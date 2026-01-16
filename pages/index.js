@@ -205,7 +205,7 @@ export default function FrisbeeRSVP() {
     const firstName = parts[0];
     const lastName = parts[parts.length - 1];
     const lastNameAbbrev = lastName.slice(0, 3);
-    return `${firstName} ${lastNameAbbrev}`;
+    return `${firstName} ${lastNameAbbrev}.`;
   };
 
   const isMySignup = (person) => person.deviceId === deviceId;
