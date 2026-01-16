@@ -6,9 +6,8 @@ const WHITELIST_KEY = 'frisbee-whitelist';
 const SETTINGS_KEY = 'frisbee-settings';
 const ARCHIVE_KEY = 'frisbee-archive';
 
-// Passwords - change these or set via environment variables
+// Admin password - change this or set via environment variables
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'frisbee-admin-2024';
-const AIS_PASSWORD = process.env.AIS_PASSWORD || process.env.ADMIN_PASSWORD || 'frisbee-admin-2024';
 
 /**
  * Sort people by priority:
@@ -57,23 +56,11 @@ const DEFAULT_SETTINGS = {
 };
 
 export default async function handler(req, res) {
-  // Verify password (admin or AIS for rebalance action)
+  // Verify admin password
   const authHeader = req.headers.authorization;
   const token = authHeader?.replace('Bearer ', '');
-  const isAdminAuth = token === ADMIN_PASSWORD;
-  const isAisAuth = token === AIS_PASSWORD;
 
-  if (!isAdminAuth && !isAisAuth) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  // Non-admin (AIS) users can only access rebalance action
-  if (!isAdminAuth && req.method === 'POST') {
-    const { action } = req.body || {};
-    if (action !== 'rebalance') {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-  } else if (!isAdminAuth && req.method !== 'POST') {
+  if (token !== ADMIN_PASSWORD) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -324,32 +311,6 @@ export default async function handler(req, res) {
           demoted,
           mainList: rebalanced.mainList,
           waitlist: rebalanced.waitlist
-        });
-      }
-
-      if (action === 'rebalance') {
-        // Manually trigger a rebalance of existing lists
-        const settings = await kv.get(SETTINGS_KEY) || DEFAULT_SETTINGS;
-        const limit = settings.mainListLimit || 30;
-        const rsvpData = await kv.get(RSVP_KEY) || { mainList: [], waitlist: [] };
-        const whitelist = await kv.get(WHITELIST_KEY) || [];
-
-        const oldMainListIds = new Set(rsvpData.mainList.map(p => p.id));
-        const rebalanced = rebalanceLists(rsvpData.mainList, rsvpData.waitlist, limit);
-
-        const promoted = rebalanced.mainList.filter(p => !oldMainListIds.has(p.id));
-        const demoted = rebalanced.waitlist.filter(p => oldMainListIds.has(p.id));
-
-        await kv.set(RSVP_KEY, rebalanced);
-
-        return res.status(200).json({
-          success: true,
-          promoted,
-          demoted,
-          mainList: rebalanced.mainList,
-          waitlist: rebalanced.waitlist,
-          whitelist,
-          settings
         });
       }
 

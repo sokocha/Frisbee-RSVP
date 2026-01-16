@@ -429,41 +429,6 @@ export default function AdminDashboard() {
     setLoading(false);
   };
 
-  const rebalanceLists = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch('/api/admin', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${password}`
-        },
-        body: JSON.stringify({ action: 'rebalance' })
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setMainList(data.mainList);
-        setWaitlist(data.waitlist);
-
-        let msg = 'Lists rebalanced';
-        if (data.promoted?.length > 0) {
-          msg += ` - ${data.promoted.length} promoted`;
-        }
-        if (data.demoted?.length > 0) {
-          msg += ` - ${data.demoted.length} demoted`;
-        }
-        showMessage(msg, 'success');
-      } else {
-        showMessage(data.error, 'error');
-      }
-    } catch (error) {
-      showMessage('Failed to rebalance', 'error');
-    }
-    setLoading(false);
-  };
-
   const formatTime = (timestamp) => {
     return new Date(timestamp).toLocaleString('en-US', {
       month: 'short',
@@ -1173,23 +1138,6 @@ export default function AdminDashboard() {
               )}
             </div>
           )}
-
-          {/* Admin Actions */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Admin Actions</h2>
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={rebalanceLists}
-                disabled={loading}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white font-medium rounded-lg"
-              >
-                Rebalance Lists
-              </button>
-            </div>
-            <p className="text-gray-500 text-sm mt-3">
-              "Rebalance Lists" will re-sort both lists by priority (AIS members first, then by signup time) and enforce the current limit. Use this if lists are out of order.
-            </p>
-          </div>
 
           {/* Danger Zone */}
           <div className="bg-white rounded-2xl shadow-xl p-6 border-2 border-red-200">
