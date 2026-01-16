@@ -69,9 +69,20 @@ export default async function handler(req, res) {
       const whitelist = await kv.get(WHITELIST_KEY) || [];
       const settings = await kv.get(SETTINGS_KEY) || DEFAULT_SETTINGS;
       const archive = await kv.get(ARCHIVE_KEY) || [];
+      const limit = settings.mainListLimit || 30;
+
+      // Auto-rebalance on load to ensure correct priority order
+      const rebalanced = rebalanceLists(rsvpData.mainList, rsvpData.waitlist, limit);
+
+      // Only save if order changed
+      const orderChanged = JSON.stringify(rebalanced) !== JSON.stringify(rsvpData);
+      if (orderChanged) {
+        await kv.set(RSVP_KEY, rebalanced);
+      }
 
       return res.status(200).json({
-        ...rsvpData,
+        mainList: rebalanced.mainList,
+        waitlist: rebalanced.waitlist,
         whitelist,
         settings,
         archive
