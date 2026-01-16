@@ -445,6 +445,9 @@ export default function FrisbeeRSVP() {
       if (response.ok) {
         setMainList(data.mainList);
         setWaitlist(data.waitlist);
+        if (data.snoozedNames !== undefined) {
+          setSnoozedNames(data.snoozedNames);
+        }
         showMessage(data.message, 'success');
         closeSnoozeModal();
       } else {

@@ -531,11 +531,17 @@ export default async function handler(req, res) {
         await kv.set(RSVP_KEY, { mainList, waitlist });
         await kv.set(SNOOZED_KEY, snoozedData);
 
+        // Extract updated snoozed names for frontend
+        const updatedSnoozedNames = snoozedData.names.map(entry =>
+          typeof entry === 'string' ? entry : (entry.snapshot?.name || entry.nameLC)
+        );
+
         return res.status(200).json({
           success: true,
           message: `${person.name} is now skipping this week. They'll be back next week!`,
           mainList,
-          waitlist
+          waitlist,
+          snoozedNames: updatedSnoozedNames
         });
       }
 
@@ -612,13 +618,19 @@ export default async function handler(req, res) {
 
         await kv.set(RSVP_KEY, { mainList, waitlist });
 
+        // Extract updated snoozed names for frontend
+        const updatedSnoozedNames = snoozedData.names.map(entry =>
+          typeof entry === 'string' ? entry : (entry.snapshot?.name || entry.nameLC)
+        );
+
         return res.status(200).json({
           success: true,
           message,
           listType,
           person: restored,
           mainList,
-          waitlist
+          waitlist,
+          snoozedNames: updatedSnoozedNames
         });
       }
 
