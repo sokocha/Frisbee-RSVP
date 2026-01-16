@@ -216,19 +216,20 @@ export default async function handler(req, res) {
       }
 
       if (action === 'update-settings') {
-        // Update access period settings
+        // Update settings
         const { settings } = data;
 
-        if (!settings || !settings.accessPeriod) {
+        if (!settings) {
           return res.status(400).json({ error: 'Settings are required' });
         }
 
         const currentSettings = await kv.get(SETTINGS_KEY) || DEFAULT_SETTINGS;
         const newSettings = {
           ...currentSettings,
+          mainListLimit: settings.mainListLimit ?? currentSettings.mainListLimit ?? 30,
           accessPeriod: {
             ...currentSettings.accessPeriod,
-            ...settings.accessPeriod
+            ...(settings.accessPeriod || {})
           }
         };
 
