@@ -24,14 +24,18 @@ async function generatePDF(mainList, waitlist, weekId) {
     doc.text(`Generated: ${new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' })} WAT`, { align: 'center' });
     doc.moveDown(2);
 
+    // Sort lists alphabetically by name
+    const sortedMainList = [...mainList].sort((a, b) => a.name.localeCompare(b.name));
+    const sortedWaitlist = [...waitlist].sort((a, b) => a.name.localeCompare(b.name));
+
     // Main List
     doc.fontSize(16).font('Helvetica-Bold').text(`Main List (${mainList.length} participants)`);
     doc.moveDown(0.5);
 
-    if (mainList.length === 0) {
+    if (sortedMainList.length === 0) {
       doc.fontSize(11).font('Helvetica').text('No participants registered.');
     } else {
-      mainList.forEach((person, index) => {
+      sortedMainList.forEach((person, index) => {
         const badge = person.isWhitelisted ? ' [AIS]' : '';
         doc.fontSize(11).font('Helvetica').text(`${index + 1}. ${person.name}${badge}`);
       });
@@ -40,11 +44,11 @@ async function generatePDF(mainList, waitlist, weekId) {
     doc.moveDown(1.5);
 
     // Waitlist
-    if (waitlist.length > 0) {
-      doc.fontSize(16).font('Helvetica-Bold').text(`Waitlist (${waitlist.length})`);
+    if (sortedWaitlist.length > 0) {
+      doc.fontSize(16).font('Helvetica-Bold').text(`Waitlist (${sortedWaitlist.length})`);
       doc.moveDown(0.5);
 
-      waitlist.forEach((person, index) => {
+      sortedWaitlist.forEach((person, index) => {
         const badge = person.isWhitelisted ? ' [AIS]' : '';
         doc.fontSize(11).font('Helvetica').text(`${index + 1}. ${person.name}${badge}`);
       });
