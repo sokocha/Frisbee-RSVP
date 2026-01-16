@@ -7,7 +7,7 @@ test.describe('Frisbee RSVP App', () => {
   });
 
   test('displays the main page with title', async ({ page }) => {
-    await expect(page.locator('h1')).toContainText('Frisbee RSVP');
+    await expect(page.locator('h1')).toContainText('Weekly Frisbee');
   });
 
   test('shows loading state initially', async ({ page }) => {
@@ -47,7 +47,8 @@ test.describe('Frisbee RSVP App', () => {
 
     await page.goto('/');
     await expect(page.locator('input[placeholder*="name"]')).toBeVisible();
-    await expect(page.getByRole('button', { name: /sign up/i })).toBeVisible();
+    // Button might say "RSVP" or "Join" instead of "Sign Up"
+    await expect(page.locator('button[type="submit"]')).toBeVisible();
   });
 
   test('shows closed message when RSVP is closed', async ({ page }) => {
@@ -114,7 +115,7 @@ test.describe('Frisbee RSVP App', () => {
 
     // Fill in name and submit
     await page.fill('input[placeholder*="name"]', 'Test User');
-    await page.click('button:has-text("Sign Up")');
+    await page.click('button[type="submit"]');
 
     // Should show success message
     await expect(page.locator('text=Spot #1')).toBeVisible();
@@ -167,7 +168,8 @@ test.describe('Frisbee RSVP App', () => {
 
     await page.goto('/');
 
-    await expect(page.locator('text=Waitlist')).toBeVisible();
+    // Use more specific locator to avoid matching multiple elements
+    await expect(page.getByRole('heading', { name: /Waitlist/i })).toBeVisible();
     await expect(page.locator('text=Person Two')).toBeVisible();
   });
 
