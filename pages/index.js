@@ -443,17 +443,28 @@ export default function FrisbeeRSVP() {
       const data = await response.json();
 
       if (response.ok) {
-        // If unsnoozing (AIS member rejoining), fetch fresh data to get rebalanced lists
+        // If unsnoozing (AIS member rejoining), trigger admin rebalance action
         if (snoozeModal.action === 'unsnooze') {
           try {
-            const freshDataResponse = await fetch('/api/rsvp');
-            if (freshDataResponse.ok) {
-              const freshData = await freshDataResponse.json();
-              setMainList(freshData.mainList);
-              setWaitlist(freshData.waitlist);
+            const rebalanceResponse = await fetch('/api/admin', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${snoozePassword}`
+              },
+              body: JSON.stringify({ action: 'rebalance' })
+            });
+            if (rebalanceResponse.ok) {
+              const rebalancedData = await rebalanceResponse.json();
+              setMainList(rebalancedData.mainList);
+              setWaitlist(rebalancedData.waitlist);
+            } else {
+              // Fallback to response data if rebalance fails
+              setMainList(data.mainList);
+              setWaitlist(data.waitlist);
             }
           } catch (err) {
-            console.error('Failed to fetch rebalanced data:', err);
+            console.error('Failed to rebalance after unsnooze:', err);
             setMainList(data.mainList);
             setWaitlist(data.waitlist);
           }

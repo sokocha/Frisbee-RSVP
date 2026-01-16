@@ -6,8 +6,9 @@ const WHITELIST_KEY = 'frisbee-whitelist';
 const SETTINGS_KEY = 'frisbee-settings';
 const ARCHIVE_KEY = 'frisbee-archive';
 
-// Simple admin password - change this or set via environment variable
+// Passwords - change these or set via environment variables
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'frisbee-admin-2024';
+const AIS_PASSWORD = process.env.AIS_PASSWORD || process.env.ADMIN_PASSWORD || 'frisbee-admin-2024';
 
 /**
  * Sort people by priority:
@@ -56,9 +57,23 @@ const DEFAULT_SETTINGS = {
 };
 
 export default async function handler(req, res) {
-  // Verify admin password
+  // Verify password (admin or AIS for rebalance action)
   const authHeader = req.headers.authorization;
-  if (!authHeader || authHeader !== `Bearer ${ADMIN_PASSWORD}`) {
+  const token = authHeader?.replace('Bearer ', '');
+  const isAdminAuth = token === ADMIN_PASSWORD;
+  const isAisAuth = token === AIS_PASSWORD;
+
+  if (!isAdminAuth && !isAisAuth) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  // Non-admin (AIS) users can only access rebalance action
+  if (!isAdminAuth && req.method === 'POST') {
+    const { action } = req.body || {};
+    if (action !== 'rebalance') {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+  } else if (!isAdminAuth && req.method !== 'POST') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
