@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
 
-const MAIN_LIST_LIMIT = 30;
+const DEFAULT_MAIN_LIST_LIMIT = 30;
 const DEVICE_KEY = 'frisbee-device-id';
 
 // Generate a unique device ID based on browser characteristics
@@ -51,6 +51,7 @@ export default function FrisbeeRSVP() {
   const [hasSignedUp, setHasSignedUp] = useState(false);
   const [mySignup, setMySignup] = useState(null);
   const [accessStatus, setAccessStatus] = useState({ isOpen: true, message: null });
+  const [mainListLimit, setMainListLimit] = useState(DEFAULT_MAIN_LIST_LIMIT);
 
   const checkMySignup = useCallback((mainList, waitlist, currentDeviceId) => {
     const allSignups = [...mainList, ...waitlist];
@@ -72,6 +73,7 @@ export default function FrisbeeRSVP() {
         setMainList(data.mainList || []);
         setWaitlist(data.waitlist || []);
         setAccessStatus(data.accessStatus || { isOpen: true, message: null });
+        setMainListLimit(data.mainListLimit || DEFAULT_MAIN_LIST_LIMIT);
         checkMySignup(data.mainList || [], data.waitlist || [], currentDeviceId);
       }
     } catch (error) {
@@ -205,7 +207,7 @@ export default function FrisbeeRSVP() {
     );
   }
 
-  const spotsLeft = MAIN_LIST_LIMIT - mainList.length;
+  const spotsLeft = mainListLimit - mainList.length;
 
   return (
     <>
@@ -222,7 +224,7 @@ export default function FrisbeeRSVP() {
           <div className="text-center mb-8">
             <div className="text-6xl mb-2">🥏</div>
             <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Weekly Frisbee</h1>
-            <p className="text-green-200">First come, first served • {MAIN_LIST_LIMIT} spots available</p>
+            <p className="text-green-200">First come, first served • {mainListLimit} spots available</p>
           </div>
 
           {/* Message Toast */}
@@ -286,7 +288,7 @@ export default function FrisbeeRSVP() {
             {/* Status Bar */}
             <div className="mt-4">
               <div className="flex justify-between text-sm text-gray-600 mb-2">
-                <span>{mainList.length} / {MAIN_LIST_LIMIT} spots filled</span>
+                <span>{mainList.length} / {mainListLimit} spots filled</span>
                 <span className={spotsLeft > 0 ? 'text-green-600 font-medium' : 'text-orange-600 font-medium'}>
                   {spotsLeft > 0 ? `${spotsLeft} spots left` : 'Waitlist open'}
                 </span>
@@ -296,7 +298,7 @@ export default function FrisbeeRSVP() {
                   className={`h-full transition-all duration-500 ${
                     spotsLeft === 0 ? 'bg-orange-500' : 'bg-green-500'
                   }`}
-                  style={{ width: `${(mainList.length / MAIN_LIST_LIMIT) * 100}%` }}
+                  style={{ width: `${(mainList.length / mainListLimit) * 100}%` }}
                 />
               </div>
             </div>
@@ -354,7 +356,7 @@ export default function FrisbeeRSVP() {
           </div>
 
           {/* Waitlist */}
-          {(waitlist.length > 0 || mainList.length >= MAIN_LIST_LIMIT) && (
+          {(waitlist.length > 0 || mainList.length >= mainListLimit) && (
             <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
               <h2 className="text-xl font-bold text-gray-800 mb-4">
                 Waitlist ({waitlist.length})

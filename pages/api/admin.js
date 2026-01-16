@@ -8,8 +8,9 @@ const SETTINGS_KEY = 'frisbee-settings';
 // Simple admin password - change this or set via environment variable
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'frisbee-admin-2024';
 
-// Default access period settings (WAT = UTC+1)
+// Default settings (WAT = UTC+1)
 const DEFAULT_SETTINGS = {
+  mainListLimit: 30,
   accessPeriod: {
     enabled: true,
     startDay: 4,        // Thursday (0=Sunday, 4=Thursday)
@@ -97,7 +98,8 @@ export default async function handler(req, res) {
           });
 
           // Add to main list (whitelisted users always go to main list first)
-          if (rsvpData.mainList.length < 30) {
+          const limit = settings.mainListLimit || 30;
+          if (rsvpData.mainList.length < limit) {
             rsvpData.mainList.push(newPerson);
           } else {
             // If main list is full, add to waitlist but mark as whitelisted

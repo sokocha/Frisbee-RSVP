@@ -4,6 +4,7 @@ import Head from 'next/head';
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const DEFAULT_SETTINGS = {
+  mainListLimit: 30,
   accessPeriod: {
     enabled: true,
     startDay: 4,
@@ -102,7 +103,12 @@ export default function AdminDashboard() {
     setSettings(newSettings);
   };
 
-  const saveAccessPeriod = () => {
+  const handleMainListLimitChange = (value) => {
+    const limit = Math.max(1, Math.min(100, parseInt(value) || 30));
+    setSettings({ ...settings, mainListLimit: limit });
+  };
+
+  const saveSettings = () => {
     updateSettings(settings);
   };
 
@@ -415,7 +421,8 @@ export default function AdminDashboard() {
     );
   }
 
-  const spotsRemaining = 30 - mainList.length;
+  const currentLimit = settings.mainListLimit || 30;
+  const spotsRemaining = currentLimit - mainList.length;
   const whitelistCount = mainList.filter(p => p.isWhitelisted).length;
   const regularCount = mainList.filter(p => !p.isWhitelisted).length;
   const accessStatus = getCurrentAccessStatus();
@@ -481,11 +488,31 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Access Period Settings */}
+          {/* General Settings */}
           <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Access Period Settings</h2>
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Settings</h2>
 
-            <div className="mb-4">
+            {/* Main List Limit */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Main List Limit</label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={settings.mainListLimit || 30}
+                  onChange={(e) => handleMainListLimitChange(e.target.value)}
+                  className="w-24 px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none"
+                />
+                <span className="text-gray-500 text-sm">spots (default: 30)</span>
+              </div>
+              <p className="text-sm text-gray-500 mt-1">
+                Maximum number of people on the main list before waitlist opens
+              </p>
+            </div>
+
+            {/* Access Period */}
+            <div className="border-t pt-4">
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -576,15 +603,18 @@ export default function AdminDashboard() {
                   Timezone: West Africa Time (WAT/UTC+1)
                 </div>
 
-                <button
-                  onClick={saveAccessPeriod}
-                  disabled={loading}
-                  className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium rounded-lg"
-                >
-                  Save Settings
-                </button>
               </div>
             )}
+
+            <div className="mt-4 pt-4 border-t">
+              <button
+                onClick={saveSettings}
+                disabled={loading}
+                className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium rounded-lg"
+              >
+                Save Settings
+              </button>
+            </div>
           </div>
 
           {/* Add Whitelist */}
@@ -634,7 +664,7 @@ export default function AdminDashboard() {
           {/* Main List */}
           <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
             <h2 className="text-xl font-bold text-gray-800 mb-4">
-              Main List ({mainList.length}/30)
+              Main List ({mainList.length}/{currentLimit})
             </h2>
 
             {mainList.length === 0 ? (

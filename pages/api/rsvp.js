@@ -2,10 +2,11 @@ import { kv } from '@vercel/kv';
 
 const RSVP_KEY = 'frisbee-rsvp-data';
 const SETTINGS_KEY = 'frisbee-settings';
-const MAIN_LIST_LIMIT = 30;
+const DEFAULT_MAIN_LIST_LIMIT = 30;
 
-// Default access period settings
+// Default settings
 const DEFAULT_SETTINGS = {
+  mainListLimit: 30,
   accessPeriod: {
     enabled: true,
     startDay: 4,        // Thursday
@@ -67,9 +68,11 @@ export default async function handler(req, res) {
       const data = await kv.get(RSVP_KEY) || { mainList: [], waitlist: [] };
       const settings = await kv.get(SETTINGS_KEY) || DEFAULT_SETTINGS;
       const accessStatus = isFormOpen(settings);
+      const mainListLimit = settings.mainListLimit || DEFAULT_MAIN_LIST_LIMIT;
 
       return res.status(200).json({
         ...data,
+        mainListLimit,
         accessStatus: {
           isOpen: accessStatus.isOpen,
           message: accessStatus.message
@@ -124,12 +127,13 @@ export default async function handler(req, res) {
         deviceId: deviceId
       };
 
+      const mainListLimit = settings.mainListLimit || DEFAULT_MAIN_LIST_LIMIT;
       let newMainList = mainList;
       let newWaitlist = waitlist;
       let message = '';
       let listType = '';
 
-      if (mainList.length < MAIN_LIST_LIMIT) {
+      if (mainList.length < mainListLimit) {
         newMainList = [...mainList, newPerson];
         message = `You're in! Spot #${newMainList.length}`;
         listType = 'main';
