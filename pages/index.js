@@ -318,12 +318,13 @@ export default function FrisbeeRSVP() {
                       <div>
                         <span className="font-medium text-gray-800">
                           {person.name}
+                          {person.isWhitelisted && <span className="text-xs bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded ml-2">AIS</span>}
                           {isMySignup(person) && <span className="text-blue-600 text-xs ml-2">(You)</span>}
                         </span>
                         <span className="text-xs text-gray-500 ml-2">{formatTime(person.timestamp)}</span>
                       </div>
                     </div>
-                    {isMySignup(person) && (
+                    {isMySignup(person) && !person.isWhitelisted && (
                       <button
                         onClick={() => handleDropout(person.id)}
                         disabled={submitting}
@@ -367,12 +368,13 @@ export default function FrisbeeRSVP() {
                         <div>
                           <span className="font-medium text-gray-800">
                             {person.name}
+                            {person.isWhitelisted && <span className="text-xs bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded ml-2">AIS</span>}
                             {isMySignup(person) && <span className="text-blue-600 text-xs ml-2">(You)</span>}
                           </span>
                           <span className="text-xs text-gray-500 ml-2">{formatTime(person.timestamp)}</span>
                         </div>
                       </div>
-                      {isMySignup(person) && (
+                      {isMySignup(person) && !person.isWhitelisted && (
                         <button
                           onClick={() => handleDropout(person.id, true)}
                           disabled={submitting}
@@ -387,17 +389,6 @@ export default function FrisbeeRSVP() {
               )}
             </div>
           )}
-
-          {/* Admin Controls */}
-          <div className="text-center">
-            <button
-              onClick={handleReset}
-              disabled={submitting}
-              className="text-white/70 hover:text-white disabled:opacity-50 text-sm underline"
-            >
-              Reset all RSVPs (Admin)
-            </button>
-          </div>
 
           {/* Footer */}
           <div className="text-center mt-8 text-green-200 text-sm">
