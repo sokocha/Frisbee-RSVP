@@ -472,7 +472,9 @@ export default async function handler(req, res) {
       const settings = await kv.get(SETTINGS_KEY) || DEFAULT_SETTINGS;
       const data = await kv.get(RSVP_KEY) || { mainList: [], waitlist: [] };
       let { mainList, waitlist } = data;
+      const mainListLimit = settings.mainListLimit || DEFAULT_MAIN_LIST_LIMIT;
 
+      /* ───────────────────────────  SNOOZE  ─────────────────────────── */
       if (action === 'snooze') {
         // Find the person in main list by ID
         const person = mainList.find(p => p.id === personId);
@@ -488,7 +490,7 @@ export default async function handler(req, res) {
         // Remove from main list
         mainList = mainList.filter(p => p.id !== personId);
 
-        // Add to snoozed list for this week
+        // ── Store snapshot for later restore ──
         const timezone = settings.accessPeriod?.timezone || 'Africa/Lagos';
         const currentWeekId = getCurrentWeekId(timezone);
         const snoozedData = await kv.get(SNOOZED_KEY) || { weekId: currentWeekId, names: [] };
@@ -499,17 +501,28 @@ export default async function handler(req, res) {
           snoozedData.names = [];
         }
 
-        if (!snoozedData.names.includes(person.name.toLowerCase())) {
-          snoozedData.names.push(person.name.toLowerCase());
+        const nameLC = person.name.toLowerCase();
+        // Store full snapshot (including original timestamp) keyed by lowercase name
+        const alreadySnooze = snoozedData.names.some(
+          entry => (typeof entry === 'string' ? entry : entry.nameLC) === nameLC
+        );
+        if (!alreadySnooze) {
+          snoozedData.names.push({
+            nameLC,
+            snapshot: {
+              id: person.id,
+              name: person.name,
+              timestamp: person.timestamp,   // <-- preserve original timestamp
+              isWhitelisted: person.isWhitelisted,
+              deviceId: person.deviceId
+            }
+          });
         }
 
-        // Promote from waitlist if available
-        let promotedPerson = null;
-        if (waitlist.length > 0) {
-          promotedPerson = waitlist[0];
-          mainList = [...mainList, promotedPerson];
-          waitlist = waitlist.slice(1);
-        }
+        // Rebalance after removal (promotes waitlist automatically)
+        const rebalanced = rebalanceLists(mainList, waitlist, mainListLimit);
+        mainList = rebalanced.mainList;
+        waitlist = rebalanced.waitlist;
 
         await kv.set(RSVP_KEY, { mainList, waitlist });
         await kv.set(SNOOZED_KEY, snoozedData);
@@ -517,30 +530,26 @@ export default async function handler(req, res) {
         return res.status(200).json({
           success: true,
           message: `${person.name} is now skipping this week. They'll be back next week!`,
-          promotedPerson,
           mainList,
           waitlist
         });
       }
 
+      /* ──────────────────────────  UNSNOOZE  ─────────────────────────── */
       if (action === 'unsnooze') {
         const timezone = settings.accessPeriod?.timezone || 'Africa/Lagos';
         const currentWeekId = getCurrentWeekId(timezone);
         const snoozedData = await kv.get(SNOOZED_KEY) || { weekId: currentWeekId, names: [] };
 
-        // Get whitelist to find the person
-        const whitelist = await kv.get('frisbee-whitelist') || [];
-
-        // Find by name (case-insensitive)
         const nameLC = personName?.toLowerCase();
-        if (!nameLC || !snoozedData.names.includes(nameLC)) {
-          return res.status(400).json({ error: "This person is not currently snoozed" });
-        }
 
-        // Find whitelist entry for this person
-        const whitelistPerson = whitelist.find(w => w.name.toLowerCase() === nameLC);
-        if (!whitelistPerson) {
-          return res.status(400).json({ error: 'Could not find whitelist entry' });
+        // Find the snoozed entry (handle both old string format and new object format)
+        const idx = snoozedData.names.findIndex(entry =>
+          (typeof entry === 'string' ? entry : entry.nameLC) === nameLC
+        );
+
+        if (idx === -1) {
+          return res.status(400).json({ error: 'This person is not currently snoozed' });
         }
 
         // Check if form is open
@@ -549,38 +558,51 @@ export default async function handler(req, res) {
           return res.status(403).json({ error: accessStatus.message });
         }
 
+        // Extract snapshot (or build fallback for legacy string entries)
+        const entry = snoozedData.names[idx];
+        let restored;
+
+        if (typeof entry === 'object' && entry.snapshot) {
+          // New format - use stored snapshot with original timestamp
+          restored = { ...entry.snapshot };
+        } else {
+          // Legacy string format - need to build person from whitelist
+          const whitelist = await kv.get('frisbee-whitelist') || [];
+          const whitelistPerson = whitelist.find(w => w.name.toLowerCase() === nameLC);
+          if (!whitelistPerson) {
+            return res.status(400).json({ error: 'Could not find whitelist entry' });
+          }
+          restored = {
+            id: Date.now(),
+            name: whitelistPerson.name,
+            timestamp: new Date().toISOString(),  // fallback - no original available
+            isWhitelisted: true
+          };
+        }
+
         // Remove from snoozed list
-        snoozedData.names = snoozedData.names.filter(n => n !== nameLC);
+        snoozedData.names.splice(idx, 1);
         await kv.set(SNOOZED_KEY, snoozedData);
 
-        // Add back and rebalance by priority
-        const mainListLimit = settings.mainListLimit || DEFAULT_MAIN_LIST_LIMIT;
-        const newPerson = {
-          id: Date.now(),
-          name: whitelistPerson.name,
-          timestamp: new Date().toISOString(),
-          isWhitelisted: true
-        };
-
-        // Rebalance with the returning AIS member
-        const rebalanced = rebalanceLists([...mainList, newPerson], waitlist, mainListLimit);
+        // Rebalance with the returning AIS member (original timestamp preserved)
+        const rebalanced = rebalanceLists([...mainList, restored], waitlist, mainListLimit);
         mainList = rebalanced.mainList;
         waitlist = rebalanced.waitlist;
 
         // Determine where the person ended up
-        const isOnMainList = mainList.some(p => p.id === newPerson.id);
+        const isOnMainList = mainList.some(p => p.id === restored.id);
         const position = isOnMainList
-          ? mainList.findIndex(p => p.id === newPerson.id) + 1
-          : waitlist.findIndex(p => p.id === newPerson.id) + 1;
+          ? mainList.findIndex(p => p.id === restored.id) + 1
+          : waitlist.findIndex(p => p.id === restored.id) + 1;
 
         let message = '';
         let listType = '';
 
         if (isOnMainList) {
-          message = `Welcome back ${whitelistPerson.name}! You're in spot #${position}`;
+          message = `Welcome back ${restored.name}! You're in spot #${position}`;
           listType = 'main';
         } else {
-          message = `Main list is full. ${whitelistPerson.name} is #${position} on the waitlist`;
+          message = `Main list is full. ${restored.name} is #${position} on the waitlist`;
           listType = 'waitlist';
         }
 
@@ -590,7 +612,7 @@ export default async function handler(req, res) {
           success: true,
           message,
           listType,
-          person: newPerson,
+          person: restored,
           mainList,
           waitlist
         });
