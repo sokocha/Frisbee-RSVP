@@ -148,7 +148,7 @@ export default async function handler(req, res) {
 
     // Send email
     const { data, error } = await resend.emails.send({
-      from: 'Frisbee RSVP <noreply@send.itsplayday.com>',
+      from: 'Frisbee RSVP <noreply@itsplayday.com>',
       to: emailSettings.recipients,
       subject: subject,
       text: body,
