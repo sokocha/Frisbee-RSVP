@@ -1,7 +1,6 @@
 import { kv } from '@vercel/kv';
 
 const RSVP_KEY = 'frisbee-rsvp-data';
-const ADMIN_KEY = 'frisbee-admin-password';
 const WHITELIST_KEY = 'frisbee-whitelist';
 const SETTINGS_KEY = 'frisbee-settings';
 const ARCHIVE_KEY = 'frisbee-archive';
