@@ -54,6 +54,8 @@ export default function FrisbeeRSVP() {
   const [mainListLimit, setMainListLimit] = useState(DEFAULT_MAIN_LIST_LIMIT);
   const [snoozedNames, setSnoozedNames] = useState([]);
   const [whitelist, setWhitelist] = useState([]);
+  const [snoozeModal, setSnoozeModal] = useState({ show: false, person: null, action: null });
+  const [snoozePassword, setSnoozePassword] = useState('');
 
   const checkMySignup = useCallback((mainList, waitlist, currentDeviceId) => {
     const allSignups = [...mainList, ...waitlist];
@@ -220,48 +222,39 @@ export default function FrisbeeRSVP() {
 
   const isMySignup = (person) => person.deviceId === deviceId;
 
-  // Check if current user is a snoozed whitelisted member
-  const myWhitelistEntry = whitelist.find(w => w.deviceId === deviceId);
-  const isSnoozed = myWhitelistEntry && snoozedNames.includes(myWhitelistEntry.name.toLowerCase());
+  // Check if a name is snoozed
+  const isNameSnoozed = (name) => snoozedNames.includes(name.toLowerCase());
 
-  const handleSnooze = async (personId) => {
-    if (!confirm("Skip this week? You'll be automatically added back next week.")) return;
-
-    setSubmitting(true);
-    try {
-      const response = await fetch('/api/rsvp', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'snooze', personId, deviceId })
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setMainList(data.mainList);
-        setWaitlist(data.waitlist);
-        setHasSignedUp(false);
-        setMySignup(null);
-        // Refresh to get updated snoozed list
-        loadData(deviceId);
-        showMessage(data.message, 'success');
-      } else {
-        showMessage(data.error, 'error');
-      }
-    } catch (error) {
-      console.error('Failed to snooze:', error);
-      showMessage('Failed to snooze. Please try again.', 'error');
-    }
-    setSubmitting(false);
+  // Open snooze modal
+  const openSnoozeModal = (person, action) => {
+    setSnoozeModal({ show: true, person, action });
+    setSnoozePassword('');
   };
 
-  const handleUnsnooze = async () => {
+  // Close snooze modal
+  const closeSnoozeModal = () => {
+    setSnoozeModal({ show: false, person: null, action: null });
+    setSnoozePassword('');
+  };
+
+  // Handle snooze with password
+  const handleSnoozeSubmit = async () => {
+    if (!snoozePassword.trim()) {
+      showMessage('Please enter the password', 'error');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const response = await fetch('/api/rsvp', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'unsnooze', personId: 0, deviceId })
+        body: JSON.stringify({
+          action: snoozeModal.action,
+          personId: snoozeModal.person?.id || 0,
+          personName: snoozeModal.person?.name,
+          password: snoozePassword
+        })
       });
 
       const data = await response.json();
@@ -269,17 +262,15 @@ export default function FrisbeeRSVP() {
       if (response.ok) {
         setMainList(data.mainList);
         setWaitlist(data.waitlist);
-        setHasSignedUp(true);
-        setMySignup(data.person);
-        // Refresh to get updated snoozed list
         loadData(deviceId);
-        showMessage(data.message, data.listType === 'main' ? 'success' : 'warning');
+        showMessage(data.message, 'success');
+        closeSnoozeModal();
       } else {
         showMessage(data.error, 'error');
       }
     } catch (error) {
-      console.error('Failed to unsnooze:', error);
-      showMessage('Failed to rejoin. Please try again.', 'error');
+      console.error('Failed to process request:', error);
+      showMessage('Failed to process request. Please try again.', 'error');
     }
     setSubmitting(false);
   };
@@ -338,20 +329,66 @@ export default function FrisbeeRSVP() {
             </div>
           )}
 
-          {/* Snoozed Notice for whitelisted members */}
-          {isSnoozed && !hasSignedUp && (
-            <div className="mb-4 p-4 bg-yellow-500 text-black rounded-lg text-center">
-              <p className="font-medium">You're skipping this week</p>
-              <p className="text-sm mt-1">You'll be automatically added back next week</p>
-              {accessStatus.isOpen && (
-                <button
-                  onClick={handleUnsnooze}
-                  disabled={submitting}
-                  className="mt-3 px-4 py-2 bg-white hover:bg-gray-100 text-yellow-700 font-medium rounded-lg disabled:opacity-50"
-                >
-                  {submitting ? 'Rejoining...' : 'Changed your mind? Rejoin this week'}
-                </button>
-              )}
+          {/* Snoozed Members Section */}
+          {snoozedNames.length > 0 && accessStatus.isOpen && (
+            <div className="mb-4 p-4 bg-yellow-100 border-2 border-yellow-300 rounded-lg">
+              <p className="font-medium text-yellow-800 mb-2">Skipping this week:</p>
+              <div className="flex flex-wrap gap-2">
+                {snoozedNames.map((name, index) => (
+                  <button
+                    key={index}
+                    onClick={() => openSnoozeModal({ name }, 'unsnooze')}
+                    className="bg-yellow-200 hover:bg-yellow-300 text-yellow-800 px-3 py-1 rounded-full text-sm transition-colors"
+                  >
+                    {name} <span className="text-yellow-600 ml-1">↩ rejoin</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Snooze/Unsnooze Modal */}
+          {snoozeModal.show && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-xl p-6 max-w-md w-full">
+                <h3 className="text-xl font-bold text-gray-800 mb-4">
+                  {snoozeModal.action === 'snooze' ? 'Skip This Week' : 'Rejoin This Week'}
+                </h3>
+                <p className="text-gray-600 mb-4">
+                  {snoozeModal.action === 'snooze'
+                    ? `Confirm you are ${snoozeModal.person?.name} by entering the AIS password.`
+                    : `Confirm your identity to rejoin this week's list.`}
+                </p>
+                <input
+                  type="password"
+                  value={snoozePassword}
+                  onChange={(e) => setSnoozePassword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && !submitting && handleSnoozeSubmit()}
+                  placeholder="Enter AIS password"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none mb-4"
+                  autoFocus
+                />
+                <div className="flex gap-3">
+                  <button
+                    onClick={closeSnoozeModal}
+                    disabled={submitting}
+                    className="flex-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-lg disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSnoozeSubmit}
+                    disabled={submitting}
+                    className={`flex-1 px-4 py-2 text-white font-medium rounded-lg disabled:opacity-50 ${
+                      snoozeModal.action === 'snooze'
+                        ? 'bg-yellow-600 hover:bg-yellow-700'
+                        : 'bg-green-600 hover:bg-green-700'
+                    }`}
+                  >
+                    {submitting ? 'Processing...' : 'Confirm'}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -451,9 +488,9 @@ export default function FrisbeeRSVP() {
                         Drop out
                       </button>
                     )}
-                    {isMySignup(person) && person.isWhitelisted && accessStatus.isOpen && (
+                    {person.isWhitelisted && accessStatus.isOpen && (
                       <button
-                        onClick={() => handleSnooze(person.id)}
+                        onClick={() => openSnoozeModal(person, 'snooze')}
                         disabled={submitting}
                         className="text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 disabled:opacity-50 px-3 py-1 rounded-lg transition-colors text-sm"
                       >

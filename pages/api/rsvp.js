@@ -400,11 +400,17 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'PATCH') {
-    // Snooze/unsnooze a whitelisted person
-    const { action, personId, deviceId } = req.body;
+    // Snooze/unsnooze a whitelisted person (password-protected)
+    const { action, personId, personName, password } = req.body;
 
-    if (!personId || !deviceId) {
-      return res.status(400).json({ error: 'personId and deviceId are required' });
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required' });
+    }
+
+    // Verify password (use same password as whitelist/AIS members)
+    const AIS_PASSWORD = process.env.AIS_PASSWORD || process.env.ADMIN_PASSWORD || 'frisbee-admin-2024';
+    if (password !== AIS_PASSWORD) {
+      return res.status(401).json({ error: 'Invalid password' });
     }
 
     try {
@@ -413,7 +419,7 @@ export default async function handler(req, res) {
       let { mainList, waitlist } = data;
 
       if (action === 'snooze') {
-        // Find the person in main list
+        // Find the person in main list by ID
         const person = mainList.find(p => p.id === personId);
 
         if (!person) {
@@ -422,10 +428,6 @@ export default async function handler(req, res) {
 
         if (!person.isWhitelisted) {
           return res.status(400).json({ error: 'Only whitelisted members can snooze' });
-        }
-
-        if (person.deviceId !== deviceId) {
-          return res.status(403).json({ error: 'You can only snooze your own spot' });
         }
 
         // Remove from main list
@@ -459,7 +461,7 @@ export default async function handler(req, res) {
 
         return res.status(200).json({
           success: true,
-          message: "You're snoozed for this week. You'll be back automatically next week!",
+          message: `${person.name} is now skipping this week. They'll be back next week!`,
           promotedPerson,
           mainList,
           waitlist
@@ -467,23 +469,23 @@ export default async function handler(req, res) {
       }
 
       if (action === 'unsnooze') {
-        // Check if user is snoozed
-        const settings = await kv.get(SETTINGS_KEY) || DEFAULT_SETTINGS;
         const timezone = settings.accessPeriod?.timezone || 'Africa/Lagos';
         const currentWeekId = getCurrentWeekId(timezone);
         const snoozedData = await kv.get(SNOOZED_KEY) || { weekId: currentWeekId, names: [] };
 
-        // Get whitelist to find the person's name
+        // Get whitelist to find the person
         const whitelist = await kv.get('frisbee-whitelist') || [];
-        const whitelistPerson = whitelist.find(w => w.deviceId === deviceId);
 
-        if (!whitelistPerson) {
-          return res.status(400).json({ error: 'Could not find your whitelist entry' });
+        // Find by name (case-insensitive)
+        const nameLC = personName?.toLowerCase();
+        if (!nameLC || !snoozedData.names.includes(nameLC)) {
+          return res.status(400).json({ error: "This person is not currently snoozed" });
         }
 
-        const nameLC = whitelistPerson.name.toLowerCase();
-        if (!snoozedData.names.includes(nameLC)) {
-          return res.status(400).json({ error: "You're not currently snoozed" });
+        // Find whitelist entry for this person
+        const whitelistPerson = whitelist.find(w => w.name.toLowerCase() === nameLC);
+        if (!whitelistPerson) {
+          return res.status(400).json({ error: 'Could not find whitelist entry' });
         }
 
         // Check if form is open
@@ -502,7 +504,6 @@ export default async function handler(req, res) {
           id: Date.now(),
           name: whitelistPerson.name,
           timestamp: new Date().toISOString(),
-          deviceId: deviceId,
           isWhitelisted: true
         };
 
@@ -511,11 +512,11 @@ export default async function handler(req, res) {
 
         if (mainList.length < mainListLimit) {
           mainList = [...mainList, newPerson];
-          message = `Welcome back! You're in spot #${mainList.length}`;
+          message = `Welcome back ${whitelistPerson.name}! You're in spot #${mainList.length}`;
           listType = 'main';
         } else {
           waitlist = [...waitlist, newPerson];
-          message = `Main list is full. You're #${waitlist.length} on the waitlist`;
+          message = `Main list is full. ${whitelistPerson.name} is #${waitlist.length} on the waitlist`;
           listType = 'waitlist';
         }
 
