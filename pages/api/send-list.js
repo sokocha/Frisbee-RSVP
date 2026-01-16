@@ -150,8 +150,8 @@ export default async function handler(req, res) {
     const subject = replaceTemplateVars(emailSettings.subject, templateVars);
     const body = replaceTemplateVars(emailSettings.body, templateVars);
 
-    // Send email
-    const { data, error } = await resend.emails.send({
+    // Build email options
+    const emailOptions = {
       from: 'Frisbee RSVP <noreply@itsplayday.com>',
       to: emailSettings.recipients,
       subject: subject,
@@ -162,7 +162,20 @@ export default async function handler(req, res) {
           content: pdfBuffer.toString('base64'),
         },
       ],
-    });
+    };
+
+    // Add CC if configured
+    if (emailSettings.cc && emailSettings.cc.length > 0) {
+      emailOptions.cc = emailSettings.cc;
+    }
+
+    // Add BCC if configured
+    if (emailSettings.bcc && emailSettings.bcc.length > 0) {
+      emailOptions.bcc = emailSettings.bcc;
+    }
+
+    // Send email
+    const { data, error } = await resend.emails.send(emailOptions);
 
     if (error) {
       console.error('Failed to send email:', error);
@@ -172,9 +185,15 @@ export default async function handler(req, res) {
     // Mark as sent
     await kv.set(LAST_EMAIL_KEY, weekId);
 
+    const ccCount = emailSettings.cc?.length || 0;
+    const bccCount = emailSettings.bcc?.length || 0;
+    let message = `Email sent to ${emailSettings.recipients.length} recipient(s)`;
+    if (ccCount > 0) message += `, ${ccCount} CC`;
+    if (bccCount > 0) message += `, ${bccCount} BCC`;
+
     return res.status(200).json({
       success: true,
-      message: `Email sent to ${emailSettings.recipients.length} recipient(s)`,
+      message,
       emailId: data?.id,
       weekId
     });
