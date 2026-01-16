@@ -105,6 +105,12 @@ export default function FrisbeeRSVP() {
       return;
     }
 
+    const nameParts = trimmedName.split(/\s+/);
+    if (nameParts.length < 2) {
+      showMessage('Please enter your first and last name (required for facility access)', 'error');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const response = await fetch('/api/rsvp', {
@@ -278,7 +284,7 @@ export default function FrisbeeRSVP() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && !submitting && handleRSVP()}
-                  placeholder="Enter your name"
+                  placeholder="Enter your full name (first & last)"
                   disabled={submitting}
                   className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none text-lg disabled:bg-gray-100"
                 />
