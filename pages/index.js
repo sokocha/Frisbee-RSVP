@@ -3,6 +3,44 @@ import Head from 'next/head';
 
 const MAIN_LIST_LIMIT = 30;
 const STORAGE_KEY = 'frisbee-rsvp-data';
+const DEVICE_KEY = 'frisbee-device-id';
+const SIGNUP_KEY = 'frisbee-has-signed-up';
+
+// Generate a unique device ID based on browser characteristics
+function generateDeviceId() {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.textBaseline = 'top';
+  ctx.font = '14px Arial';
+  ctx.fillText('device-fingerprint', 2, 2);
+  const canvasData = canvas.toDataURL();
+
+  const screenData = `${window.screen.width}x${window.screen.height}x${window.screen.colorDepth}`;
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const language = navigator.language;
+  const platform = navigator.platform;
+
+  const fingerprint = `${canvasData}-${screenData}-${timezone}-${language}-${platform}`;
+
+  // Simple hash function
+  let hash = 0;
+  for (let i = 0; i < fingerprint.length; i++) {
+    const char = fingerprint.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash).toString(36) + Date.now().toString(36);
+}
+
+// Get or create device ID
+function getDeviceId() {
+  let deviceId = localStorage.getItem(DEVICE_KEY);
+  if (!deviceId) {
+    deviceId = generateDeviceId();
+    localStorage.setItem(DEVICE_KEY, deviceId);
+  }
+  return deviceId;
+}
 
 export default function FrisbeeRSVP() {
   const [mainList, setMainList] = useState([]);
@@ -10,18 +48,33 @@ export default function FrisbeeRSVP() {
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState(null);
+  const [deviceId, setDeviceId] = useState(null);
+  const [hasSignedUp, setHasSignedUp] = useState(false);
+  const [mySignup, setMySignup] = useState(null);
 
   useEffect(() => {
-    loadData();
+    const id = getDeviceId();
+    setDeviceId(id);
+    loadData(id);
   }, []);
 
-  const loadData = () => {
+  const loadData = (currentDeviceId) => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const data = JSON.parse(stored);
-        setMainList(data.mainList || []);
-        setWaitlist(data.waitlist || []);
+        const loadedMainList = data.mainList || [];
+        const loadedWaitlist = data.waitlist || [];
+        setMainList(loadedMainList);
+        setWaitlist(loadedWaitlist);
+
+        // Check if this device has already signed up
+        const allSignups = [...loadedMainList, ...loadedWaitlist];
+        const existingSignup = allSignups.find(p => p.deviceId === currentDeviceId);
+        if (existingSignup) {
+          setHasSignedUp(true);
+          setMySignup(existingSignup);
+        }
       }
     } catch (error) {
       console.log('No existing data found, starting fresh');
@@ -47,22 +100,37 @@ export default function FrisbeeRSVP() {
   };
 
   const handleRSVP = () => {
+    // Check if device already signed up
+    if (hasSignedUp) {
+      showMessage("You've already signed up from this device!", 'error');
+      return;
+    }
+
     const trimmedName = name.trim();
     if (!trimmedName) {
       showMessage('Please enter your name', 'error');
       return;
     }
 
-    const allNames = [...mainList, ...waitlist].map(p => p.name.toLowerCase());
+    // Check for duplicate device IDs in the list
+    const allSignups = [...mainList, ...waitlist];
+    if (allSignups.some(p => p.deviceId === deviceId)) {
+      showMessage("You've already signed up from this device!", 'error');
+      setHasSignedUp(true);
+      return;
+    }
+
+    const allNames = allSignups.map(p => p.name.toLowerCase());
     if (allNames.includes(trimmedName.toLowerCase())) {
-      showMessage("You're already on the list!", 'error');
+      showMessage("This name is already on the list!", 'error');
       return;
     }
 
     const newPerson = {
       id: Date.now(),
       name: trimmedName,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      deviceId: deviceId
     };
 
     let newMainList = mainList;
@@ -79,10 +147,23 @@ export default function FrisbeeRSVP() {
     setMainList(newMainList);
     setWaitlist(newWaitlist);
     setName('');
+    setHasSignedUp(true);
+    setMySignup(newPerson);
     saveData(newMainList, newWaitlist);
   };
 
   const handleDropout = (personId, isWaitlist = false) => {
+    // Find the person being removed
+    const person = isWaitlist
+      ? waitlist.find(p => p.id === personId)
+      : mainList.find(p => p.id === personId);
+
+    // Only allow removing your own signup (matching device ID)
+    if (person && person.deviceId !== deviceId) {
+      showMessage("You can only remove your own signup", 'error');
+      return;
+    }
+
     let newMainList = mainList;
     let newWaitlist = waitlist;
 
@@ -102,6 +183,12 @@ export default function FrisbeeRSVP() {
       }
     }
 
+    // If removing own signup, allow signing up again
+    if (person && person.deviceId === deviceId) {
+      setHasSignedUp(false);
+      setMySignup(null);
+    }
+
     setMainList(newMainList);
     setWaitlist(newWaitlist);
     saveData(newMainList, newWaitlist);
@@ -111,6 +198,8 @@ export default function FrisbeeRSVP() {
     if (window.confirm('Are you sure you want to clear all RSVPs? This cannot be undone.')) {
       setMainList([]);
       setWaitlist([]);
+      setHasSignedUp(false);
+      setMySignup(null);
       saveData([], []);
       showMessage('All RSVPs cleared', 'success');
     }
@@ -124,6 +213,9 @@ export default function FrisbeeRSVP() {
       minute: '2-digit'
     });
   };
+
+  // Check if a person is from this device
+  const isMySignup = (person) => person.deviceId === deviceId;
 
   if (loading) {
     return (
@@ -164,24 +256,38 @@ export default function FrisbeeRSVP() {
             </div>
           )}
 
+          {/* Already Signed Up Notice */}
+          {hasSignedUp && mySignup && (
+            <div className="mb-4 p-4 bg-blue-500 text-white rounded-lg text-center">
+              <p className="font-medium">You're signed up as: {mySignup.name}</p>
+              <p className="text-sm text-blue-100 mt-1">One signup per device allowed</p>
+            </div>
+          )}
+
           {/* RSVP Form */}
           <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-            <div className="flex flex-col md:flex-row gap-3">
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleRSVP()}
-                placeholder="Enter your name"
-                className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none text-lg"
-              />
-              <button
-                onClick={handleRSVP}
-                className="px-8 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition-colors text-lg"
-              >
-                RSVP
-              </button>
-            </div>
+            {!hasSignedUp ? (
+              <div className="flex flex-col md:flex-row gap-3">
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleRSVP()}
+                  placeholder="Enter your name"
+                  className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none text-lg"
+                />
+                <button
+                  onClick={handleRSVP}
+                  className="px-8 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition-colors text-lg"
+                >
+                  RSVP
+                </button>
+              </div>
+            ) : (
+              <div className="text-center text-gray-600 py-2">
+                <p>You've already signed up for this week!</p>
+              </div>
+            )}
 
             {/* Status Bar */}
             <div className="mt-4">
@@ -217,23 +323,34 @@ export default function FrisbeeRSVP() {
                 {mainList.map((person, index) => (
                   <div
                     key={person.id}
-                    className="flex items-center justify-between p-3 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
+                    className={`flex items-center justify-between p-3 rounded-lg transition-colors ${
+                      isMySignup(person)
+                        ? 'bg-blue-50 hover:bg-blue-100 ring-2 ring-blue-300'
+                        : 'bg-green-50 hover:bg-green-100'
+                    }`}
                   >
                     <div className="flex items-center gap-3">
-                      <span className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center font-bold text-sm">
+                      <span className={`w-8 h-8 text-white rounded-full flex items-center justify-center font-bold text-sm ${
+                        isMySignup(person) ? 'bg-blue-600' : 'bg-green-600'
+                      }`}>
                         {index + 1}
                       </span>
                       <div>
-                        <span className="font-medium text-gray-800">{person.name}</span>
+                        <span className="font-medium text-gray-800">
+                          {person.name}
+                          {isMySignup(person) && <span className="text-blue-600 text-xs ml-2">(You)</span>}
+                        </span>
                         <span className="text-xs text-gray-500 ml-2">{formatTime(person.timestamp)}</span>
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleDropout(person.id)}
-                      className="text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1 rounded-lg transition-colors text-sm"
-                    >
-                      Drop out
-                    </button>
+                    {isMySignup(person) && (
+                      <button
+                        onClick={() => handleDropout(person.id)}
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1 rounded-lg transition-colors text-sm"
+                      >
+                        Drop out
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -254,23 +371,34 @@ export default function FrisbeeRSVP() {
                   {waitlist.map((person, index) => (
                     <div
                       key={person.id}
-                      className="flex items-center justify-between p-3 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors"
+                      className={`flex items-center justify-between p-3 rounded-lg transition-colors ${
+                        isMySignup(person)
+                          ? 'bg-blue-50 hover:bg-blue-100 ring-2 ring-blue-300'
+                          : 'bg-orange-50 hover:bg-orange-100'
+                      }`}
                     >
                       <div className="flex items-center gap-3">
-                        <span className="w-8 h-8 bg-orange-500 text-white rounded-full flex items-center justify-center font-bold text-sm">
+                        <span className={`w-8 h-8 text-white rounded-full flex items-center justify-center font-bold text-sm ${
+                          isMySignup(person) ? 'bg-blue-600' : 'bg-orange-500'
+                        }`}>
                           {index + 1}
                         </span>
                         <div>
-                          <span className="font-medium text-gray-800">{person.name}</span>
+                          <span className="font-medium text-gray-800">
+                            {person.name}
+                            {isMySignup(person) && <span className="text-blue-600 text-xs ml-2">(You)</span>}
+                          </span>
                           <span className="text-xs text-gray-500 ml-2">{formatTime(person.timestamp)}</span>
                         </div>
                       </div>
-                      <button
-                        onClick={() => handleDropout(person.id, true)}
-                        className="text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1 rounded-lg transition-colors text-sm"
-                      >
-                        Remove
-                      </button>
+                      {isMySignup(person) && (
+                        <button
+                          onClick={() => handleDropout(person.id, true)}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1 rounded-lg transition-colors text-sm"
+                        >
+                          Remove
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
