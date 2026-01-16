@@ -201,6 +201,79 @@ describe('RSVP API', () => {
         })
       );
     });
+
+    it('bumps non-whitelisted user when whitelisted user signs up to full list', async () => {
+      mockKvStore['frisbee-settings'] = {
+        mainListLimit: 2,
+        accessPeriod: { enabled: false },
+      };
+      mockKvStore['frisbee-rsvp-data'] = {
+        mainList: [
+          { id: 1, name: 'AIS Member', deviceId: 'device1', isWhitelisted: true },
+          { id: 2, name: 'Regular User', deviceId: 'device2' },
+        ],
+        waitlist: [],
+      };
+      // Set up whitelist with the new AIS member
+      mockKvStore['frisbee-whitelist'] = [
+        { name: 'AIS Member', deviceId: 'device1' },
+        { name: 'New AIS Member', deviceId: 'device3' },
+      ];
+
+      const { req, res } = createMockReqRes('POST', {
+        name: 'New AIS Member',
+        deviceId: 'device3'
+      });
+
+      await handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      const response = res.json.mock.calls[0][0];
+
+      // New AIS member should be on main list
+      expect(response.listType).toBe('main');
+      expect(response.mainList).toHaveLength(2);
+      expect(response.mainList.some(p => p.name === 'New AIS Member' && p.isWhitelisted)).toBe(true);
+
+      // Regular user should be bumped to waitlist
+      expect(response.waitlist).toHaveLength(1);
+      expect(response.waitlist[0].name).toBe('Regular User');
+      expect(response.bumpedPerson.name).toBe('Regular User');
+    });
+
+    it('adds whitelisted user to waitlist when all main list spots are whitelisted', async () => {
+      mockKvStore['frisbee-settings'] = {
+        mainListLimit: 2,
+        accessPeriod: { enabled: false },
+      };
+      mockKvStore['frisbee-rsvp-data'] = {
+        mainList: [
+          { id: 1, name: 'AIS Member 1', deviceId: 'device1', isWhitelisted: true },
+          { id: 2, name: 'AIS Member 2', deviceId: 'device2', isWhitelisted: true },
+        ],
+        waitlist: [],
+      };
+      mockKvStore['frisbee-whitelist'] = [
+        { name: 'AIS Member 1', deviceId: 'device1' },
+        { name: 'AIS Member 2', deviceId: 'device2' },
+        { name: 'AIS Member 3', deviceId: 'device3' },
+      ];
+
+      const { req, res } = createMockReqRes('POST', {
+        name: 'AIS Member 3',
+        deviceId: 'device3'
+      });
+
+      await handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          listType: 'waitlist',
+        })
+      );
+    });
   });
 
   describe('DELETE /api/rsvp', () => {

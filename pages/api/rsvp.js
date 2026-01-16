@@ -270,25 +270,63 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'This name is already on the list!' });
       }
 
+      // Check if this person is on the whitelist
+      const whitelist = await kv.get('frisbee-whitelist') || [];
+      const whitelistEntry = whitelist.find(w =>
+        w.name.toLowerCase() === trimmedName.toLowerCase() ||
+        w.deviceId === deviceId
+      );
+      const isWhitelisted = !!whitelistEntry;
+
       const newPerson = {
         id: Date.now(),
         name: trimmedName,
         timestamp: new Date().toISOString(),
-        deviceId: deviceId
+        deviceId: deviceId,
+        ...(isWhitelisted && { isWhitelisted: true })
       };
 
       const mainListLimit = settings.mainListLimit || DEFAULT_MAIN_LIST_LIMIT;
-      let newMainList = mainList;
-      let newWaitlist = waitlist;
+      let newMainList = [...mainList];
+      let newWaitlist = [...waitlist];
       let message = '';
       let listType = '';
+      let bumpedPerson = null;
 
-      if (mainList.length < mainListLimit) {
-        newMainList = [...mainList, newPerson];
+      if (newMainList.length < mainListLimit) {
+        // There's space - just add to main list
+        newMainList = [...newMainList, newPerson];
         message = `You're in! Spot #${newMainList.length}`;
         listType = 'main';
+      } else if (isWhitelisted) {
+        // Main list is full but this is a whitelisted (AIS) member
+        // Find the last non-whitelisted person to bump to waitlist
+        let bumpIndex = -1;
+        for (let i = newMainList.length - 1; i >= 0; i--) {
+          if (!newMainList[i].isWhitelisted) {
+            bumpIndex = i;
+            break;
+          }
+        }
+
+        if (bumpIndex >= 0) {
+          // Bump the non-whitelisted person to the front of waitlist
+          bumpedPerson = newMainList[bumpIndex];
+          newMainList.splice(bumpIndex, 1);
+          newWaitlist = [bumpedPerson, ...newWaitlist];
+          // Add whitelisted person to main list
+          newMainList = [...newMainList, newPerson];
+          message = `You're in! Spot #${newMainList.length} (AIS priority)`;
+          listType = 'main';
+        } else {
+          // All spots taken by whitelisted members - go to waitlist
+          newWaitlist = [...newWaitlist, newPerson];
+          message = `Main list full of AIS members. You're #${newWaitlist.length} on the waitlist`;
+          listType = 'waitlist';
+        }
       } else {
-        newWaitlist = [...waitlist, newPerson];
+        // Regular user and list is full - go to waitlist
+        newWaitlist = [...newWaitlist, newPerson];
         message = `Main list full. You're #${newWaitlist.length} on the waitlist`;
         listType = 'waitlist';
       }
@@ -301,7 +339,8 @@ export default async function handler(req, res) {
         listType,
         person: newPerson,
         mainList: newMainList,
-        waitlist: newWaitlist
+        waitlist: newWaitlist,
+        ...(bumpedPerson && { bumpedPerson })
       });
     } catch (error) {
       console.error('Failed to add RSVP:', error);
