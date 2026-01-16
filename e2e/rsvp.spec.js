@@ -1,12 +1,35 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
 
-test.describe('Frisbee RSVP App', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-  });
+// Helper to mock API with default open state
+const mockRsvpApi = async (page, data = {}) => {
+  const defaultData = {
+    mainList: [],
+    waitlist: [],
+    mainListLimit: 30,
+    accessStatus: { isOpen: true, message: null },
+    snoozedNames: [],
+    whitelist: [],
+    ...data,
+  };
 
+  await page.route('**/api/rsvp', async route => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(defaultData),
+      });
+    } else {
+      await route.continue();
+    }
+  });
+};
+
+test.describe('Frisbee RSVP App', () => {
   test('displays the main page with title', async ({ page }) => {
+    await mockRsvpApi(page);
+    await page.goto('/');
     await expect(page.locator('h1')).toContainText('Weekly Frisbee');
   });
 
@@ -14,7 +37,18 @@ test.describe('Frisbee RSVP App', () => {
     // Go to the page with slow network to catch loading state
     await page.route('**/api/rsvp', async route => {
       await new Promise(resolve => setTimeout(resolve, 500));
-      await route.continue();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          mainList: [],
+          waitlist: [],
+          mainListLimit: 30,
+          accessStatus: { isOpen: true, message: null },
+          snoozedNames: [],
+          whitelist: [],
+        }),
+      });
     });
 
     await page.goto('/');
@@ -25,51 +59,19 @@ test.describe('Frisbee RSVP App', () => {
   });
 
   test('displays RSVP form when access is open', async ({ page }) => {
-    // Mock the API to return open access
-    await page.route('**/api/rsvp', async route => {
-      if (route.request().method() === 'GET') {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            mainList: [],
-            waitlist: [],
-            mainListLimit: 30,
-            accessStatus: { isOpen: true, message: null },
-            snoozedNames: [],
-            whitelist: [],
-          }),
-        });
-      } else {
-        await route.continue();
-      }
-    });
-
+    await mockRsvpApi(page);
     await page.goto('/');
     await expect(page.locator('input[placeholder*="name"]')).toBeVisible();
-    // Button might say "RSVP" or "Join" instead of "Sign Up"
-    await expect(page.locator('button[type="submit"]')).toBeVisible();
+    // Button says "RSVP" not "Sign Up"
+    await expect(page.locator('button:has-text("RSVP")')).toBeVisible();
   });
 
   test('shows closed message when RSVP is closed', async ({ page }) => {
-    await page.route('**/api/rsvp', async route => {
-      if (route.request().method() === 'GET') {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            mainList: [],
-            waitlist: [],
-            mainListLimit: 30,
-            accessStatus: {
-              isOpen: false,
-              message: 'RSVP is closed. Opens Thursday at 12:00 PM WAT',
-            },
-            snoozedNames: [],
-            whitelist: [],
-          }),
-        });
-      }
+    await mockRsvpApi(page, {
+      accessStatus: {
+        isOpen: false,
+        message: 'RSVP is closed. Opens Thursday at 12:00 PM WAT',
+      },
     });
 
     await page.goto('/');
@@ -77,7 +79,7 @@ test.describe('Frisbee RSVP App', () => {
   });
 
   test('can sign up successfully', async ({ page }) => {
-    // First load with open access
+    // Mock both GET and POST
     await page.route('**/api/rsvp', async route => {
       const method = route.request().method();
 
@@ -115,31 +117,18 @@ test.describe('Frisbee RSVP App', () => {
 
     // Fill in name and submit
     await page.fill('input[placeholder*="name"]', 'Test User');
-    await page.click('button[type="submit"]');
+    await page.click('button:has-text("RSVP")');
 
     // Should show success message
     await expect(page.locator('text=Spot #1')).toBeVisible();
   });
 
   test('displays participants in the main list', async ({ page }) => {
-    await page.route('**/api/rsvp', async route => {
-      if (route.request().method() === 'GET') {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            mainList: [
-              { id: 1, name: 'Alice Smith', deviceId: 'device1' },
-              { id: 2, name: 'Bob Jones', deviceId: 'device2' },
-            ],
-            waitlist: [],
-            mainListLimit: 30,
-            accessStatus: { isOpen: true, message: null },
-            snoozedNames: [],
-            whitelist: [],
-          }),
-        });
-      }
+    await mockRsvpApi(page, {
+      mainList: [
+        { id: 1, name: 'Alice Smith', deviceId: 'device1' },
+        { id: 2, name: 'Bob Jones', deviceId: 'device2' },
+      ],
     });
 
     await page.goto('/');
@@ -149,21 +138,10 @@ test.describe('Frisbee RSVP App', () => {
   });
 
   test('displays waitlist when main list is full', async ({ page }) => {
-    await page.route('**/api/rsvp', async route => {
-      if (route.request().method() === 'GET') {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            mainList: [{ id: 1, name: 'Person One', deviceId: 'device1' }],
-            waitlist: [{ id: 2, name: 'Person Two', deviceId: 'device2' }],
-            mainListLimit: 1,
-            accessStatus: { isOpen: true, message: null },
-            snoozedNames: [],
-            whitelist: [],
-          }),
-        });
-      }
+    await mockRsvpApi(page, {
+      mainList: [{ id: 1, name: 'Person One', deviceId: 'device1' }],
+      waitlist: [{ id: 2, name: 'Person Two', deviceId: 'device2' }],
+      mainListLimit: 1,
     });
 
     await page.goto('/');
@@ -174,21 +152,9 @@ test.describe('Frisbee RSVP App', () => {
   });
 
   test('shows snoozed members section', async ({ page }) => {
-    await page.route('**/api/rsvp', async route => {
-      if (route.request().method() === 'GET') {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            mainList: [],
-            waitlist: [],
-            mainListLimit: 30,
-            accessStatus: { isOpen: true, message: null },
-            snoozedNames: ['john doe'],
-            whitelist: [{ name: 'John Doe' }],
-          }),
-        });
-      }
+    await mockRsvpApi(page, {
+      snoozedNames: ['john doe'],
+      whitelist: [{ name: 'John Doe' }],
     });
 
     await page.goto('/');
@@ -198,26 +164,14 @@ test.describe('Frisbee RSVP App', () => {
   });
 
   test('shows skip week button for whitelisted members', async ({ page }) => {
-    await page.route('**/api/rsvp', async route => {
-      if (route.request().method() === 'GET') {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            mainList: [{
-              id: 1,
-              name: 'AIS Member',
-              deviceId: 'device1',
-              isWhitelisted: true,
-            }],
-            waitlist: [],
-            mainListLimit: 30,
-            accessStatus: { isOpen: true, message: null },
-            snoozedNames: [],
-            whitelist: [{ name: 'AIS Member', deviceId: 'device1' }],
-          }),
-        });
-      }
+    await mockRsvpApi(page, {
+      mainList: [{
+        id: 1,
+        name: 'AIS Member',
+        deviceId: 'device1',
+        isWhitelisted: true,
+      }],
+      whitelist: [{ name: 'AIS Member', deviceId: 'device1' }],
     });
 
     await page.goto('/');
@@ -226,25 +180,12 @@ test.describe('Frisbee RSVP App', () => {
   });
 
   test('progress bar reflects list capacity', async ({ page }) => {
-    await page.route('**/api/rsvp', async route => {
-      if (route.request().method() === 'GET') {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            mainList: Array.from({ length: 15 }, (_, i) => ({
-              id: i + 1,
-              name: `Person ${i + 1}`,
-              deviceId: `device${i + 1}`,
-            })),
-            waitlist: [],
-            mainListLimit: 30,
-            accessStatus: { isOpen: true, message: null },
-            snoozedNames: [],
-            whitelist: [],
-          }),
-        });
-      }
+    await mockRsvpApi(page, {
+      mainList: Array.from({ length: 15 }, (_, i) => ({
+        id: i + 1,
+        name: `Person ${i + 1}`,
+        deviceId: `device${i + 1}`,
+      })),
     });
 
     await page.goto('/');
