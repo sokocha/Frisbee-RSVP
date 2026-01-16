@@ -197,6 +197,17 @@ export default function FrisbeeRSVP() {
     });
   };
 
+  const formatDisplayName = (fullName) => {
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length === 1) {
+      return parts[0]; // Only first name
+    }
+    const firstName = parts[0];
+    const lastName = parts[parts.length - 1];
+    const lastNameAbbrev = lastName.slice(0, 3);
+    return `${firstName} ${lastNameAbbrev}`;
+  };
+
   const isMySignup = (person) => person.deviceId === deviceId;
 
   if (loading) {
@@ -333,7 +344,7 @@ export default function FrisbeeRSVP() {
                       </span>
                       <div>
                         <span className="font-medium text-gray-800">
-                          {person.name}
+                          {formatDisplayName(person.name)}
                           {person.isWhitelisted && <span className="text-xs bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded ml-2">AIS</span>}
                           {isMySignup(person) && <span className="text-blue-600 text-xs ml-2">(You)</span>}
                         </span>
@@ -383,7 +394,7 @@ export default function FrisbeeRSVP() {
                         </span>
                         <div>
                           <span className="font-medium text-gray-800">
-                            {person.name}
+                            {formatDisplayName(person.name)}
                             {person.isWhitelisted && <span className="text-xs bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded ml-2">AIS</span>}
                             {isMySignup(person) && <span className="text-blue-600 text-xs ml-2">(You)</span>}
                           </span>
