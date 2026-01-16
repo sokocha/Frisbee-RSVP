@@ -75,7 +75,8 @@ test.describe('Frisbee RSVP App', () => {
     });
 
     await page.goto('/');
-    await expect(page.locator('text=RSVP is currently closed')).toBeVisible();
+    // Use first() since the text appears in both header badge and form area
+    await expect(page.locator('text=RSVP is currently closed').first()).toBeVisible();
   });
 
   test('can sign up successfully', async ({ page }) => {
