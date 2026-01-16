@@ -8,6 +8,36 @@ const LAST_EMAIL_KEY = 'frisbee-last-email';
 const SNOOZED_KEY = 'frisbee-snoozed';
 const DEFAULT_MAIN_LIST_LIMIT = 30;
 
+/**
+ * Sort people by priority:
+ * 1. AIS members first (by earliest timestamp)
+ * 2. Non-AIS members second (by earliest timestamp)
+ *
+ * Within each group, earlier timestamp = higher priority
+ */
+function sortByPriority(people) {
+  return [...people].sort((a, b) => {
+    // AIS members come first
+    if (a.isWhitelisted && !b.isWhitelisted) return -1;
+    if (!a.isWhitelisted && b.isWhitelisted) return 1;
+    // Within same category, earlier timestamp wins
+    return new Date(a.timestamp) - new Date(b.timestamp);
+  });
+}
+
+/**
+ * Rebalance mainList and waitlist based on the limit.
+ * Combines both lists, sorts by priority, then splits at the limit.
+ */
+function rebalanceLists(mainList, waitlist, limit) {
+  const allPeople = [...mainList, ...waitlist];
+  const sorted = sortByPriority(allPeople);
+  return {
+    mainList: sorted.slice(0, limit),
+    waitlist: sorted.slice(limit)
+  };
+}
+
 // Default settings
 const DEFAULT_SETTINGS = {
   mainListLimit: 30,
@@ -287,47 +317,26 @@ export default async function handler(req, res) {
       };
 
       const mainListLimit = settings.mainListLimit || DEFAULT_MAIN_LIST_LIMIT;
-      let newMainList = [...mainList];
-      let newWaitlist = [...waitlist];
+
+      // Add new person and rebalance both lists by priority
+      const rebalanced = rebalanceLists([...mainList, newPerson], waitlist, mainListLimit);
+      const newMainList = rebalanced.mainList;
+      const newWaitlist = rebalanced.waitlist;
+
+      // Determine where the new person ended up
+      const isOnMainList = newMainList.some(p => p.id === newPerson.id);
+      const position = isOnMainList
+        ? newMainList.findIndex(p => p.id === newPerson.id) + 1
+        : newWaitlist.findIndex(p => p.id === newPerson.id) + 1;
+
       let message = '';
       let listType = '';
-      let bumpedPerson = null;
 
-      if (newMainList.length < mainListLimit) {
-        // There's space - just add to main list
-        newMainList = [...newMainList, newPerson];
-        message = `You're in! Spot #${newMainList.length}`;
+      if (isOnMainList) {
+        message = `You're in! Spot #${position}`;
         listType = 'main';
-      } else if (isWhitelisted) {
-        // Main list is full but this is a whitelisted (AIS) member
-        // Find the most recently joined non-whitelisted person to bump
-        const nonWhitelisted = newMainList
-          .map((p, idx) => ({ ...p, originalIndex: idx }))
-          .filter(p => !p.isWhitelisted);
-
-        if (nonWhitelisted.length > 0) {
-          // Sort by timestamp descending (most recent first) and take the most recent
-          nonWhitelisted.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-          const toBump = nonWhitelisted[0];
-
-          // Bump the most recent non-whitelisted person to the front of waitlist
-          bumpedPerson = newMainList[toBump.originalIndex];
-          newMainList.splice(toBump.originalIndex, 1);
-          newWaitlist = [bumpedPerson, ...newWaitlist];
-          // Add whitelisted person to main list
-          newMainList = [...newMainList, newPerson];
-          message = `You're in! Spot #${newMainList.length} (AIS priority)`;
-          listType = 'main';
-        } else {
-          // All spots taken by whitelisted members - go to waitlist
-          newWaitlist = [...newWaitlist, newPerson];
-          message = `Main list full of AIS members. You're #${newWaitlist.length} on the waitlist`;
-          listType = 'waitlist';
-        }
       } else {
-        // Regular user and list is full - go to waitlist
-        newWaitlist = [...newWaitlist, newPerson];
-        message = `Main list full. You're #${newWaitlist.length} on the waitlist`;
+        message = `Main list full. You're #${position} on the waitlist`;
         listType = 'waitlist';
       }
 
@@ -339,8 +348,7 @@ export default async function handler(req, res) {
         listType,
         person: newPerson,
         mainList: newMainList,
-        waitlist: newWaitlist,
-        ...(bumpedPerson && { bumpedPerson })
+        waitlist: newWaitlist
       });
     } catch (error) {
       console.error('Failed to add RSVP:', error);

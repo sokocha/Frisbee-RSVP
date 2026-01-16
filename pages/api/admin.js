@@ -9,6 +9,31 @@ const ARCHIVE_KEY = 'frisbee-archive';
 // Simple admin password - change this or set via environment variable
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'frisbee-admin-2024';
 
+/**
+ * Sort people by priority:
+ * 1. AIS members first (by earliest timestamp)
+ * 2. Non-AIS members second (by earliest timestamp)
+ */
+function sortByPriority(people) {
+  return [...people].sort((a, b) => {
+    if (a.isWhitelisted && !b.isWhitelisted) return -1;
+    if (!a.isWhitelisted && b.isWhitelisted) return 1;
+    return new Date(a.timestamp) - new Date(b.timestamp);
+  });
+}
+
+/**
+ * Rebalance mainList and waitlist based on the limit.
+ */
+function rebalanceLists(mainList, waitlist, limit) {
+  const allPeople = [...mainList, ...waitlist];
+  const sorted = sortByPriority(allPeople);
+  return {
+    mainList: sorted.slice(0, limit),
+    waitlist: sorted.slice(limit)
+  };
+}
+
 // Default settings (WAT = UTC+1)
 const DEFAULT_SETTINGS = {
   mainListLimit: 30,
@@ -270,61 +295,19 @@ export default async function handler(req, res) {
 
         await kv.set(SETTINGS_KEY, newSettings);
 
-        // Handle limit enforcement - always ensure mainList respects the limit
-        let rsvpData = await kv.get(RSVP_KEY) || { mainList: [], waitlist: [] };
-        const promoted = [];
-        const demoted = [];
+        // Always rebalance lists based on the new limit
+        const rsvpData = await kv.get(RSVP_KEY) || { mainList: [], waitlist: [] };
+        const oldMainListIds = new Set(rsvpData.mainList.map(p => p.id));
 
-        // Always enforce the limit - demote excess users if mainList exceeds newLimit
-        if (rsvpData.mainList.length > newLimit) {
-          // Limit decreased - need to bump excess people to waitlist
-          // Bump most recent non-whitelisted users first (by timestamp)
-          while (rsvpData.mainList.length > newLimit) {
-            // Find non-whitelisted users
-            const nonWhitelisted = rsvpData.mainList
-              .map((p, idx) => ({ ...p, originalIndex: idx }))
-              .filter(p => !p.isWhitelisted);
+        const rebalanced = rebalanceLists(rsvpData.mainList, rsvpData.waitlist, newLimit);
 
-            if (nonWhitelisted.length > 0) {
-              // Sort by timestamp descending and bump the most recent
-              nonWhitelisted.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-              const toBump = nonWhitelisted[0];
-              const bumpedPerson = rsvpData.mainList.splice(toBump.originalIndex, 1)[0];
-              rsvpData.waitlist.unshift(bumpedPerson);
-              demoted.push(bumpedPerson);
-            } else {
-              // All are whitelisted - bump the most recent whitelisted user
-              const sorted = [...rsvpData.mainList].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-              const toBumpIdx = rsvpData.mainList.findIndex(p => p.id === sorted[0].id);
-              const bumpedPerson = rsvpData.mainList.splice(toBumpIdx, 1)[0];
-              rsvpData.waitlist.unshift(bumpedPerson);
-              demoted.push(bumpedPerson);
-            }
-          }
-        } else if (newLimit > rsvpData.mainList.length && rsvpData.waitlist.length > 0) {
-          // Limit increased - promote from waitlist with AIS priority
-          while (rsvpData.mainList.length < newLimit && rsvpData.waitlist.length > 0) {
-            // Check if there are any whitelisted users in waitlist - they get priority
-            const whitelistedInWaitlist = rsvpData.waitlist.findIndex(p => p.isWhitelisted);
+        // Calculate who was promoted and demoted
+        const promoted = rebalanced.mainList.filter(p => !oldMainListIds.has(p.id));
+        const demoted = rebalanced.waitlist.filter(p => oldMainListIds.has(p.id));
 
-            let promotedPerson;
-            if (whitelistedInWaitlist >= 0) {
-              // Promote the first whitelisted person found
-              promotedPerson = rsvpData.waitlist.splice(whitelistedInWaitlist, 1)[0];
-            } else {
-              // No whitelisted in waitlist, promote by oldest timestamp
-              const sorted = [...rsvpData.waitlist].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-              const oldestIdx = rsvpData.waitlist.findIndex(p => p.id === sorted[0].id);
-              promotedPerson = rsvpData.waitlist.splice(oldestIdx, 1)[0];
-            }
-
-            rsvpData.mainList.push(promotedPerson);
-            promoted.push(promotedPerson);
-          }
-        }
-
+        // Save if anything changed
         if (promoted.length > 0 || demoted.length > 0) {
-          await kv.set(RSVP_KEY, rsvpData);
+          await kv.set(RSVP_KEY, rebalanced);
         }
 
         return res.status(200).json({
@@ -333,8 +316,8 @@ export default async function handler(req, res) {
           ...((promoted.length > 0 || demoted.length > 0) && {
             promoted,
             demoted,
-            mainList: rsvpData.mainList,
-            waitlist: rsvpData.waitlist
+            mainList: rebalanced.mainList,
+            waitlist: rebalanced.waitlist
           })
         });
       }

@@ -202,7 +202,7 @@ describe('RSVP API', () => {
       );
     });
 
-    it('bumps most recent non-whitelisted user when whitelisted user signs up to full list', async () => {
+    it('AIS member bumps non-AIS when signing up to full list', async () => {
       mockKvStore['frisbee-settings'] = {
         mainListLimit: 2,
         accessPeriod: { enabled: false },
@@ -210,20 +210,10 @@ describe('RSVP API', () => {
       mockKvStore['frisbee-rsvp-data'] = {
         mainList: [
           { id: 1, name: 'AIS Member', deviceId: 'device1', isWhitelisted: true, timestamp: '2026-01-16T10:00:00Z' },
-          { id: 2, name: 'Regular User Early', deviceId: 'device2', timestamp: '2026-01-16T10:30:00Z' },
-          { id: 3, name: 'Regular User Late', deviceId: 'device4', timestamp: '2026-01-16T11:00:00Z' },
-        ].slice(0, 2), // Only 2 to match limit
-        waitlist: [],
-      };
-      // Actually set up with the correct data for 2-person limit
-      mockKvStore['frisbee-rsvp-data'] = {
-        mainList: [
-          { id: 1, name: 'AIS Member', deviceId: 'device1', isWhitelisted: true, timestamp: '2026-01-16T10:00:00Z' },
           { id: 2, name: 'Regular User', deviceId: 'device2', timestamp: '2026-01-16T10:30:00Z' },
         ],
         waitlist: [],
       };
-      // Set up whitelist with the new AIS member
       mockKvStore['frisbee-whitelist'] = [
         { name: 'AIS Member', deviceId: 'device1' },
         { name: 'New AIS Member', deviceId: 'device3' },
@@ -239,7 +229,7 @@ describe('RSVP API', () => {
       expect(res.status).toHaveBeenCalledWith(200);
       const response = res.json.mock.calls[0][0];
 
-      // New AIS member should be on main list
+      // New AIS member should be on main list (AIS has priority over non-AIS)
       expect(response.listType).toBe('main');
       expect(response.mainList).toHaveLength(2);
       expect(response.mainList.some(p => p.name === 'New AIS Member' && p.isWhitelisted)).toBe(true);
@@ -247,10 +237,9 @@ describe('RSVP API', () => {
       // Regular user should be bumped to waitlist
       expect(response.waitlist).toHaveLength(1);
       expect(response.waitlist[0].name).toBe('Regular User');
-      expect(response.bumpedPerson.name).toBe('Regular User');
     });
 
-    it('bumps most recently joined non-whitelisted user when multiple exist', async () => {
+    it('lists are sorted by priority: AIS first, then by timestamp', async () => {
       mockKvStore['frisbee-settings'] = {
         mainListLimit: 3,
         accessPeriod: { enabled: false },
@@ -278,16 +267,17 @@ describe('RSVP API', () => {
       expect(res.status).toHaveBeenCalledWith(200);
       const response = res.json.mock.calls[0][0];
 
-      // New AIS member should be on main list
-      expect(response.listType).toBe('main');
+      // Main list should have 3 people, sorted by priority
       expect(response.mainList).toHaveLength(3);
 
-      // The MOST RECENT non-whitelisted user (Regular User Late) should be bumped
-      expect(response.bumpedPerson.name).toBe('Regular User Late');
-      expect(response.waitlist[0].name).toBe('Regular User Late');
+      // AIS members should be first (sorted by timestamp)
+      expect(response.mainList[0].name).toBe('AIS Member'); // Earliest AIS
+      expect(response.mainList[1].name).toBe('New AIS Member'); // Later AIS
+      expect(response.mainList[2].name).toBe('Regular User Early'); // Earliest non-AIS
 
-      // Regular User Early should still be on main list
-      expect(response.mainList.some(p => p.name === 'Regular User Early')).toBe(true);
+      // Latest non-AIS user should be on waitlist
+      expect(response.waitlist).toHaveLength(1);
+      expect(response.waitlist[0].name).toBe('Regular User Late');
     });
 
     it('adds whitelisted user to waitlist when all main list spots are whitelisted', async () => {
