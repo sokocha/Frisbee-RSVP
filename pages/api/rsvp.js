@@ -5,6 +5,7 @@ const SETTINGS_KEY = 'frisbee-settings';
 const ARCHIVE_KEY = 'frisbee-archive';
 const LAST_RESET_KEY = 'frisbee-last-reset';
 const LAST_EMAIL_KEY = 'frisbee-last-email';
+const SNOOZED_KEY = 'frisbee-snoozed';
 const DEFAULT_MAIN_LIST_LIMIT = 30;
 
 // Default settings
@@ -137,9 +138,13 @@ async function checkAndResetIfNeeded(settings) {
       await kv.set(ARCHIVE_KEY, archive);
     }
 
-    // Reset: keep only whitelisted people
+    // Reset: keep only whitelisted people (who aren't snoozed)
+    const snoozedData = await kv.get(SNOOZED_KEY) || { weekId: null, names: [] };
     const whitelistedPeople = rsvpData.mainList.filter(p => p.isWhitelisted);
     await kv.set(RSVP_KEY, { mainList: whitelistedPeople, waitlist: [] });
+
+    // Clear snoozed list for new week
+    await kv.set(SNOOZED_KEY, { weekId: currentWeekId, names: [] });
 
     // Mark this week as reset
     await kv.set(LAST_RESET_KEY, currentWeekId);
@@ -204,13 +209,24 @@ export default async function handler(req, res) {
       const accessStatus = isFormOpen(settings);
       const mainListLimit = settings.mainListLimit || DEFAULT_MAIN_LIST_LIMIT;
 
+      // Get snoozed list for this week
+      const timezone = settings.accessPeriod?.timezone || 'Africa/Lagos';
+      const currentWeekId = getCurrentWeekId(timezone);
+      const snoozedData = await kv.get(SNOOZED_KEY) || { weekId: currentWeekId, names: [] };
+      const snoozedNames = snoozedData.weekId === currentWeekId ? snoozedData.names : [];
+
+      // Get whitelist to check if requester is whitelisted
+      const whitelist = await kv.get('frisbee-whitelist') || [];
+
       return res.status(200).json({
         ...data,
         mainListLimit,
         accessStatus: {
           isOpen: accessStatus.isOpen,
           message: accessStatus.message
-        }
+        },
+        snoozedNames,
+        whitelist: whitelist.map(w => ({ name: w.name, deviceId: w.deviceId }))
       });
     } catch (error) {
       console.error('Failed to get RSVP data:', error);
@@ -381,6 +397,145 @@ export default async function handler(req, res) {
     }
 
     return res.status(400).json({ error: 'Invalid action' });
+  }
+
+  if (req.method === 'PATCH') {
+    // Snooze/unsnooze a whitelisted person
+    const { action, personId, deviceId } = req.body;
+
+    if (!personId || !deviceId) {
+      return res.status(400).json({ error: 'personId and deviceId are required' });
+    }
+
+    try {
+      const settings = await kv.get(SETTINGS_KEY) || DEFAULT_SETTINGS;
+      const data = await kv.get(RSVP_KEY) || { mainList: [], waitlist: [] };
+      let { mainList, waitlist } = data;
+
+      if (action === 'snooze') {
+        // Find the person in main list
+        const person = mainList.find(p => p.id === personId);
+
+        if (!person) {
+          return res.status(404).json({ error: 'Person not found on main list' });
+        }
+
+        if (!person.isWhitelisted) {
+          return res.status(400).json({ error: 'Only whitelisted members can snooze' });
+        }
+
+        if (person.deviceId !== deviceId) {
+          return res.status(403).json({ error: 'You can only snooze your own spot' });
+        }
+
+        // Remove from main list
+        mainList = mainList.filter(p => p.id !== personId);
+
+        // Add to snoozed list for this week
+        const timezone = settings.accessPeriod?.timezone || 'Africa/Lagos';
+        const currentWeekId = getCurrentWeekId(timezone);
+        const snoozedData = await kv.get(SNOOZED_KEY) || { weekId: currentWeekId, names: [] };
+
+        // If it's a new week, reset the snoozed list
+        if (snoozedData.weekId !== currentWeekId) {
+          snoozedData.weekId = currentWeekId;
+          snoozedData.names = [];
+        }
+
+        if (!snoozedData.names.includes(person.name.toLowerCase())) {
+          snoozedData.names.push(person.name.toLowerCase());
+        }
+
+        // Promote from waitlist if available
+        let promotedPerson = null;
+        if (waitlist.length > 0) {
+          promotedPerson = waitlist[0];
+          mainList = [...mainList, promotedPerson];
+          waitlist = waitlist.slice(1);
+        }
+
+        await kv.set(RSVP_KEY, { mainList, waitlist });
+        await kv.set(SNOOZED_KEY, snoozedData);
+
+        return res.status(200).json({
+          success: true,
+          message: "You're snoozed for this week. You'll be back automatically next week!",
+          promotedPerson,
+          mainList,
+          waitlist
+        });
+      }
+
+      if (action === 'unsnooze') {
+        // Check if user is snoozed
+        const settings = await kv.get(SETTINGS_KEY) || DEFAULT_SETTINGS;
+        const timezone = settings.accessPeriod?.timezone || 'Africa/Lagos';
+        const currentWeekId = getCurrentWeekId(timezone);
+        const snoozedData = await kv.get(SNOOZED_KEY) || { weekId: currentWeekId, names: [] };
+
+        // Get whitelist to find the person's name
+        const whitelist = await kv.get('frisbee-whitelist') || [];
+        const whitelistPerson = whitelist.find(w => w.deviceId === deviceId);
+
+        if (!whitelistPerson) {
+          return res.status(400).json({ error: 'Could not find your whitelist entry' });
+        }
+
+        const nameLC = whitelistPerson.name.toLowerCase();
+        if (!snoozedData.names.includes(nameLC)) {
+          return res.status(400).json({ error: "You're not currently snoozed" });
+        }
+
+        // Check if form is open
+        const accessStatus = isFormOpen(settings);
+        if (!accessStatus.isOpen) {
+          return res.status(403).json({ error: accessStatus.message });
+        }
+
+        // Remove from snoozed list
+        snoozedData.names = snoozedData.names.filter(n => n !== nameLC);
+        await kv.set(SNOOZED_KEY, snoozedData);
+
+        // Add back to main list or waitlist
+        const mainListLimit = settings.mainListLimit || DEFAULT_MAIN_LIST_LIMIT;
+        const newPerson = {
+          id: Date.now(),
+          name: whitelistPerson.name,
+          timestamp: new Date().toISOString(),
+          deviceId: deviceId,
+          isWhitelisted: true
+        };
+
+        let message = '';
+        let listType = '';
+
+        if (mainList.length < mainListLimit) {
+          mainList = [...mainList, newPerson];
+          message = `Welcome back! You're in spot #${mainList.length}`;
+          listType = 'main';
+        } else {
+          waitlist = [...waitlist, newPerson];
+          message = `Main list is full. You're #${waitlist.length} on the waitlist`;
+          listType = 'waitlist';
+        }
+
+        await kv.set(RSVP_KEY, { mainList, waitlist });
+
+        return res.status(200).json({
+          success: true,
+          message,
+          listType,
+          person: newPerson,
+          mainList,
+          waitlist
+        });
+      }
+
+      return res.status(400).json({ error: 'Invalid action' });
+    } catch (error) {
+      console.error('Snooze error:', error);
+      return res.status(500).json({ error: 'Failed to process snooze request' });
+    }
   }
 
   return res.status(405).json({ error: 'Method not allowed' });

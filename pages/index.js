@@ -52,6 +52,8 @@ export default function FrisbeeRSVP() {
   const [mySignup, setMySignup] = useState(null);
   const [accessStatus, setAccessStatus] = useState({ isOpen: true, message: null });
   const [mainListLimit, setMainListLimit] = useState(DEFAULT_MAIN_LIST_LIMIT);
+  const [snoozedNames, setSnoozedNames] = useState([]);
+  const [whitelist, setWhitelist] = useState([]);
 
   const checkMySignup = useCallback((mainList, waitlist, currentDeviceId) => {
     const allSignups = [...mainList, ...waitlist];
@@ -74,6 +76,8 @@ export default function FrisbeeRSVP() {
         setWaitlist(data.waitlist || []);
         setAccessStatus(data.accessStatus || { isOpen: true, message: null });
         setMainListLimit(data.mainListLimit || DEFAULT_MAIN_LIST_LIMIT);
+        setSnoozedNames(data.snoozedNames || []);
+        setWhitelist(data.whitelist || []);
         checkMySignup(data.mainList || [], data.waitlist || [], currentDeviceId);
       }
     } catch (error) {
@@ -216,6 +220,70 @@ export default function FrisbeeRSVP() {
 
   const isMySignup = (person) => person.deviceId === deviceId;
 
+  // Check if current user is a snoozed whitelisted member
+  const myWhitelistEntry = whitelist.find(w => w.deviceId === deviceId);
+  const isSnoozed = myWhitelistEntry && snoozedNames.includes(myWhitelistEntry.name.toLowerCase());
+
+  const handleSnooze = async (personId) => {
+    if (!confirm("Skip this week? You'll be automatically added back next week.")) return;
+
+    setSubmitting(true);
+    try {
+      const response = await fetch('/api/rsvp', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'snooze', personId, deviceId })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setMainList(data.mainList);
+        setWaitlist(data.waitlist);
+        setHasSignedUp(false);
+        setMySignup(null);
+        // Refresh to get updated snoozed list
+        loadData(deviceId);
+        showMessage(data.message, 'success');
+      } else {
+        showMessage(data.error, 'error');
+      }
+    } catch (error) {
+      console.error('Failed to snooze:', error);
+      showMessage('Failed to snooze. Please try again.', 'error');
+    }
+    setSubmitting(false);
+  };
+
+  const handleUnsnooze = async () => {
+    setSubmitting(true);
+    try {
+      const response = await fetch('/api/rsvp', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'unsnooze', personId: 0, deviceId })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setMainList(data.mainList);
+        setWaitlist(data.waitlist);
+        setHasSignedUp(true);
+        setMySignup(data.person);
+        // Refresh to get updated snoozed list
+        loadData(deviceId);
+        showMessage(data.message, data.listType === 'main' ? 'success' : 'warning');
+      } else {
+        showMessage(data.error, 'error');
+      }
+    } catch (error) {
+      console.error('Failed to unsnooze:', error);
+      showMessage('Failed to rejoin. Please try again.', 'error');
+    }
+    setSubmitting(false);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-900 to-green-700 flex items-center justify-center">
@@ -267,6 +335,23 @@ export default function FrisbeeRSVP() {
             <div className="mb-4 p-4 bg-blue-500 text-white rounded-lg text-center">
               <p className="font-medium">You're signed up as: {mySignup.name}</p>
               <p className="text-sm text-blue-100 mt-1">One signup per device allowed</p>
+            </div>
+          )}
+
+          {/* Snoozed Notice for whitelisted members */}
+          {isSnoozed && !hasSignedUp && (
+            <div className="mb-4 p-4 bg-yellow-500 text-black rounded-lg text-center">
+              <p className="font-medium">You're skipping this week</p>
+              <p className="text-sm mt-1">You'll be automatically added back next week</p>
+              {accessStatus.isOpen && (
+                <button
+                  onClick={handleUnsnooze}
+                  disabled={submitting}
+                  className="mt-3 px-4 py-2 bg-white hover:bg-gray-100 text-yellow-700 font-medium rounded-lg disabled:opacity-50"
+                >
+                  {submitting ? 'Rejoining...' : 'Changed your mind? Rejoin this week'}
+                </button>
+              )}
             </div>
           )}
 
@@ -364,6 +449,15 @@ export default function FrisbeeRSVP() {
                         className="text-red-500 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 px-3 py-1 rounded-lg transition-colors text-sm"
                       >
                         Drop out
+                      </button>
+                    )}
+                    {isMySignup(person) && person.isWhitelisted && accessStatus.isOpen && (
+                      <button
+                        onClick={() => handleSnooze(person.id)}
+                        disabled={submitting}
+                        className="text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 disabled:opacity-50 px-3 py-1 rounded-lg transition-colors text-sm"
+                      >
+                        Skip week
                       </button>
                     )}
                   </div>
