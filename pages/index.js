@@ -268,6 +268,7 @@ export default function FrisbeeRSVP() {
   const [snoozeModal, setSnoozeModal] = useState({ show: false, person: null, action: null });
   const [snoozePassword, setSnoozePassword] = useState('');
   const [showConfetti, setShowConfetti] = useState(false);
+  const [confirmModal, setConfirmModal] = useState({ show: false, personId: null, isWaitlist: false });
 
   const checkMySignup = useCallback((mainList, waitlist, currentDeviceId) => {
     const allSignups = [...mainList, ...waitlist];
@@ -419,6 +420,19 @@ export default function FrisbeeRSVP() {
   const closeSnoozeModal = () => {
     setSnoozeModal({ show: false, person: null, action: null });
     setSnoozePassword('');
+  };
+
+  const openConfirmModal = (personId, isWaitlist = false) => {
+    setConfirmModal({ show: true, personId, isWaitlist });
+  };
+
+  const closeConfirmModal = () => {
+    setConfirmModal({ show: false, personId: null, isWaitlist: false });
+  };
+
+  const handleConfirmedDropout = async () => {
+    await handleDropout(confirmModal.personId, confirmModal.isWaitlist);
+    closeConfirmModal();
   };
 
   const handleSnoozeSubmit = async () => {
@@ -675,6 +689,38 @@ export default function FrisbeeRSVP() {
             </div>
           )}
 
+          {/* Confirmation Modal for Drop Out */}
+          {confirmModal.show && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in-up">
+              <div className="glass-card-solid rounded-3xl shadow-2xl p-6 max-w-md w-full">
+                <h3 className="text-xl font-bold text-gray-800 mb-4">
+                  {confirmModal.isWaitlist ? '🚪 Leave Waitlist?' : '🚪 Cancel RSVP?'}
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  {confirmModal.isWaitlist
+                    ? 'Are you sure you want to remove yourself from the waitlist?'
+                    : 'Are you sure you want to cancel your RSVP? Your spot will be given to the next person on the waitlist.'}
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={closeConfirmModal}
+                    disabled={submitting}
+                    className="flex-1 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl disabled:opacity-50 transition-colors"
+                  >
+                    Keep my spot
+                  </button>
+                  <button
+                    onClick={handleConfirmedDropout}
+                    disabled={submitting}
+                    className="flex-1 px-4 py-3 bg-red-500 hover:bg-red-600 text-white font-medium rounded-xl disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                  >
+                    {submitting ? <Spinner /> : 'Yes, cancel'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* RSVP Form */}
           <div className="glass-card-solid rounded-3xl shadow-2xl p-4 md:p-6 mb-4 md:mb-6 animate-fade-in-up card-hover">
             {!accessStatus.isOpen ? (
@@ -777,7 +823,7 @@ export default function FrisbeeRSVP() {
                       <span className="text-xs text-gray-400 font-medium">#{index + 1}</span>
                       {isMySignup(person) && !person.isWhitelisted && (
                         <button
-                          onClick={() => handleDropout(person.id)}
+                          onClick={() => openConfirmModal(person.id, false)}
                           disabled={submitting}
                           className="text-red-500 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 px-3 py-1.5 rounded-lg transition-all text-sm font-medium"
                         >
@@ -845,7 +891,7 @@ export default function FrisbeeRSVP() {
                         <span className="text-xs text-gray-400 font-medium">#{index + 1}</span>
                         {isMySignup(person) && !person.isWhitelisted && (
                           <button
-                            onClick={() => handleDropout(person.id, true)}
+                            onClick={() => openConfirmModal(person.id, true)}
                             disabled={submitting}
                             className="text-red-500 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 px-3 py-1.5 rounded-lg transition-all text-sm font-medium"
                           >
