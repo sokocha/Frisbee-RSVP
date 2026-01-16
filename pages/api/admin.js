@@ -252,9 +252,12 @@ export default async function handler(req, res) {
         }
 
         const currentSettings = await kv.get(SETTINGS_KEY) || DEFAULT_SETTINGS;
+        const oldLimit = currentSettings.mainListLimit || 30;
+        const newLimit = settings.mainListLimit ?? oldLimit;
+
         const newSettings = {
           ...currentSettings,
-          mainListLimit: settings.mainListLimit ?? currentSettings.mainListLimit ?? 30,
+          mainListLimit: newLimit,
           accessPeriod: {
             ...currentSettings.accessPeriod,
             ...(settings.accessPeriod || {})
@@ -267,9 +270,32 @@ export default async function handler(req, res) {
 
         await kv.set(SETTINGS_KEY, newSettings);
 
+        // If the limit increased, promote users from waitlist
+        let rsvpData = null;
+        const promoted = [];
+        if (newLimit > oldLimit) {
+          rsvpData = await kv.get(RSVP_KEY) || { mainList: [], waitlist: [] };
+
+          // Promote as many as possible from waitlist to fill new slots
+          while (rsvpData.mainList.length < newLimit && rsvpData.waitlist.length > 0) {
+            const promotedPerson = rsvpData.waitlist.shift();
+            rsvpData.mainList.push(promotedPerson);
+            promoted.push(promotedPerson);
+          }
+
+          if (promoted.length > 0) {
+            await kv.set(RSVP_KEY, rsvpData);
+          }
+        }
+
         return res.status(200).json({
           success: true,
-          settings: newSettings
+          settings: newSettings,
+          ...(promoted.length > 0 && {
+            promoted,
+            mainList: rsvpData.mainList,
+            waitlist: rsvpData.waitlist
+          })
         });
       }
 
