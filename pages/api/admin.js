@@ -133,31 +133,14 @@ export default async function handler(req, res) {
             addedAt: new Date().toISOString()
           });
 
-          // Add to main list (whitelisted users always have priority)
-          if (rsvpData.mainList.length < limit) {
-            rsvpData.mainList.push(newPerson);
-          } else {
-            // Main list is full - find the last non-whitelisted person to bump
-            const lastNonWhitelistedIndex = [...rsvpData.mainList].reverse().findIndex(p => !p.isWhitelisted);
-
-            if (lastNonWhitelistedIndex !== -1) {
-              // Convert reversed index to actual index
-              const actualIndex = rsvpData.mainList.length - 1 - lastNonWhitelistedIndex;
-              const bumpedPerson = rsvpData.mainList[actualIndex];
-
-              // Remove bumped person from main list
-              rsvpData.mainList.splice(actualIndex, 1);
-
-              // Add bumped person to the front of waitlist
-              rsvpData.waitlist.unshift(bumpedPerson);
-
-              // Add whitelisted person to main list
-              rsvpData.mainList.push(newPerson);
-            } else {
-              // All spots are whitelisted, add to waitlist
-              rsvpData.waitlist.push(newPerson);
-            }
-          }
+          // Add the new person to the combined list and rebalance
+          const rebalanced = rebalanceLists(
+            [...rsvpData.mainList, newPerson],
+            rsvpData.waitlist,
+            limit
+          );
+          rsvpData.mainList = rebalanced.mainList;
+          rsvpData.waitlist = rebalanced.waitlist;
 
           added.push(trimmedName);
         }
@@ -315,6 +298,32 @@ export default async function handler(req, res) {
           demoted,
           mainList: rebalanced.mainList,
           waitlist: rebalanced.waitlist
+        });
+      }
+
+      if (action === 'rebalance') {
+        // Manually trigger a rebalance of existing lists
+        const settings = await kv.get(SETTINGS_KEY) || DEFAULT_SETTINGS;
+        const limit = settings.mainListLimit || 30;
+        const rsvpData = await kv.get(RSVP_KEY) || { mainList: [], waitlist: [] };
+        const whitelist = await kv.get(WHITELIST_KEY) || [];
+
+        const oldMainListIds = new Set(rsvpData.mainList.map(p => p.id));
+        const rebalanced = rebalanceLists(rsvpData.mainList, rsvpData.waitlist, limit);
+
+        const promoted = rebalanced.mainList.filter(p => !oldMainListIds.has(p.id));
+        const demoted = rebalanced.waitlist.filter(p => oldMainListIds.has(p.id));
+
+        await kv.set(RSVP_KEY, rebalanced);
+
+        return res.status(200).json({
+          success: true,
+          promoted,
+          demoted,
+          mainList: rebalanced.mainList,
+          waitlist: rebalanced.waitlist,
+          whitelist,
+          settings
         });
       }
 
