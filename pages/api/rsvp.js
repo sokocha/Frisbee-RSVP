@@ -250,7 +250,11 @@ export default async function handler(req, res) {
       const timezone = settings.accessPeriod?.timezone || 'Africa/Lagos';
       const currentWeekId = getCurrentWeekId(timezone);
       const snoozedData = await kv.get(SNOOZED_KEY) || { weekId: currentWeekId, names: [] };
-      const snoozedNames = snoozedData.weekId === currentWeekId ? snoozedData.names : [];
+      const snoozedEntries = snoozedData.weekId === currentWeekId ? snoozedData.names : [];
+      // Extract display names for frontend (handle both old string format and new object format)
+      const snoozedNames = snoozedEntries.map(entry =>
+        typeof entry === 'string' ? entry : (entry.snapshot?.name || entry.nameLC)
+      );
 
       // Get whitelist to check if requester is whitelisted
       const whitelist = await kv.get('frisbee-whitelist') || [];
