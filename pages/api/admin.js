@@ -21,6 +21,12 @@ const DEFAULT_SETTINGS = {
     endHour: 10,        // 10:00
     endMinute: 0,
     timezone: 'Africa/Lagos'  // WAT timezone
+  },
+  email: {
+    enabled: false,
+    recipients: [],     // Array of email addresses
+    subject: 'Weekly Frisbee RSVP List - {{week}}',
+    body: 'Please find attached the RSVP list for this week\'s frisbee session.\n\nTotal participants: {{count}}'
   }
 };
 
@@ -252,6 +258,10 @@ export default async function handler(req, res) {
           accessPeriod: {
             ...currentSettings.accessPeriod,
             ...(settings.accessPeriod || {})
+          },
+          email: {
+            ...(currentSettings.email || DEFAULT_SETTINGS.email),
+            ...(settings.email || {})
           }
         };
 

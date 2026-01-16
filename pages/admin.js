@@ -14,6 +14,12 @@ const DEFAULT_SETTINGS = {
     endHour: 10,
     endMinute: 0,
     timezone: 'Africa/Lagos'
+  },
+  email: {
+    enabled: false,
+    recipients: [],
+    subject: 'Weekly Frisbee RSVP List - {{week}}',
+    body: 'Please find attached the RSVP list for this week\'s frisbee session.\n\nTotal participants: {{count}}'
   }
 };
 
@@ -30,6 +36,8 @@ export default function AdminDashboard() {
   const [message, setMessage] = useState(null);
   const [bulkNames, setBulkNames] = useState('');
   const [singleName, setSingleName] = useState('');
+  const [newRecipient, setNewRecipient] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   const showMessage = (text, type) => {
     setMessage({ text, type });
@@ -113,6 +121,66 @@ export default function AdminDashboard() {
 
   const saveSettings = () => {
     updateSettings(settings);
+  };
+
+  const handleEmailSettingChange = (field, value) => {
+    setSettings({
+      ...settings,
+      email: {
+        ...(settings.email || DEFAULT_SETTINGS.email),
+        [field]: value
+      }
+    });
+  };
+
+  const addRecipient = () => {
+    const email = newRecipient.trim().toLowerCase();
+    if (!email) return;
+
+    // Basic email validation
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showMessage('Please enter a valid email address', 'error');
+      return;
+    }
+
+    const currentRecipients = settings.email?.recipients || [];
+    if (currentRecipients.includes(email)) {
+      showMessage('Email already in list', 'error');
+      return;
+    }
+
+    handleEmailSettingChange('recipients', [...currentRecipients, email]);
+    setNewRecipient('');
+  };
+
+  const removeRecipient = (email) => {
+    const currentRecipients = settings.email?.recipients || [];
+    handleEmailSettingChange('recipients', currentRecipients.filter(e => e !== email));
+  };
+
+  const sendTestEmail = async () => {
+    setSendingEmail(true);
+    try {
+      const response = await fetch('/api/send-list', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${password}`
+        },
+        body: JSON.stringify({ force: true })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        showMessage(`Email sent successfully!`, 'success');
+      } else {
+        showMessage(data.error || 'Failed to send email', 'error');
+      }
+    } catch (error) {
+      showMessage('Failed to send email', 'error');
+    }
+    setSendingEmail(false);
   };
 
   const addWhitelistBulk = async () => {
@@ -618,6 +686,119 @@ export default function AdminDashboard() {
                 Save Settings
               </button>
             </div>
+          </div>
+
+          {/* Email Settings */}
+          <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Email Notifications</h2>
+
+            <div className="mb-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settings.email?.enabled || false}
+                  onChange={(e) => handleEmailSettingChange('enabled', e.target.checked)}
+                  className="w-5 h-5 rounded text-green-600"
+                />
+                <span className="font-medium text-gray-700">Auto-send list when RSVP closes</span>
+              </label>
+              <p className="text-sm text-gray-500 mt-1 ml-8">
+                Automatically email the participant list as a PDF when the access period ends
+              </p>
+            </div>
+
+            {/* Recipients */}
+            <div className="border-t pt-4 mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Email Recipients</label>
+              <div className="flex gap-2 mb-3">
+                <input
+                  type="email"
+                  value={newRecipient}
+                  onChange={(e) => setNewRecipient(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addRecipient()}
+                  placeholder="email@example.com"
+                  className="flex-1 px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none"
+                />
+                <button
+                  onClick={addRecipient}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg"
+                >
+                  Add
+                </button>
+              </div>
+
+              {(settings.email?.recipients || []).length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {settings.email.recipients.map((email, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-2 bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm"
+                    >
+                      <span>{email}</span>
+                      <button
+                        onClick={() => removeRecipient(email)}
+                        className="text-gray-500 hover:text-red-600 font-bold"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400">No recipients added yet</p>
+              )}
+            </div>
+
+            {/* Subject */}
+            <div className="border-t pt-4 mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Email Subject</label>
+              <input
+                type="text"
+                value={settings.email?.subject || ''}
+                onChange={(e) => handleEmailSettingChange('subject', e.target.value)}
+                placeholder="Weekly Frisbee RSVP List - {{week}}"
+                className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Available variables: {'{{week}}'}, {'{{count}}'}, {'{{date}}'}
+              </p>
+            </div>
+
+            {/* Body */}
+            <div className="border-t pt-4 mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Email Body</label>
+              <textarea
+                value={settings.email?.body || ''}
+                onChange={(e) => handleEmailSettingChange('body', e.target.value)}
+                rows={4}
+                placeholder="Please find attached the RSVP list..."
+                className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Available variables: {'{{week}}'}, {'{{count}}'}, {'{{waitlistCount}}'}, {'{{date}}'}
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="border-t pt-4 flex flex-wrap gap-3">
+              <button
+                onClick={saveSettings}
+                disabled={loading}
+                className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium rounded-lg"
+              >
+                Save Email Settings
+              </button>
+              <button
+                onClick={sendTestEmail}
+                disabled={sendingEmail || !(settings.email?.recipients?.length > 0)}
+                className="px-6 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white font-medium rounded-lg"
+              >
+                {sendingEmail ? 'Sending...' : 'Send Now'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-2">
+              "Send Now" will immediately send the current list to all recipients
+            </p>
           </div>
 
           {/* Add Whitelist */}

@@ -4,6 +4,7 @@ const RSVP_KEY = 'frisbee-rsvp-data';
 const SETTINGS_KEY = 'frisbee-settings';
 const ARCHIVE_KEY = 'frisbee-archive';
 const LAST_RESET_KEY = 'frisbee-last-reset';
+const LAST_EMAIL_KEY = 'frisbee-last-email';
 const DEFAULT_MAIN_LIST_LIMIT = 30;
 
 // Default settings
@@ -61,6 +62,29 @@ function isFormOpen(settings) {
     : `RSVP is closed. Opens ${days[startDay]} at ${formatTime(startHour, startMinute)} WAT`;
 
   return { isOpen, message };
+}
+
+// Check if we just transitioned to closed state (for auto-email)
+function shouldSendEmail(settings) {
+  if (!settings.accessPeriod.enabled) {
+    return false;
+  }
+
+  const now = new Date();
+  const watTime = new Date(now.toLocaleString('en-US', { timeZone: settings.accessPeriod.timezone }));
+  const currentDay = watTime.getDay();
+  const currentHour = watTime.getHours();
+  const currentMinute = watTime.getMinutes();
+
+  const { endDay, endHour, endMinute } = settings.accessPeriod;
+
+  // Check if we're within 5 minutes after the close time
+  const currentMins = currentDay * 24 * 60 + currentHour * 60 + currentMinute;
+  const endMins = endDay * 24 * 60 + endHour * 60 + endMinute;
+
+  // Within 5 minutes after close time
+  const diff = currentMins - endMins;
+  return diff >= 0 && diff <= 5;
 }
 
 // Get the current week identifier (year-week format)
@@ -126,6 +150,44 @@ async function checkAndResetIfNeeded(settings) {
   return false;
 }
 
+// Send email via internal API call
+async function triggerAutoEmail(settings, req) {
+  if (!settings.email?.enabled || !settings.email?.recipients?.length) {
+    return;
+  }
+
+  const timezone = settings.accessPeriod?.timezone || 'Africa/Lagos';
+  const weekId = getCurrentWeekId(timezone);
+  const lastEmail = await kv.get(LAST_EMAIL_KEY);
+
+  // Don't send if already sent for this week
+  if (lastEmail === weekId) {
+    return;
+  }
+
+  // Check if we should send (within 5 mins of close time)
+  if (!shouldSendEmail(settings)) {
+    return;
+  }
+
+  try {
+    // Get the host from the request
+    const protocol = req.headers['x-forwarded-proto'] || 'https';
+    const host = req.headers.host;
+
+    await fetch(`${protocol}://${host}/api/send-list`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-call': process.env.RESEND_API_KEY
+      },
+      body: JSON.stringify({})
+    });
+  } catch (error) {
+    console.error('Failed to trigger auto-email:', error);
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     // Get current RSVP data and settings
@@ -134,6 +196,9 @@ export default async function handler(req, res) {
 
       // Check if we need to auto-reset for the new week
       await checkAndResetIfNeeded(settings);
+
+      // Check if we should auto-send email (when access period closes)
+      triggerAutoEmail(settings, req);
 
       const data = await kv.get(RSVP_KEY) || { mainList: [], waitlist: [] };
       const accessStatus = isFormOpen(settings);
