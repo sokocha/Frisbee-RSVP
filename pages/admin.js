@@ -25,6 +25,8 @@ export default function AdminDashboard() {
   const [waitlist, setWaitlist] = useState([]);
   const [whitelist, setWhitelist] = useState([]);
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [archive, setArchive] = useState([]);
+  const [selectedArchive, setSelectedArchive] = useState(null);
   const [message, setMessage] = useState(null);
   const [bulkNames, setBulkNames] = useState('');
   const [singleName, setSingleName] = useState('');
@@ -47,6 +49,7 @@ export default function AdminDashboard() {
         setWaitlist(data.waitlist || []);
         setWhitelist(data.whitelist || []);
         setSettings(data.settings || DEFAULT_SETTINGS);
+        setArchive(data.archive || []);
         setIsAuthenticated(true);
       } else {
         showMessage('Invalid password', 'error');
@@ -772,6 +775,78 @@ export default function AdminDashboard() {
             )}
           </div>
 
+          {/* Archive */}
+          {archive.length > 0 && (
+            <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+              <h2 className="text-xl font-bold text-gray-800 mb-4">
+                Past Weeks Archive ({archive.length})
+              </h2>
+
+              <div className="space-y-2 mb-4">
+                {archive.map((entry, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setSelectedArchive(selectedArchive === index ? null : index)}
+                    className={`w-full text-left p-3 rounded-lg transition-colors ${
+                      selectedArchive === index
+                        ? 'bg-purple-100 border-2 border-purple-300'
+                        : 'bg-gray-50 hover:bg-gray-100'
+                    }`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium text-gray-800">
+                        Week {entry.weekId}
+                      </span>
+                      <span className="text-sm text-gray-500">
+                        {entry.mainList.length} players, {entry.waitlist.length} waitlisted
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      Archived: {new Date(entry.archivedAt).toLocaleString()}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {selectedArchive !== null && archive[selectedArchive] && (
+                <div className="border-t pt-4">
+                  <h3 className="font-medium text-gray-700 mb-3">
+                    Week {archive[selectedArchive].weekId} - Main List
+                  </h3>
+                  <div className="space-y-1 max-h-64 overflow-y-auto">
+                    {archive[selectedArchive].mainList.map((person, idx) => (
+                      <div key={person.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded text-sm">
+                        <span className="w-6 h-6 bg-gray-400 text-white rounded-full flex items-center justify-center text-xs">
+                          {idx + 1}
+                        </span>
+                        <span>{person.name}</span>
+                        {person.isWhitelisted && (
+                          <span className="text-xs bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded">AIS</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {archive[selectedArchive].waitlist.length > 0 && (
+                    <>
+                      <h3 className="font-medium text-gray-700 mb-3 mt-4">Waitlist</h3>
+                      <div className="space-y-1 max-h-32 overflow-y-auto">
+                        {archive[selectedArchive].waitlist.map((person, idx) => (
+                          <div key={person.id} className="flex items-center gap-2 p-2 bg-orange-50 rounded text-sm">
+                            <span className="w-6 h-6 bg-orange-400 text-white rounded-full flex items-center justify-center text-xs">
+                              {idx + 1}
+                            </span>
+                            <span>{person.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Danger Zone */}
           <div className="bg-white rounded-2xl shadow-xl p-6 border-2 border-red-200">
             <h2 className="text-xl font-bold text-red-600 mb-4">Danger Zone</h2>
@@ -792,7 +867,7 @@ export default function AdminDashboard() {
               </button>
             </div>
             <p className="text-gray-500 text-sm mt-3">
-              "Reset Week" clears all regular signups but keeps whitelisted alumni. Use this at the start of each week.
+              "Reset Week" now happens automatically when the access period opens each week. The previous week's list is archived. Manual reset is still available if needed.
             </p>
           </div>
         </div>

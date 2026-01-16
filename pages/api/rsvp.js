@@ -2,6 +2,8 @@ import { kv } from '@vercel/kv';
 
 const RSVP_KEY = 'frisbee-rsvp-data';
 const SETTINGS_KEY = 'frisbee-settings';
+const ARCHIVE_KEY = 'frisbee-archive';
+const LAST_RESET_KEY = 'frisbee-last-reset';
 const DEFAULT_MAIN_LIST_LIMIT = 30;
 
 // Default settings
@@ -61,12 +63,79 @@ function isFormOpen(settings) {
   return { isOpen, message };
 }
 
+// Get the current week identifier (year-week format)
+function getCurrentWeekId(timezone) {
+  const now = new Date();
+  const watTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+  const year = watTime.getFullYear();
+  // Get week number
+  const startOfYear = new Date(year, 0, 1);
+  const days = Math.floor((watTime - startOfYear) / (24 * 60 * 60 * 1000));
+  const weekNum = Math.ceil((days + startOfYear.getDay() + 1) / 7);
+  return `${year}-W${weekNum.toString().padStart(2, '0')}`;
+}
+
+// Check if we need to reset and archive
+async function checkAndResetIfNeeded(settings) {
+  if (!settings.accessPeriod.enabled) {
+    return false;
+  }
+
+  const timezone = settings.accessPeriod.timezone || 'Africa/Lagos';
+  const currentWeekId = getCurrentWeekId(timezone);
+  const lastReset = await kv.get(LAST_RESET_KEY);
+
+  // Check if form is currently open and we haven't reset for this week yet
+  const accessStatus = isFormOpen(settings);
+
+  if (accessStatus.isOpen && lastReset !== currentWeekId) {
+    // Archive the current list
+    const rsvpData = await kv.get(RSVP_KEY) || { mainList: [], waitlist: [] };
+
+    // Only archive if there's data
+    if (rsvpData.mainList.length > 0 || rsvpData.waitlist.length > 0) {
+      const archive = await kv.get(ARCHIVE_KEY) || [];
+
+      // Create archive entry
+      const archiveEntry = {
+        weekId: lastReset || 'unknown',
+        archivedAt: new Date().toISOString(),
+        mainList: rsvpData.mainList,
+        waitlist: rsvpData.waitlist
+      };
+
+      // Add to archive (keep last 12 weeks)
+      archive.unshift(archiveEntry);
+      if (archive.length > 12) {
+        archive.pop();
+      }
+
+      await kv.set(ARCHIVE_KEY, archive);
+    }
+
+    // Reset: keep only whitelisted people
+    const whitelistedPeople = rsvpData.mainList.filter(p => p.isWhitelisted);
+    await kv.set(RSVP_KEY, { mainList: whitelistedPeople, waitlist: [] });
+
+    // Mark this week as reset
+    await kv.set(LAST_RESET_KEY, currentWeekId);
+
+    return true;
+  }
+
+  return false;
+}
+
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     // Get current RSVP data and settings
     try {
-      const data = await kv.get(RSVP_KEY) || { mainList: [], waitlist: [] };
       const settings = await kv.get(SETTINGS_KEY) || DEFAULT_SETTINGS;
+
+      // Check if we need to auto-reset for the new week
+      await checkAndResetIfNeeded(settings);
+
+      const data = await kv.get(RSVP_KEY) || { mainList: [], waitlist: [] };
       const accessStatus = isFormOpen(settings);
       const mainListLimit = settings.mainListLimit || DEFAULT_MAIN_LIST_LIMIT;
 

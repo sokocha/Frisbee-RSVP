@@ -4,6 +4,7 @@ const RSVP_KEY = 'frisbee-rsvp-data';
 const ADMIN_KEY = 'frisbee-admin-password';
 const WHITELIST_KEY = 'frisbee-whitelist';
 const SETTINGS_KEY = 'frisbee-settings';
+const ARCHIVE_KEY = 'frisbee-archive';
 
 // Simple admin password - change this or set via environment variable
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'frisbee-admin-2024';
@@ -31,16 +32,18 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    // Get all data including whitelist and settings
+    // Get all data including whitelist, settings, and archive
     try {
       const rsvpData = await kv.get(RSVP_KEY) || { mainList: [], waitlist: [] };
       const whitelist = await kv.get(WHITELIST_KEY) || [];
       const settings = await kv.get(SETTINGS_KEY) || DEFAULT_SETTINGS;
+      const archive = await kv.get(ARCHIVE_KEY) || [];
 
       return res.status(200).json({
         ...rsvpData,
         whitelist,
-        settings
+        settings,
+        archive
       });
     } catch (error) {
       console.error('Failed to get admin data:', error);
