@@ -1,10 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
 
 const MAIN_LIST_LIMIT = 30;
-const STORAGE_KEY = 'frisbee-rsvp-data';
 const DEVICE_KEY = 'frisbee-device-id';
-const SIGNUP_KEY = 'frisbee-has-signed-up';
 
 // Generate a unique device ID based on browser characteristics
 function generateDeviceId() {
@@ -47,60 +45,51 @@ export default function FrisbeeRSVP() {
   const [waitlist, setWaitlist] = useState([]);
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
   const [deviceId, setDeviceId] = useState(null);
   const [hasSignedUp, setHasSignedUp] = useState(false);
   const [mySignup, setMySignup] = useState(null);
 
+  const checkMySignup = useCallback((mainList, waitlist, currentDeviceId) => {
+    const allSignups = [...mainList, ...waitlist];
+    const existingSignup = allSignups.find(p => p.deviceId === currentDeviceId);
+    if (existingSignup) {
+      setHasSignedUp(true);
+      setMySignup(existingSignup);
+    } else {
+      setHasSignedUp(false);
+      setMySignup(null);
+    }
+  }, []);
+
+  const loadData = useCallback(async (currentDeviceId) => {
+    try {
+      const response = await fetch('/api/rsvp');
+      if (response.ok) {
+        const data = await response.json();
+        setMainList(data.mainList || []);
+        setWaitlist(data.waitlist || []);
+        checkMySignup(data.mainList || [], data.waitlist || [], currentDeviceId);
+      }
+    } catch (error) {
+      console.error('Failed to load data:', error);
+    }
+    setLoading(false);
+  }, [checkMySignup]);
+
   useEffect(() => {
     const id = getDeviceId();
     setDeviceId(id);
     loadData(id);
-  }, []);
-
-  const loadData = (currentDeviceId) => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const data = JSON.parse(stored);
-        const loadedMainList = data.mainList || [];
-        const loadedWaitlist = data.waitlist || [];
-        setMainList(loadedMainList);
-        setWaitlist(loadedWaitlist);
-
-        // Check if this device has already signed up
-        const allSignups = [...loadedMainList, ...loadedWaitlist];
-        const existingSignup = allSignups.find(p => p.deviceId === currentDeviceId);
-        if (existingSignup) {
-          setHasSignedUp(true);
-          setMySignup(existingSignup);
-        }
-      }
-    } catch (error) {
-      console.log('No existing data found, starting fresh');
-    }
-    setLoading(false);
-  };
-
-  const saveData = (newMainList, newWaitlist) => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        mainList: newMainList,
-        waitlist: newWaitlist,
-        lastUpdated: new Date().toISOString()
-      }));
-    } catch (error) {
-      console.error('Failed to save data:', error);
-    }
-  };
+  }, [loadData]);
 
   const showMessage = (text, type) => {
     setMessage({ text, type });
     setTimeout(() => setMessage(null), 4000);
   };
 
-  const handleRSVP = () => {
-    // Check if device already signed up
+  const handleRSVP = async () => {
     if (hasSignedUp) {
       showMessage("You've already signed up from this device!", 'error');
       return;
@@ -112,96 +101,86 @@ export default function FrisbeeRSVP() {
       return;
     }
 
-    // Check for duplicate device IDs in the list
-    const allSignups = [...mainList, ...waitlist];
-    if (allSignups.some(p => p.deviceId === deviceId)) {
-      showMessage("You've already signed up from this device!", 'error');
-      setHasSignedUp(true);
-      return;
-    }
+    setSubmitting(true);
+    try {
+      const response = await fetch('/api/rsvp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmedName, deviceId })
+      });
 
-    const allNames = allSignups.map(p => p.name.toLowerCase());
-    if (allNames.includes(trimmedName.toLowerCase())) {
-      showMessage("This name is already on the list!", 'error');
-      return;
-    }
+      const data = await response.json();
 
-    const newPerson = {
-      id: Date.now(),
-      name: trimmedName,
-      timestamp: new Date().toISOString(),
-      deviceId: deviceId
-    };
-
-    let newMainList = mainList;
-    let newWaitlist = waitlist;
-
-    if (mainList.length < MAIN_LIST_LIMIT) {
-      newMainList = [...mainList, newPerson];
-      showMessage(`You're in! Spot #${newMainList.length}`, 'success');
-    } else {
-      newWaitlist = [...waitlist, newPerson];
-      showMessage(`Main list full. You're #${newWaitlist.length} on the waitlist`, 'warning');
-    }
-
-    setMainList(newMainList);
-    setWaitlist(newWaitlist);
-    setName('');
-    setHasSignedUp(true);
-    setMySignup(newPerson);
-    saveData(newMainList, newWaitlist);
-  };
-
-  const handleDropout = (personId, isWaitlist = false) => {
-    // Find the person being removed
-    const person = isWaitlist
-      ? waitlist.find(p => p.id === personId)
-      : mainList.find(p => p.id === personId);
-
-    // Only allow removing your own signup (matching device ID)
-    if (person && person.deviceId !== deviceId) {
-      showMessage("You can only remove your own signup", 'error');
-      return;
-    }
-
-    let newMainList = mainList;
-    let newWaitlist = waitlist;
-
-    if (isWaitlist) {
-      newWaitlist = waitlist.filter(p => p.id !== personId);
-      showMessage('Removed from waitlist', 'success');
-    } else {
-      newMainList = mainList.filter(p => p.id !== personId);
-
-      if (waitlist.length > 0) {
-        const promoted = waitlist[0];
-        newMainList = [...newMainList, promoted];
-        newWaitlist = waitlist.slice(1);
-        showMessage(`Spot opened! ${promoted.name} promoted from waitlist`, 'success');
+      if (response.ok) {
+        setMainList(data.mainList);
+        setWaitlist(data.waitlist);
+        setName('');
+        setHasSignedUp(true);
+        setMySignup(data.person);
+        showMessage(data.message, data.listType === 'main' ? 'success' : 'warning');
       } else {
-        showMessage('Removed from main list', 'success');
+        showMessage(data.error, 'error');
       }
+    } catch (error) {
+      console.error('Failed to submit RSVP:', error);
+      showMessage('Failed to submit RSVP. Please try again.', 'error');
     }
-
-    // If removing own signup, allow signing up again
-    if (person && person.deviceId === deviceId) {
-      setHasSignedUp(false);
-      setMySignup(null);
-    }
-
-    setMainList(newMainList);
-    setWaitlist(newWaitlist);
-    saveData(newMainList, newWaitlist);
+    setSubmitting(false);
   };
 
-  const handleReset = () => {
+  const handleDropout = async (personId, isWaitlist = false) => {
+    setSubmitting(true);
+    try {
+      const response = await fetch('/api/rsvp', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ personId, deviceId, isWaitlist })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setMainList(data.mainList);
+        setWaitlist(data.waitlist);
+        setHasSignedUp(false);
+        setMySignup(null);
+        showMessage(data.message, 'success');
+      } else {
+        showMessage(data.error, 'error');
+      }
+    } catch (error) {
+      console.error('Failed to remove RSVP:', error);
+      showMessage('Failed to remove RSVP. Please try again.', 'error');
+    }
+    setSubmitting(false);
+  };
+
+  const handleReset = async () => {
     if (window.confirm('Are you sure you want to clear all RSVPs? This cannot be undone.')) {
-      setMainList([]);
-      setWaitlist([]);
-      setHasSignedUp(false);
-      setMySignup(null);
-      saveData([], []);
-      showMessage('All RSVPs cleared', 'success');
+      setSubmitting(true);
+      try {
+        const response = await fetch('/api/rsvp', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'reset' })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          setMainList([]);
+          setWaitlist([]);
+          setHasSignedUp(false);
+          setMySignup(null);
+          showMessage(data.message, 'success');
+        } else {
+          showMessage(data.error, 'error');
+        }
+      } catch (error) {
+        console.error('Failed to reset RSVPs:', error);
+        showMessage('Failed to reset RSVPs. Please try again.', 'error');
+      }
+      setSubmitting(false);
     }
   };
 
@@ -214,7 +193,6 @@ export default function FrisbeeRSVP() {
     });
   };
 
-  // Check if a person is from this device
   const isMySignup = (person) => person.deviceId === deviceId;
 
   if (loading) {
@@ -272,15 +250,17 @@ export default function FrisbeeRSVP() {
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleRSVP()}
+                  onKeyDown={(e) => e.key === 'Enter' && !submitting && handleRSVP()}
                   placeholder="Enter your name"
-                  className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none text-lg"
+                  disabled={submitting}
+                  className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none text-lg disabled:bg-gray-100"
                 />
                 <button
                   onClick={handleRSVP}
-                  className="px-8 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition-colors text-lg"
+                  disabled={submitting}
+                  className="px-8 py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-semibold rounded-xl transition-colors text-lg"
                 >
-                  RSVP
+                  {submitting ? 'Submitting...' : 'RSVP'}
                 </button>
               </div>
             ) : (
@@ -346,7 +326,8 @@ export default function FrisbeeRSVP() {
                     {isMySignup(person) && (
                       <button
                         onClick={() => handleDropout(person.id)}
-                        className="text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1 rounded-lg transition-colors text-sm"
+                        disabled={submitting}
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 px-3 py-1 rounded-lg transition-colors text-sm"
                       >
                         Drop out
                       </button>
@@ -394,7 +375,8 @@ export default function FrisbeeRSVP() {
                       {isMySignup(person) && (
                         <button
                           onClick={() => handleDropout(person.id, true)}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1 rounded-lg transition-colors text-sm"
+                          disabled={submitting}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 px-3 py-1 rounded-lg transition-colors text-sm"
                         >
                           Remove
                         </button>
@@ -410,7 +392,8 @@ export default function FrisbeeRSVP() {
           <div className="text-center">
             <button
               onClick={handleReset}
-              className="text-white/70 hover:text-white text-sm underline"
+              disabled={submitting}
+              className="text-white/70 hover:text-white disabled:opacity-50 text-sm underline"
             >
               Reset all RSVPs (Admin)
             </button>
