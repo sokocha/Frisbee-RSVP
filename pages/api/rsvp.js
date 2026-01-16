@@ -300,19 +300,19 @@ export default async function handler(req, res) {
         listType = 'main';
       } else if (isWhitelisted) {
         // Main list is full but this is a whitelisted (AIS) member
-        // Find the last non-whitelisted person to bump to waitlist
-        let bumpIndex = -1;
-        for (let i = newMainList.length - 1; i >= 0; i--) {
-          if (!newMainList[i].isWhitelisted) {
-            bumpIndex = i;
-            break;
-          }
-        }
+        // Find the most recently joined non-whitelisted person to bump
+        const nonWhitelisted = newMainList
+          .map((p, idx) => ({ ...p, originalIndex: idx }))
+          .filter(p => !p.isWhitelisted);
 
-        if (bumpIndex >= 0) {
-          // Bump the non-whitelisted person to the front of waitlist
-          bumpedPerson = newMainList[bumpIndex];
-          newMainList.splice(bumpIndex, 1);
+        if (nonWhitelisted.length > 0) {
+          // Sort by timestamp descending (most recent first) and take the most recent
+          nonWhitelisted.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+          const toBump = nonWhitelisted[0];
+
+          // Bump the most recent non-whitelisted person to the front of waitlist
+          bumpedPerson = newMainList[toBump.originalIndex];
+          newMainList.splice(toBump.originalIndex, 1);
           newWaitlist = [bumpedPerson, ...newWaitlist];
           // Add whitelisted person to main list
           newMainList = [...newMainList, newPerson];

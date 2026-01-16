@@ -202,15 +202,24 @@ describe('RSVP API', () => {
       );
     });
 
-    it('bumps non-whitelisted user when whitelisted user signs up to full list', async () => {
+    it('bumps most recent non-whitelisted user when whitelisted user signs up to full list', async () => {
       mockKvStore['frisbee-settings'] = {
         mainListLimit: 2,
         accessPeriod: { enabled: false },
       };
       mockKvStore['frisbee-rsvp-data'] = {
         mainList: [
-          { id: 1, name: 'AIS Member', deviceId: 'device1', isWhitelisted: true },
-          { id: 2, name: 'Regular User', deviceId: 'device2' },
+          { id: 1, name: 'AIS Member', deviceId: 'device1', isWhitelisted: true, timestamp: '2026-01-16T10:00:00Z' },
+          { id: 2, name: 'Regular User Early', deviceId: 'device2', timestamp: '2026-01-16T10:30:00Z' },
+          { id: 3, name: 'Regular User Late', deviceId: 'device4', timestamp: '2026-01-16T11:00:00Z' },
+        ].slice(0, 2), // Only 2 to match limit
+        waitlist: [],
+      };
+      // Actually set up with the correct data for 2-person limit
+      mockKvStore['frisbee-rsvp-data'] = {
+        mainList: [
+          { id: 1, name: 'AIS Member', deviceId: 'device1', isWhitelisted: true, timestamp: '2026-01-16T10:00:00Z' },
+          { id: 2, name: 'Regular User', deviceId: 'device2', timestamp: '2026-01-16T10:30:00Z' },
         ],
         waitlist: [],
       };
@@ -239,6 +248,46 @@ describe('RSVP API', () => {
       expect(response.waitlist).toHaveLength(1);
       expect(response.waitlist[0].name).toBe('Regular User');
       expect(response.bumpedPerson.name).toBe('Regular User');
+    });
+
+    it('bumps most recently joined non-whitelisted user when multiple exist', async () => {
+      mockKvStore['frisbee-settings'] = {
+        mainListLimit: 3,
+        accessPeriod: { enabled: false },
+      };
+      mockKvStore['frisbee-rsvp-data'] = {
+        mainList: [
+          { id: 1, name: 'AIS Member', deviceId: 'device1', isWhitelisted: true, timestamp: '2026-01-16T10:00:00Z' },
+          { id: 2, name: 'Regular User Early', deviceId: 'device2', timestamp: '2026-01-16T10:30:00Z' },
+          { id: 3, name: 'Regular User Late', deviceId: 'device4', timestamp: '2026-01-16T11:00:00Z' },
+        ],
+        waitlist: [],
+      };
+      mockKvStore['frisbee-whitelist'] = [
+        { name: 'AIS Member', deviceId: 'device1' },
+        { name: 'New AIS Member', deviceId: 'device3' },
+      ];
+
+      const { req, res } = createMockReqRes('POST', {
+        name: 'New AIS Member',
+        deviceId: 'device3'
+      });
+
+      await handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      const response = res.json.mock.calls[0][0];
+
+      // New AIS member should be on main list
+      expect(response.listType).toBe('main');
+      expect(response.mainList).toHaveLength(3);
+
+      // The MOST RECENT non-whitelisted user (Regular User Late) should be bumped
+      expect(response.bumpedPerson.name).toBe('Regular User Late');
+      expect(response.waitlist[0].name).toBe('Regular User Late');
+
+      // Regular User Early should still be on main list
+      expect(response.mainList.some(p => p.name === 'Regular User Early')).toBe(true);
     });
 
     it('adds whitelisted user to waitlist when all main list spots are whitelisted', async () => {

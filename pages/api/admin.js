@@ -270,29 +270,68 @@ export default async function handler(req, res) {
 
         await kv.set(SETTINGS_KEY, newSettings);
 
-        // If the limit increased, promote users from waitlist
-        let rsvpData = null;
+        // Handle limit changes
+        let rsvpData = await kv.get(RSVP_KEY) || { mainList: [], waitlist: [] };
         const promoted = [];
-        if (newLimit > oldLimit) {
-          rsvpData = await kv.get(RSVP_KEY) || { mainList: [], waitlist: [] };
+        const demoted = [];
 
-          // Promote as many as possible from waitlist to fill new slots
+        if (newLimit < rsvpData.mainList.length) {
+          // Limit decreased - need to bump excess people to waitlist
+          // Bump most recent non-whitelisted users first (by timestamp)
+          while (rsvpData.mainList.length > newLimit) {
+            // Find non-whitelisted users
+            const nonWhitelisted = rsvpData.mainList
+              .map((p, idx) => ({ ...p, originalIndex: idx }))
+              .filter(p => !p.isWhitelisted);
+
+            if (nonWhitelisted.length > 0) {
+              // Sort by timestamp descending and bump the most recent
+              nonWhitelisted.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+              const toBump = nonWhitelisted[0];
+              const bumpedPerson = rsvpData.mainList.splice(toBump.originalIndex, 1)[0];
+              rsvpData.waitlist.unshift(bumpedPerson);
+              demoted.push(bumpedPerson);
+            } else {
+              // All are whitelisted - bump the most recent whitelisted user
+              const sorted = [...rsvpData.mainList].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+              const toBumpIdx = rsvpData.mainList.findIndex(p => p.id === sorted[0].id);
+              const bumpedPerson = rsvpData.mainList.splice(toBumpIdx, 1)[0];
+              rsvpData.waitlist.unshift(bumpedPerson);
+              demoted.push(bumpedPerson);
+            }
+          }
+        } else if (newLimit > rsvpData.mainList.length && rsvpData.waitlist.length > 0) {
+          // Limit increased - promote from waitlist with AIS priority
           while (rsvpData.mainList.length < newLimit && rsvpData.waitlist.length > 0) {
-            const promotedPerson = rsvpData.waitlist.shift();
+            // Check if there are any whitelisted users in waitlist - they get priority
+            const whitelistedInWaitlist = rsvpData.waitlist.findIndex(p => p.isWhitelisted);
+
+            let promotedPerson;
+            if (whitelistedInWaitlist >= 0) {
+              // Promote the first whitelisted person found
+              promotedPerson = rsvpData.waitlist.splice(whitelistedInWaitlist, 1)[0];
+            } else {
+              // No whitelisted in waitlist, promote by oldest timestamp
+              const sorted = [...rsvpData.waitlist].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+              const oldestIdx = rsvpData.waitlist.findIndex(p => p.id === sorted[0].id);
+              promotedPerson = rsvpData.waitlist.splice(oldestIdx, 1)[0];
+            }
+
             rsvpData.mainList.push(promotedPerson);
             promoted.push(promotedPerson);
           }
+        }
 
-          if (promoted.length > 0) {
-            await kv.set(RSVP_KEY, rsvpData);
-          }
+        if (promoted.length > 0 || demoted.length > 0) {
+          await kv.set(RSVP_KEY, rsvpData);
         }
 
         return res.status(200).json({
           success: true,
           settings: newSettings,
-          ...(promoted.length > 0 && {
+          ...((promoted.length > 0 || demoted.length > 0) && {
             promoted,
+            demoted,
             mainList: rsvpData.mainList,
             waitlist: rsvpData.waitlist
           })
