@@ -62,6 +62,8 @@ export default async function handler(req, res) {
 
         const rsvpData = await kv.get(RSVP_KEY) || { mainList: [], waitlist: [] };
         let whitelist = await kv.get(WHITELIST_KEY) || [];
+        const settings = await kv.get(SETTINGS_KEY) || DEFAULT_SETTINGS;
+        const limit = settings.mainListLimit || 30;
 
         const added = [];
         const skipped = [];
@@ -98,7 +100,6 @@ export default async function handler(req, res) {
           });
 
           // Add to main list (whitelisted users always go to main list first)
-          const limit = settings.mainListLimit || 30;
           if (rsvpData.mainList.length < limit) {
             rsvpData.mainList.push(newPerson);
           } else {
@@ -139,7 +140,7 @@ export default async function handler(req, res) {
         // Remove from main list or waitlist
         const wasInMain = rsvpData.mainList.some(p => p.name.toLowerCase() === name.toLowerCase());
         rsvpData.mainList = rsvpData.mainList.filter(p => p.name.toLowerCase() !== name.toLowerCase());
-        rsvpData.waitlist = rsvpData.waitlist.filter(p => p.name.toLowerCase() === name.toLowerCase());
+        rsvpData.waitlist = rsvpData.waitlist.filter(p => p.name.toLowerCase() !== name.toLowerCase());
 
         // If removed from main list and waitlist has people, promote
         if (wasInMain && rsvpData.waitlist.length > 0) {
