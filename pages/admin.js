@@ -1,6 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+const DEFAULT_SETTINGS = {
+  accessPeriod: {
+    enabled: true,
+    startDay: 4,
+    startHour: 12,
+    startMinute: 0,
+    endDay: 5,
+    endHour: 10,
+    endMinute: 0,
+    timezone: 'Africa/Lagos'
+  }
+};
+
 export default function AdminDashboard() {
   const [password, setPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -8,6 +23,7 @@ export default function AdminDashboard() {
   const [mainList, setMainList] = useState([]);
   const [waitlist, setWaitlist] = useState([]);
   const [whitelist, setWhitelist] = useState([]);
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [message, setMessage] = useState(null);
   const [bulkNames, setBulkNames] = useState('');
   const [singleName, setSingleName] = useState('');
@@ -29,6 +45,7 @@ export default function AdminDashboard() {
         setMainList(data.mainList || []);
         setWaitlist(data.waitlist || []);
         setWhitelist(data.whitelist || []);
+        setSettings(data.settings || DEFAULT_SETTINGS);
         setIsAuthenticated(true);
       } else {
         showMessage('Invalid password', 'error');
@@ -43,6 +60,50 @@ export default function AdminDashboard() {
   const handleLogin = (e) => {
     e.preventDefault();
     fetchData();
+  };
+
+  const updateSettings = async (newSettings) => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${password}`
+        },
+        body: JSON.stringify({
+          action: 'update-settings',
+          data: { settings: newSettings }
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSettings(data.settings);
+        showMessage('Settings updated', 'success');
+      } else {
+        showMessage(data.error, 'error');
+      }
+    } catch (error) {
+      showMessage('Failed to update settings', 'error');
+    }
+    setLoading(false);
+  };
+
+  const handleAccessPeriodChange = (field, value) => {
+    const newSettings = {
+      ...settings,
+      accessPeriod: {
+        ...settings.accessPeriod,
+        [field]: value
+      }
+    };
+    setSettings(newSettings);
+  };
+
+  const saveAccessPeriod = () => {
+    updateSettings(settings);
   };
 
   const addWhitelistBulk = async () => {
@@ -273,6 +334,46 @@ export default function AdminDashboard() {
     });
   };
 
+  const formatHour = (hour) => {
+    if (hour === 0) return '12:00 AM';
+    if (hour === 12) return '12:00 PM';
+    if (hour < 12) return `${hour}:00 AM`;
+    return `${hour - 12}:00 PM`;
+  };
+
+  const getCurrentAccessStatus = () => {
+    if (!settings.accessPeriod.enabled) {
+      return { isOpen: true, message: 'Access period disabled - form always open' };
+    }
+
+    const now = new Date();
+    const watTime = new Date(now.toLocaleString('en-US', { timeZone: settings.accessPeriod.timezone }));
+    const currentDay = watTime.getDay();
+    const currentHour = watTime.getHours();
+    const currentMinute = watTime.getMinutes();
+
+    const { startDay, startHour, startMinute, endDay, endHour, endMinute } = settings.accessPeriod;
+
+    // Convert to minutes since start of week for easier comparison
+    const currentMins = currentDay * 24 * 60 + currentHour * 60 + currentMinute;
+    const startMins = startDay * 24 * 60 + startHour * 60 + startMinute;
+    const endMins = endDay * 24 * 60 + endHour * 60 + endMinute;
+
+    let isOpen;
+    if (startMins <= endMins) {
+      isOpen = currentMins >= startMins && currentMins < endMins;
+    } else {
+      // Wraps around week (e.g., Friday to Monday)
+      isOpen = currentMins >= startMins || currentMins < endMins;
+    }
+
+    const statusMessage = isOpen
+      ? `Open now (closes ${DAYS[endDay]} ${formatHour(endHour)})`
+      : `Closed (opens ${DAYS[startDay]} ${formatHour(startHour)})`;
+
+    return { isOpen, message: statusMessage };
+  };
+
   if (!isAuthenticated) {
     return (
       <>
@@ -317,6 +418,7 @@ export default function AdminDashboard() {
   const spotsRemaining = 30 - mainList.length;
   const whitelistCount = mainList.filter(p => p.isWhitelisted).length;
   const regularCount = mainList.filter(p => !p.isWhitelisted).length;
+  const accessStatus = getCurrentAccessStatus();
 
   return (
     <>
@@ -349,6 +451,16 @@ export default function AdminDashboard() {
             </div>
           )}
 
+          {/* Access Status Banner */}
+          <div className={`mb-6 p-4 rounded-xl ${accessStatus.isOpen ? 'bg-green-100 border-2 border-green-300' : 'bg-red-100 border-2 border-red-300'}`}>
+            <div className="flex items-center gap-3">
+              <div className={`w-3 h-3 rounded-full ${accessStatus.isOpen ? 'bg-green-500' : 'bg-red-500'} animate-pulse`}></div>
+              <span className={`font-medium ${accessStatus.isOpen ? 'text-green-800' : 'text-red-800'}`}>
+                RSVP Form: {accessStatus.message}
+              </span>
+            </div>
+          </div>
+
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div className="bg-white rounded-xl p-4 shadow">
@@ -367,6 +479,92 @@ export default function AdminDashboard() {
               <div className="text-3xl font-bold text-orange-600">{waitlist.length}</div>
               <div className="text-gray-500 text-sm">Waitlist</div>
             </div>
+          </div>
+
+          {/* Access Period Settings */}
+          <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Access Period Settings</h2>
+
+            <div className="mb-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settings.accessPeriod.enabled}
+                  onChange={(e) => handleAccessPeriodChange('enabled', e.target.checked)}
+                  className="w-5 h-5 rounded text-green-600"
+                />
+                <span className="font-medium text-gray-700">Enable access period restrictions</span>
+              </label>
+              <p className="text-sm text-gray-500 mt-1 ml-8">
+                When disabled, the RSVP form is always open
+              </p>
+            </div>
+
+            {settings.accessPeriod.enabled && (
+              <div className="border-t pt-4 space-y-4">
+                {/* Start Time */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Opens at:</label>
+                  <div className="flex gap-3 flex-wrap">
+                    <select
+                      value={settings.accessPeriod.startDay}
+                      onChange={(e) => handleAccessPeriodChange('startDay', parseInt(e.target.value))}
+                      className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none"
+                    >
+                      {DAYS.map((day, i) => (
+                        <option key={i} value={i}>{day}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={settings.accessPeriod.startHour}
+                      onChange={(e) => handleAccessPeriodChange('startHour', parseInt(e.target.value))}
+                      className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none"
+                    >
+                      {Array.from({ length: 24 }, (_, i) => (
+                        <option key={i} value={i}>{formatHour(i)}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* End Time */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Closes at:</label>
+                  <div className="flex gap-3 flex-wrap">
+                    <select
+                      value={settings.accessPeriod.endDay}
+                      onChange={(e) => handleAccessPeriodChange('endDay', parseInt(e.target.value))}
+                      className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none"
+                    >
+                      {DAYS.map((day, i) => (
+                        <option key={i} value={i}>{day}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={settings.accessPeriod.endHour}
+                      onChange={(e) => handleAccessPeriodChange('endHour', parseInt(e.target.value))}
+                      className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none"
+                    >
+                      {Array.from({ length: 24 }, (_, i) => (
+                        <option key={i} value={i}>{formatHour(i)}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="text-sm text-gray-500">
+                  Timezone: West Africa Time (WAT/UTC+1)
+                </div>
+
+                <button
+                  onClick={saveAccessPeriod}
+                  disabled={loading}
+                  className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium rounded-lg"
+                >
+                  Save Settings
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Add Whitelist */}

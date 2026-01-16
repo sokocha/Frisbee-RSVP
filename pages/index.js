@@ -50,6 +50,7 @@ export default function FrisbeeRSVP() {
   const [deviceId, setDeviceId] = useState(null);
   const [hasSignedUp, setHasSignedUp] = useState(false);
   const [mySignup, setMySignup] = useState(null);
+  const [accessStatus, setAccessStatus] = useState({ isOpen: true, message: null });
 
   const checkMySignup = useCallback((mainList, waitlist, currentDeviceId) => {
     const allSignups = [...mainList, ...waitlist];
@@ -70,6 +71,7 @@ export default function FrisbeeRSVP() {
         const data = await response.json();
         setMainList(data.mainList || []);
         setWaitlist(data.waitlist || []);
+        setAccessStatus(data.accessStatus || { isOpen: true, message: null });
         checkMySignup(data.mainList || [], data.waitlist || [], currentDeviceId);
       }
     } catch (error) {
@@ -235,6 +237,13 @@ export default function FrisbeeRSVP() {
           )}
 
           {/* Already Signed Up Notice */}
+          {/* Access Status Banner */}
+          {!accessStatus.isOpen && (
+            <div className="mb-4 p-4 bg-red-500 text-white rounded-lg text-center">
+              <p className="font-medium">{accessStatus.message}</p>
+            </div>
+          )}
+
           {hasSignedUp && mySignup && (
             <div className="mb-4 p-4 bg-blue-500 text-white rounded-lg text-center">
               <p className="font-medium">You're signed up as: {mySignup.name}</p>
@@ -244,7 +253,12 @@ export default function FrisbeeRSVP() {
 
           {/* RSVP Form */}
           <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-            {!hasSignedUp ? (
+            {!accessStatus.isOpen ? (
+              <div className="text-center text-gray-500 py-4">
+                <p className="text-lg font-medium">RSVP is currently closed</p>
+                <p className="text-sm mt-1">{accessStatus.message}</p>
+              </div>
+            ) : !hasSignedUp ? (
               <div className="flex flex-col md:flex-row gap-3">
                 <input
                   type="text"

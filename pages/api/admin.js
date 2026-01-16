@@ -3,9 +3,24 @@ import { kv } from '@vercel/kv';
 const RSVP_KEY = 'frisbee-rsvp-data';
 const ADMIN_KEY = 'frisbee-admin-password';
 const WHITELIST_KEY = 'frisbee-whitelist';
+const SETTINGS_KEY = 'frisbee-settings';
 
 // Simple admin password - change this or set via environment variable
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'frisbee-admin-2024';
+
+// Default access period settings (WAT = UTC+1)
+const DEFAULT_SETTINGS = {
+  accessPeriod: {
+    enabled: true,
+    startDay: 4,        // Thursday (0=Sunday, 4=Thursday)
+    startHour: 12,      // 12:00 (noon)
+    startMinute: 0,
+    endDay: 5,          // Friday
+    endHour: 10,        // 10:00
+    endMinute: 0,
+    timezone: 'Africa/Lagos'  // WAT timezone
+  }
+};
 
 export default async function handler(req, res) {
   // Verify admin password
@@ -15,14 +30,16 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    // Get all data including whitelist
+    // Get all data including whitelist and settings
     try {
       const rsvpData = await kv.get(RSVP_KEY) || { mainList: [], waitlist: [] };
       const whitelist = await kv.get(WHITELIST_KEY) || [];
+      const settings = await kv.get(SETTINGS_KEY) || DEFAULT_SETTINGS;
 
       return res.status(200).json({
         ...rsvpData,
-        whitelist
+        whitelist,
+        settings
       });
     } catch (error) {
       console.error('Failed to get admin data:', error);
@@ -193,6 +210,31 @@ export default async function handler(req, res) {
           mainList: whitelistedPeople,
           waitlist: [],
           whitelist
+        });
+      }
+
+      if (action === 'update-settings') {
+        // Update access period settings
+        const { settings } = data;
+
+        if (!settings || !settings.accessPeriod) {
+          return res.status(400).json({ error: 'Settings are required' });
+        }
+
+        const currentSettings = await kv.get(SETTINGS_KEY) || DEFAULT_SETTINGS;
+        const newSettings = {
+          ...currentSettings,
+          accessPeriod: {
+            ...currentSettings.accessPeriod,
+            ...settings.accessPeriod
+          }
+        };
+
+        await kv.set(SETTINGS_KEY, newSettings);
+
+        return res.status(200).json({
+          success: true,
+          settings: newSettings
         });
       }
 

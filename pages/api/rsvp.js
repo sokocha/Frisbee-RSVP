@@ -1,14 +1,80 @@
 import { kv } from '@vercel/kv';
 
 const RSVP_KEY = 'frisbee-rsvp-data';
+const SETTINGS_KEY = 'frisbee-settings';
 const MAIN_LIST_LIMIT = 30;
+
+// Default access period settings
+const DEFAULT_SETTINGS = {
+  accessPeriod: {
+    enabled: true,
+    startDay: 4,        // Thursday
+    startHour: 12,      // 12:00 (noon)
+    startMinute: 0,
+    endDay: 5,          // Friday
+    endHour: 10,        // 10:00
+    endMinute: 0,
+    timezone: 'Africa/Lagos'
+  }
+};
+
+// Check if RSVP form is currently open
+function isFormOpen(settings) {
+  if (!settings.accessPeriod.enabled) {
+    return { isOpen: true, message: null };
+  }
+
+  const now = new Date();
+  const watTime = new Date(now.toLocaleString('en-US', { timeZone: settings.accessPeriod.timezone }));
+  const currentDay = watTime.getDay();
+  const currentHour = watTime.getHours();
+  const currentMinute = watTime.getMinutes();
+
+  const { startDay, startHour, startMinute, endDay, endHour, endMinute } = settings.accessPeriod;
+
+  // Convert to minutes since start of week for easier comparison
+  const currentMins = currentDay * 24 * 60 + currentHour * 60 + currentMinute;
+  const startMins = startDay * 24 * 60 + startHour * 60 + startMinute;
+  const endMins = endDay * 24 * 60 + endHour * 60 + endMinute;
+
+  let isOpen;
+  if (startMins <= endMins) {
+    isOpen = currentMins >= startMins && currentMins < endMins;
+  } else {
+    // Wraps around week
+    isOpen = currentMins >= startMins || currentMins < endMins;
+  }
+
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const formatHour = (h) => {
+    if (h === 0) return '12:00 AM';
+    if (h === 12) return '12:00 PM';
+    if (h < 12) return `${h}:00 AM`;
+    return `${h - 12}:00 PM`;
+  };
+
+  const message = isOpen
+    ? null
+    : `RSVP is closed. Opens ${days[startDay]} at ${formatHour(startHour)} WAT`;
+
+  return { isOpen, message };
+}
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
-    // Get current RSVP data
+    // Get current RSVP data and settings
     try {
-      const data = await kv.get(RSVP_KEY);
-      return res.status(200).json(data || { mainList: [], waitlist: [] });
+      const data = await kv.get(RSVP_KEY) || { mainList: [], waitlist: [] };
+      const settings = await kv.get(SETTINGS_KEY) || DEFAULT_SETTINGS;
+      const accessStatus = isFormOpen(settings);
+
+      return res.status(200).json({
+        ...data,
+        accessStatus: {
+          isOpen: accessStatus.isOpen,
+          message: accessStatus.message
+        }
+      });
     } catch (error) {
       console.error('Failed to get RSVP data:', error);
       return res.status(500).json({ error: 'Failed to load data' });
@@ -29,6 +95,14 @@ export default async function handler(req, res) {
     }
 
     try {
+      // Check if form is open
+      const settings = await kv.get(SETTINGS_KEY) || DEFAULT_SETTINGS;
+      const accessStatus = isFormOpen(settings);
+
+      if (!accessStatus.isOpen) {
+        return res.status(403).json({ error: accessStatus.message });
+      }
+
       const data = await kv.get(RSVP_KEY) || { mainList: [], waitlist: [] };
       const { mainList, waitlist } = data;
 
@@ -90,6 +164,14 @@ export default async function handler(req, res) {
     }
 
     try {
+      // Check if form is open for removal too
+      const settings = await kv.get(SETTINGS_KEY) || DEFAULT_SETTINGS;
+      const accessStatus = isFormOpen(settings);
+
+      if (!accessStatus.isOpen) {
+        return res.status(403).json({ error: accessStatus.message });
+      }
+
       const data = await kv.get(RSVP_KEY) || { mainList: [], waitlist: [] };
       let { mainList, waitlist } = data;
 
