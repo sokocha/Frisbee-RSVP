@@ -98,13 +98,9 @@ export default function AdminDashboard() {
       if (response.ok) {
         setSettings(data.settings);
 
-        // Update lists if there were promotions/demotions due to limit change
-        if (data.mainList) {
-          setMainList(data.mainList);
-        }
-        if (data.waitlist) {
-          setWaitlist(data.waitlist);
-        }
+        // Always update lists from rebalanced response
+        setMainList(data.mainList);
+        setWaitlist(data.waitlist);
 
         let msg = 'Settings updated';
         if (data.promoted?.length > 0) {

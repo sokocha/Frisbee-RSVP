@@ -305,20 +305,16 @@ export default async function handler(req, res) {
         const promoted = rebalanced.mainList.filter(p => !oldMainListIds.has(p.id));
         const demoted = rebalanced.waitlist.filter(p => oldMainListIds.has(p.id));
 
-        // Save if anything changed
-        if (promoted.length > 0 || demoted.length > 0) {
-          await kv.set(RSVP_KEY, rebalanced);
-        }
+        // Always save the rebalanced lists to ensure correct priority order
+        await kv.set(RSVP_KEY, rebalanced);
 
         return res.status(200).json({
           success: true,
           settings: newSettings,
-          ...((promoted.length > 0 || demoted.length > 0) && {
-            promoted,
-            demoted,
-            mainList: rebalanced.mainList,
-            waitlist: rebalanced.waitlist
-          })
+          promoted,
+          demoted,
+          mainList: rebalanced.mainList,
+          waitlist: rebalanced.waitlist
         });
       }
 
