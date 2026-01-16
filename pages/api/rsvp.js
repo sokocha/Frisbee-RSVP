@@ -545,7 +545,7 @@ export default async function handler(req, res) {
         snoozedData.names = snoozedData.names.filter(n => n !== nameLC);
         await kv.set(SNOOZED_KEY, snoozedData);
 
-        // Add back to main list or waitlist
+        // Add back and rebalance by priority
         const mainListLimit = settings.mainListLimit || DEFAULT_MAIN_LIST_LIMIT;
         const newPerson = {
           id: Date.now(),
@@ -554,16 +554,25 @@ export default async function handler(req, res) {
           isWhitelisted: true
         };
 
+        // Rebalance with the returning AIS member
+        const rebalanced = rebalanceLists([...mainList, newPerson], waitlist, mainListLimit);
+        mainList = rebalanced.mainList;
+        waitlist = rebalanced.waitlist;
+
+        // Determine where the person ended up
+        const isOnMainList = mainList.some(p => p.id === newPerson.id);
+        const position = isOnMainList
+          ? mainList.findIndex(p => p.id === newPerson.id) + 1
+          : waitlist.findIndex(p => p.id === newPerson.id) + 1;
+
         let message = '';
         let listType = '';
 
-        if (mainList.length < mainListLimit) {
-          mainList = [...mainList, newPerson];
-          message = `Welcome back ${whitelistPerson.name}! You're in spot #${mainList.length}`;
+        if (isOnMainList) {
+          message = `Welcome back ${whitelistPerson.name}! You're in spot #${position}`;
           listType = 'main';
         } else {
-          waitlist = [...waitlist, newPerson];
-          message = `Main list is full. ${whitelistPerson.name} is #${waitlist.length} on the waitlist`;
+          message = `Main list is full. ${whitelistPerson.name} is #${position} on the waitlist`;
           listType = 'waitlist';
         }
 
