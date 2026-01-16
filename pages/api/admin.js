@@ -99,12 +99,30 @@ export default async function handler(req, res) {
             addedAt: new Date().toISOString()
           });
 
-          // Add to main list (whitelisted users always go to main list first)
+          // Add to main list (whitelisted users always have priority)
           if (rsvpData.mainList.length < limit) {
             rsvpData.mainList.push(newPerson);
           } else {
-            // If main list is full, add to waitlist but mark as whitelisted
-            rsvpData.waitlist.push(newPerson);
+            // Main list is full - find the last non-whitelisted person to bump
+            const lastNonWhitelistedIndex = [...rsvpData.mainList].reverse().findIndex(p => !p.isWhitelisted);
+
+            if (lastNonWhitelistedIndex !== -1) {
+              // Convert reversed index to actual index
+              const actualIndex = rsvpData.mainList.length - 1 - lastNonWhitelistedIndex;
+              const bumpedPerson = rsvpData.mainList[actualIndex];
+
+              // Remove bumped person from main list
+              rsvpData.mainList.splice(actualIndex, 1);
+
+              // Add bumped person to the front of waitlist
+              rsvpData.waitlist.unshift(bumpedPerson);
+
+              // Add whitelisted person to main list
+              rsvpData.mainList.push(newPerson);
+            } else {
+              // All spots are whitelisted, add to waitlist
+              rsvpData.waitlist.push(newPerson);
+            }
           }
 
           added.push(trimmedName);
