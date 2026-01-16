@@ -270,12 +270,13 @@ export default async function handler(req, res) {
 
         await kv.set(SETTINGS_KEY, newSettings);
 
-        // Handle limit changes
+        // Handle limit enforcement - always ensure mainList respects the limit
         let rsvpData = await kv.get(RSVP_KEY) || { mainList: [], waitlist: [] };
         const promoted = [];
         const demoted = [];
 
-        if (newLimit < rsvpData.mainList.length) {
+        // Always enforce the limit - demote excess users if mainList exceeds newLimit
+        if (rsvpData.mainList.length > newLimit) {
           // Limit decreased - need to bump excess people to waitlist
           // Bump most recent non-whitelisted users first (by timestamp)
           while (rsvpData.mainList.length > newLimit) {

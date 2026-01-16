@@ -97,7 +97,23 @@ export default function AdminDashboard() {
 
       if (response.ok) {
         setSettings(data.settings);
-        showMessage('Settings updated', 'success');
+
+        // Update lists if there were promotions/demotions due to limit change
+        if (data.mainList) {
+          setMainList(data.mainList);
+        }
+        if (data.waitlist) {
+          setWaitlist(data.waitlist);
+        }
+
+        let msg = 'Settings updated';
+        if (data.promoted?.length > 0) {
+          msg += ` - ${data.promoted.length} promoted from waitlist`;
+        }
+        if (data.demoted?.length > 0) {
+          msg += ` - ${data.demoted.length} moved to waitlist`;
+        }
+        showMessage(msg, 'success');
       } else {
         showMessage(data.error, 'error');
       }
