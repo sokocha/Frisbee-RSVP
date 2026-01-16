@@ -239,6 +239,13 @@ export default async function handler(req, res) {
       const accessStatus = isFormOpen(settings);
       const mainListLimit = settings.mainListLimit || DEFAULT_MAIN_LIST_LIMIT;
 
+      // Auto-rebalance on GET to ensure correct priority order
+      const rebalanced = rebalanceLists(data.mainList, data.waitlist, mainListLimit);
+      const orderChanged = JSON.stringify(rebalanced) !== JSON.stringify(data);
+      if (orderChanged) {
+        await kv.set(RSVP_KEY, rebalanced);
+      }
+
       // Get snoozed list for this week
       const timezone = settings.accessPeriod?.timezone || 'Africa/Lagos';
       const currentWeekId = getCurrentWeekId(timezone);
@@ -249,7 +256,8 @@ export default async function handler(req, res) {
       const whitelist = await kv.get('frisbee-whitelist') || [];
 
       return res.status(200).json({
-        ...data,
+        mainList: rebalanced.mainList,
+        waitlist: rebalanced.waitlist,
         mainListLimit,
         accessStatus: {
           isOpen: accessStatus.isOpen,

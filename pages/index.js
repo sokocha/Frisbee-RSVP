@@ -443,8 +443,24 @@ export default function FrisbeeRSVP() {
       const data = await response.json();
 
       if (response.ok) {
-        setMainList(data.mainList);
-        setWaitlist(data.waitlist);
+        // If unsnoozing (AIS member rejoining), fetch fresh data to get rebalanced lists
+        if (snoozeModal.action === 'unsnooze') {
+          try {
+            const freshDataResponse = await fetch('/api/rsvp');
+            if (freshDataResponse.ok) {
+              const freshData = await freshDataResponse.json();
+              setMainList(freshData.mainList);
+              setWaitlist(freshData.waitlist);
+            }
+          } catch (err) {
+            console.error('Failed to fetch rebalanced data:', err);
+            setMainList(data.mainList);
+            setWaitlist(data.waitlist);
+          }
+        } else {
+          setMainList(data.mainList);
+          setWaitlist(data.waitlist);
+        }
         loadData(deviceId);
         showMessage(data.message, 'success');
         closeSnoozeModal();
