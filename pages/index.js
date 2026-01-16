@@ -330,20 +330,32 @@ export default function FrisbeeRSVP() {
           )}
 
           {/* Snoozed Members Section */}
-          {snoozedNames.length > 0 && accessStatus.isOpen && (
+          {snoozedNames.length > 0 && (
             <div className="mb-4 p-4 bg-yellow-100 border-2 border-yellow-300 rounded-lg">
               <p className="font-medium text-yellow-800 mb-2">Skipping this week:</p>
               <div className="flex flex-wrap gap-2">
                 {snoozedNames.map((name, index) => (
-                  <button
-                    key={index}
-                    onClick={() => openSnoozeModal({ name }, 'unsnooze')}
-                    className="bg-yellow-200 hover:bg-yellow-300 text-yellow-800 px-3 py-1 rounded-full text-sm transition-colors"
-                  >
-                    {name} <span className="text-yellow-600 ml-1">↩ rejoin</span>
-                  </button>
+                  accessStatus.isOpen ? (
+                    <button
+                      key={index}
+                      onClick={() => openSnoozeModal({ name }, 'unsnooze')}
+                      className="bg-yellow-200 hover:bg-yellow-300 text-yellow-800 px-3 py-1 rounded-full text-sm transition-colors"
+                    >
+                      {name} <span className="text-yellow-600 ml-1">↩ rejoin</span>
+                    </button>
+                  ) : (
+                    <span
+                      key={index}
+                      className="bg-yellow-200 text-yellow-800 px-3 py-1 rounded-full text-sm"
+                    >
+                      {name}
+                    </span>
+                  )
                 ))}
               </div>
+              {!accessStatus.isOpen && (
+                <p className="text-xs text-yellow-700 mt-2">Rejoin option available when RSVP opens</p>
+              )}
             </div>
           )}
 
@@ -488,7 +500,7 @@ export default function FrisbeeRSVP() {
                         Drop out
                       </button>
                     )}
-                    {person.isWhitelisted && accessStatus.isOpen && (
+                    {person.isWhitelisted && (
                       <button
                         onClick={() => openSnoozeModal(person, 'snooze')}
                         disabled={submitting}
