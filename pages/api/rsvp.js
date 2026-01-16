@@ -46,16 +46,16 @@ function isFormOpen(settings) {
   }
 
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const formatHour = (h) => {
-    if (h === 0) return '12:00 AM';
-    if (h === 12) return '12:00 PM';
-    if (h < 12) return `${h}:00 AM`;
-    return `${h - 12}:00 PM`;
+  const formatTime = (h, m) => {
+    const hour = h % 12 || 12;
+    const minute = m.toString().padStart(2, '0');
+    const ampm = h < 12 ? 'AM' : 'PM';
+    return `${hour}:${minute} ${ampm}`;
   };
 
   const message = isOpen
     ? null
-    : `RSVP is closed. Opens ${days[startDay]} at ${formatHour(startHour)} WAT`;
+    : `RSVP is closed. Opens ${days[startDay]} at ${formatTime(startHour, startMinute)} WAT`;
 
   return { isOpen, message };
 }

@@ -334,11 +334,11 @@ export default function AdminDashboard() {
     });
   };
 
-  const formatHour = (hour) => {
-    if (hour === 0) return '12:00 AM';
-    if (hour === 12) return '12:00 PM';
-    if (hour < 12) return `${hour}:00 AM`;
-    return `${hour - 12}:00 PM`;
+  const formatTimeDisplay = (hour, minute) => {
+    const h = hour % 12 || 12;
+    const m = minute.toString().padStart(2, '0');
+    const ampm = hour < 12 ? 'AM' : 'PM';
+    return `${h}:${m} ${ampm}`;
   };
 
   const getCurrentAccessStatus = () => {
@@ -356,8 +356,8 @@ export default function AdminDashboard() {
 
     // Convert to minutes since start of week for easier comparison
     const currentMins = currentDay * 24 * 60 + currentHour * 60 + currentMinute;
-    const startMins = startDay * 24 * 60 + startHour * 60 + startMinute;
-    const endMins = endDay * 24 * 60 + endHour * 60 + endMinute;
+    const startMins = startDay * 24 * 60 + startHour * 60 + (startMinute || 0);
+    const endMins = endDay * 24 * 60 + endHour * 60 + (endMinute || 0);
 
     let isOpen;
     if (startMins <= endMins) {
@@ -368,8 +368,8 @@ export default function AdminDashboard() {
     }
 
     const statusMessage = isOpen
-      ? `Open now (closes ${DAYS[endDay]} ${formatHour(endHour)})`
-      : `Closed (opens ${DAYS[startDay]} ${formatHour(startHour)})`;
+      ? `Open now (closes ${DAYS[endDay]} ${formatTimeDisplay(endHour, endMinute || 0)})`
+      : `Closed (opens ${DAYS[startDay]} ${formatTimeDisplay(startHour, startMinute || 0)})`;
 
     return { isOpen, message: statusMessage };
   };
@@ -505,7 +505,7 @@ export default function AdminDashboard() {
                 {/* Start Time */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Opens at:</label>
-                  <div className="flex gap-3 flex-wrap">
+                  <div className="flex gap-2 flex-wrap items-center">
                     <select
                       value={settings.accessPeriod.startDay}
                       onChange={(e) => handleAccessPeriodChange('startDay', parseInt(e.target.value))}
@@ -521,7 +521,17 @@ export default function AdminDashboard() {
                       className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none"
                     >
                       {Array.from({ length: 24 }, (_, i) => (
-                        <option key={i} value={i}>{formatHour(i)}</option>
+                        <option key={i} value={i}>{i.toString().padStart(2, '0')}</option>
+                      ))}
+                    </select>
+                    <span className="text-gray-500">:</span>
+                    <select
+                      value={settings.accessPeriod.startMinute}
+                      onChange={(e) => handleAccessPeriodChange('startMinute', parseInt(e.target.value))}
+                      className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none"
+                    >
+                      {Array.from({ length: 60 }, (_, i) => (
+                        <option key={i} value={i}>{i.toString().padStart(2, '0')}</option>
                       ))}
                     </select>
                   </div>
@@ -530,7 +540,7 @@ export default function AdminDashboard() {
                 {/* End Time */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Closes at:</label>
-                  <div className="flex gap-3 flex-wrap">
+                  <div className="flex gap-2 flex-wrap items-center">
                     <select
                       value={settings.accessPeriod.endDay}
                       onChange={(e) => handleAccessPeriodChange('endDay', parseInt(e.target.value))}
@@ -546,7 +556,17 @@ export default function AdminDashboard() {
                       className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none"
                     >
                       {Array.from({ length: 24 }, (_, i) => (
-                        <option key={i} value={i}>{formatHour(i)}</option>
+                        <option key={i} value={i}>{i.toString().padStart(2, '0')}</option>
+                      ))}
+                    </select>
+                    <span className="text-gray-500">:</span>
+                    <select
+                      value={settings.accessPeriod.endMinute}
+                      onChange={(e) => handleAccessPeriodChange('endMinute', parseInt(e.target.value))}
+                      className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none"
+                    >
+                      {Array.from({ length: 60 }, (_, i) => (
+                        <option key={i} value={i}>{i.toString().padStart(2, '0')}</option>
                       ))}
                     </select>
                   </div>
