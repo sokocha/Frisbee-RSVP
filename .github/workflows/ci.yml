@@ -84,10 +84,16 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
+      - name: Build application
+        run: npm run build
+        env:
+          KV_REST_API_URL: ${{ secrets.KV_REST_API_URL || 'https://dummy.upstash.io' }}
+          KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN || 'dummy-token' }}
+
       - name: Run E2E tests
         run: npm run test:e2e
         env:
-          PLAYWRIGHT_BASE_URL: ${{ secrets.PREPROD_URL || 'http://localhost:3000' }}
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
           KV_REST_API_URL: ${{ secrets.KV_REST_API_URL || 'https://dummy.upstash.io' }}
           KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN || 'dummy-token' }}
 
