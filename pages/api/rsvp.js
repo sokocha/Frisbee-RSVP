@@ -267,6 +267,7 @@ export default async function handler(req, res) {
           isOpen: accessStatus.isOpen,
           message: accessStatus.message
         },
+        accessPeriod: settings.accessPeriod,
         snoozedNames,
         whitelist: whitelist.map(w => ({ name: w.name, deviceId: w.deviceId }))
       });

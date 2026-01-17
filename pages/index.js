@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Head from 'next/head';
+import { useNotifications, useMainListFullNotification, useWaitlistPromotionNotification } from '../hooks/useNotifications';
 
 const DEFAULT_MAIN_LIST_LIMIT = 30;
 const DEVICE_KEY = 'frisbee-device-id';
@@ -269,6 +270,18 @@ export default function FrisbeeRSVP() {
   const [snoozePassword, setSnoozePassword] = useState('');
   const [showConfetti, setShowConfetti] = useState(false);
   const [confirmModal, setConfirmModal] = useState({ show: false, personId: null, isWaitlist: false });
+  const [accessPeriod, setAccessPeriod] = useState(null);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const prevMainListLengthRef = useRef(0);
+
+  // Notification hooks
+  const {
+    permission: notificationPermission,
+    requestPermission,
+    showNotification,
+    scheduleFormOpeningReminder,
+    isSupported: notificationsSupported
+  } = useNotifications();
 
   const checkMySignup = useCallback((mainList, waitlist, currentDeviceId) => {
     const allSignups = [...mainList, ...waitlist];
@@ -293,6 +306,7 @@ export default function FrisbeeRSVP() {
         setMainListLimit(data.mainListLimit || DEFAULT_MAIN_LIST_LIMIT);
         setSnoozedNames(data.snoozedNames || []);
         setWhitelist(data.whitelist || []);
+        setAccessPeriod(data.accessPeriod || null);
         checkMySignup(data.mainList || [], data.waitlist || [], currentDeviceId);
       }
     } catch (error) {
@@ -306,6 +320,75 @@ export default function FrisbeeRSVP() {
     setDeviceId(id);
     loadData(id);
   }, [loadData]);
+
+  // Check saved notification preference
+  useEffect(() => {
+    const saved = localStorage.getItem('frisbee-notifications-enabled');
+    if (saved === 'true' && notificationPermission === 'granted') {
+      setNotificationsEnabled(true);
+    }
+  }, [notificationPermission]);
+
+  // Schedule form opening reminder when notifications are enabled
+  useEffect(() => {
+    if (notificationsEnabled && accessPeriod && notificationPermission === 'granted') {
+      scheduleFormOpeningReminder(accessPeriod);
+    }
+  }, [notificationsEnabled, accessPeriod, notificationPermission, scheduleFormOpeningReminder]);
+
+  // Main list full notification
+  useEffect(() => {
+    if (!notificationsEnabled || notificationPermission !== 'granted') return;
+
+    const prevLength = prevMainListLengthRef.current;
+    const currentLength = mainList.length;
+
+    // Notify when list just became full
+    if (prevLength < mainListLimit && currentLength >= mainListLimit) {
+      showNotification('🥏 Main List is Full!', {
+        body: `All ${mainListLimit} spots have been claimed. You can still join the waitlist.`,
+        tag: 'main-list-full'
+      });
+    }
+
+    prevMainListLengthRef.current = currentLength;
+  }, [mainList.length, mainListLimit, notificationsEnabled, notificationPermission, showNotification]);
+
+  // Waitlist promotion notification
+  useEffect(() => {
+    if (!notificationsEnabled || notificationPermission !== 'granted' || !mySignup) return;
+
+    const isOnMainList = mainList.some(p => p.id === mySignup.id);
+    const wasOnWaitlist = localStorage.getItem('frisbee-was-on-waitlist') === 'true';
+
+    if (wasOnWaitlist && isOnMainList) {
+      const position = mainList.findIndex(p => p.id === mySignup.id) + 1;
+      showNotification('🎉 You\'ve Been Promoted!', {
+        body: `Great news! You're now #${position} on the main list!`,
+        tag: 'waitlist-promotion'
+      });
+      localStorage.removeItem('frisbee-was-on-waitlist');
+    } else if (!isOnMainList && mySignup) {
+      localStorage.setItem('frisbee-was-on-waitlist', 'true');
+    }
+  }, [mySignup, mainList, notificationsEnabled, notificationPermission, showNotification]);
+
+  // Handle enabling notifications
+  const handleEnableNotifications = async () => {
+    const permission = await requestPermission();
+    if (permission === 'granted') {
+      setNotificationsEnabled(true);
+      localStorage.setItem('frisbee-notifications-enabled', 'true');
+      showMessage('Notifications enabled! You\'ll be notified when the form opens.', 'success');
+
+      // Schedule the opening reminder immediately
+      if (accessPeriod) {
+        scheduleFormOpeningReminder(accessPeriod);
+      }
+    } else {
+      showMessage('Notifications permission denied', 'error');
+    }
+  };
 
   const showMessage = (text, type) => {
     setMessage({ text, type });
@@ -579,6 +662,24 @@ export default function FrisbeeRSVP() {
               Weekly Frisbee
             </h1>
             <p className="text-emerald-200/80 text-sm md:text-base">First come, first served • {mainListLimit} spots available</p>
+
+            {/* Notification Toggle */}
+            {notificationsSupported && (
+              <button
+                onClick={handleEnableNotifications}
+                disabled={notificationsEnabled}
+                className={`mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                  notificationsEnabled
+                    ? 'bg-emerald-500/30 text-emerald-200 cursor-default'
+                    : 'bg-white/10 hover:bg-white/20 text-white'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                {notificationsEnabled ? 'Notifications On' : 'Enable Notifications'}
+              </button>
+            )}
           </div>
 
           {/* Access Status Banner */}
