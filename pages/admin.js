@@ -484,7 +484,7 @@ export default function AdminDashboard() {
         <Head>
           <title>Admin - PlayDay</title>
           <meta name="robots" content="noindex" />
-          <link rel="icon" href="/favicon.png" type="image/png" />
+          <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         </Head>
         <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full">
@@ -531,7 +531,7 @@ export default function AdminDashboard() {
       <Head>
         <title>Admin Dashboard - PlayDay</title>
         <meta name="robots" content="noindex" />
-        <link rel="icon" href="/favicon.png" type="image/png" />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
       </Head>
 
       <div className="min-h-screen bg-gray-100 p-4 md:p-8">
