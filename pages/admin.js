@@ -97,7 +97,19 @@ export default function AdminDashboard() {
 
       if (response.ok) {
         setSettings(data.settings);
-        showMessage('Settings updated', 'success');
+
+        // Always update lists from rebalanced response
+        setMainList(data.mainList);
+        setWaitlist(data.waitlist);
+
+        let msg = 'Settings updated';
+        if (data.promoted?.length > 0) {
+          msg += ` - ${data.promoted.length} promoted from waitlist`;
+        }
+        if (data.demoted?.length > 0) {
+          msg += ` - ${data.demoted.length} moved to waitlist`;
+        }
+        showMessage(msg, 'success');
       } else {
         showMessage(data.error, 'error');
       }

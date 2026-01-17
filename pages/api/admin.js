@@ -1,13 +1,37 @@
 import { kv } from '@vercel/kv';
 
 const RSVP_KEY = 'frisbee-rsvp-data';
-const ADMIN_KEY = 'frisbee-admin-password';
 const WHITELIST_KEY = 'frisbee-whitelist';
 const SETTINGS_KEY = 'frisbee-settings';
 const ARCHIVE_KEY = 'frisbee-archive';
 
-// Simple admin password - change this or set via environment variable
+// Admin password - change this or set via environment variables
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'frisbee-admin-2024';
+
+/**
+ * Sort people by priority:
+ * 1. AIS members first (by earliest timestamp)
+ * 2. Non-AIS members second (by earliest timestamp)
+ */
+function sortByPriority(people) {
+  return [...people].sort((a, b) => {
+    if (a.isWhitelisted && !b.isWhitelisted) return -1;
+    if (!a.isWhitelisted && b.isWhitelisted) return 1;
+    return new Date(a.timestamp) - new Date(b.timestamp);
+  });
+}
+
+/**
+ * Rebalance mainList and waitlist based on the limit.
+ */
+function rebalanceLists(mainList, waitlist, limit) {
+  const allPeople = [...mainList, ...waitlist];
+  const sorted = sortByPriority(allPeople);
+  return {
+    mainList: sorted.slice(0, limit),
+    waitlist: sorted.slice(limit)
+  };
+}
 
 // Default settings (WAT = UTC+1)
 const DEFAULT_SETTINGS = {
@@ -33,7 +57,9 @@ const DEFAULT_SETTINGS = {
 export default async function handler(req, res) {
   // Verify admin password
   const authHeader = req.headers.authorization;
-  if (!authHeader || authHeader !== `Bearer ${ADMIN_PASSWORD}`) {
+  const token = authHeader?.replace('Bearer ', '');
+
+  if (token !== ADMIN_PASSWORD) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -44,9 +70,20 @@ export default async function handler(req, res) {
       const whitelist = await kv.get(WHITELIST_KEY) || [];
       const settings = await kv.get(SETTINGS_KEY) || DEFAULT_SETTINGS;
       const archive = await kv.get(ARCHIVE_KEY) || [];
+      const limit = settings.mainListLimit || 30;
+
+      // Auto-rebalance on load to ensure correct priority order
+      const rebalanced = rebalanceLists(rsvpData.mainList, rsvpData.waitlist, limit);
+
+      // Only save if order changed
+      const orderChanged = JSON.stringify(rebalanced) !== JSON.stringify(rsvpData);
+      if (orderChanged) {
+        await kv.set(RSVP_KEY, rebalanced);
+      }
 
       return res.status(200).json({
-        ...rsvpData,
+        mainList: rebalanced.mainList,
+        waitlist: rebalanced.waitlist,
         whitelist,
         settings,
         archive
@@ -108,31 +145,14 @@ export default async function handler(req, res) {
             addedAt: new Date().toISOString()
           });
 
-          // Add to main list (whitelisted users always have priority)
-          if (rsvpData.mainList.length < limit) {
-            rsvpData.mainList.push(newPerson);
-          } else {
-            // Main list is full - find the last non-whitelisted person to bump
-            const lastNonWhitelistedIndex = [...rsvpData.mainList].reverse().findIndex(p => !p.isWhitelisted);
-
-            if (lastNonWhitelistedIndex !== -1) {
-              // Convert reversed index to actual index
-              const actualIndex = rsvpData.mainList.length - 1 - lastNonWhitelistedIndex;
-              const bumpedPerson = rsvpData.mainList[actualIndex];
-
-              // Remove bumped person from main list
-              rsvpData.mainList.splice(actualIndex, 1);
-
-              // Add bumped person to the front of waitlist
-              rsvpData.waitlist.unshift(bumpedPerson);
-
-              // Add whitelisted person to main list
-              rsvpData.mainList.push(newPerson);
-            } else {
-              // All spots are whitelisted, add to waitlist
-              rsvpData.waitlist.push(newPerson);
-            }
-          }
+          // Add the new person to the combined list and rebalance
+          const rebalanced = rebalanceLists(
+            [...rsvpData.mainList, newPerson],
+            rsvpData.waitlist,
+            limit
+          );
+          rsvpData.mainList = rebalanced.mainList;
+          rsvpData.waitlist = rebalanced.waitlist;
 
           added.push(trimmedName);
         }
@@ -252,9 +272,12 @@ export default async function handler(req, res) {
         }
 
         const currentSettings = await kv.get(SETTINGS_KEY) || DEFAULT_SETTINGS;
+        const oldLimit = currentSettings.mainListLimit || 30;
+        const newLimit = settings.mainListLimit ?? oldLimit;
+
         const newSettings = {
           ...currentSettings,
-          mainListLimit: settings.mainListLimit ?? currentSettings.mainListLimit ?? 30,
+          mainListLimit: newLimit,
           accessPeriod: {
             ...currentSettings.accessPeriod,
             ...(settings.accessPeriod || {})
@@ -267,9 +290,26 @@ export default async function handler(req, res) {
 
         await kv.set(SETTINGS_KEY, newSettings);
 
+        // Always rebalance lists based on the new limit
+        const rsvpData = await kv.get(RSVP_KEY) || { mainList: [], waitlist: [] };
+        const oldMainListIds = new Set(rsvpData.mainList.map(p => p.id));
+
+        const rebalanced = rebalanceLists(rsvpData.mainList, rsvpData.waitlist, newLimit);
+
+        // Calculate who was promoted and demoted
+        const promoted = rebalanced.mainList.filter(p => !oldMainListIds.has(p.id));
+        const demoted = rebalanced.waitlist.filter(p => oldMainListIds.has(p.id));
+
+        // Always save the rebalanced lists to ensure correct priority order
+        await kv.set(RSVP_KEY, rebalanced);
+
         return res.status(200).json({
           success: true,
-          settings: newSettings
+          settings: newSettings,
+          promoted,
+          demoted,
+          mainList: rebalanced.mainList,
+          waitlist: rebalanced.waitlist
         });
       }
 

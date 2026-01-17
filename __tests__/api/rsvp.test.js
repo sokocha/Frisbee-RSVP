@@ -201,6 +201,118 @@ describe('RSVP API', () => {
         })
       );
     });
+
+    it('AIS member bumps non-AIS when signing up to full list', async () => {
+      mockKvStore['frisbee-settings'] = {
+        mainListLimit: 2,
+        accessPeriod: { enabled: false },
+      };
+      mockKvStore['frisbee-rsvp-data'] = {
+        mainList: [
+          { id: 1, name: 'AIS Member', deviceId: 'device1', isWhitelisted: true, timestamp: '2026-01-16T10:00:00Z' },
+          { id: 2, name: 'Regular User', deviceId: 'device2', timestamp: '2026-01-16T10:30:00Z' },
+        ],
+        waitlist: [],
+      };
+      mockKvStore['frisbee-whitelist'] = [
+        { name: 'AIS Member', deviceId: 'device1' },
+        { name: 'New AIS Member', deviceId: 'device3' },
+      ];
+
+      const { req, res } = createMockReqRes('POST', {
+        name: 'New AIS Member',
+        deviceId: 'device3'
+      });
+
+      await handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      const response = res.json.mock.calls[0][0];
+
+      // New AIS member should be on main list (AIS has priority over non-AIS)
+      expect(response.listType).toBe('main');
+      expect(response.mainList).toHaveLength(2);
+      expect(response.mainList.some(p => p.name === 'New AIS Member' && p.isWhitelisted)).toBe(true);
+
+      // Regular user should be bumped to waitlist
+      expect(response.waitlist).toHaveLength(1);
+      expect(response.waitlist[0].name).toBe('Regular User');
+    });
+
+    it('lists are sorted by priority: AIS first, then by timestamp', async () => {
+      mockKvStore['frisbee-settings'] = {
+        mainListLimit: 3,
+        accessPeriod: { enabled: false },
+      };
+      mockKvStore['frisbee-rsvp-data'] = {
+        mainList: [
+          { id: 1, name: 'AIS Member', deviceId: 'device1', isWhitelisted: true, timestamp: '2026-01-16T10:00:00Z' },
+          { id: 2, name: 'Regular User Early', deviceId: 'device2', timestamp: '2026-01-16T10:30:00Z' },
+          { id: 3, name: 'Regular User Late', deviceId: 'device4', timestamp: '2026-01-16T11:00:00Z' },
+        ],
+        waitlist: [],
+      };
+      mockKvStore['frisbee-whitelist'] = [
+        { name: 'AIS Member', deviceId: 'device1' },
+        { name: 'New AIS Member', deviceId: 'device3' },
+      ];
+
+      const { req, res } = createMockReqRes('POST', {
+        name: 'New AIS Member',
+        deviceId: 'device3'
+      });
+
+      await handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      const response = res.json.mock.calls[0][0];
+
+      // Main list should have 3 people, sorted by priority
+      expect(response.mainList).toHaveLength(3);
+
+      // AIS members should be first (sorted by timestamp)
+      expect(response.mainList[0].name).toBe('AIS Member'); // Earliest AIS
+      expect(response.mainList[1].name).toBe('New AIS Member'); // Later AIS
+      expect(response.mainList[2].name).toBe('Regular User Early'); // Earliest non-AIS
+
+      // Latest non-AIS user should be on waitlist
+      expect(response.waitlist).toHaveLength(1);
+      expect(response.waitlist[0].name).toBe('Regular User Late');
+    });
+
+    it('adds whitelisted user to waitlist when all main list spots are whitelisted', async () => {
+      mockKvStore['frisbee-settings'] = {
+        mainListLimit: 2,
+        accessPeriod: { enabled: false },
+      };
+      mockKvStore['frisbee-rsvp-data'] = {
+        mainList: [
+          { id: 1, name: 'AIS Member 1', deviceId: 'device1', isWhitelisted: true },
+          { id: 2, name: 'AIS Member 2', deviceId: 'device2', isWhitelisted: true },
+        ],
+        waitlist: [],
+      };
+      mockKvStore['frisbee-whitelist'] = [
+        { name: 'AIS Member 1', deviceId: 'device1' },
+        { name: 'AIS Member 2', deviceId: 'device2' },
+        { name: 'AIS Member 3', deviceId: 'device3' },
+      ];
+
+      const { req, res } = createMockReqRes('POST', {
+        name: 'AIS Member 3',
+        deviceId: 'device3'
+      });
+
+      await handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          listType: 'waitlist',
+        })
+      );
+    });
   });
 
   describe('DELETE /api/rsvp', () => {
