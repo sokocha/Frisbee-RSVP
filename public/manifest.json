@@ -1,0 +1,23 @@
+{
+  "name": "PlayDay - Weekly Frisbee RSVP",
+  "short_name": "PlayDay",
+  "description": "RSVP for weekly frisbee pickup games",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1b4332",
+  "theme_color": "#2e7d32",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
