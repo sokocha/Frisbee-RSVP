@@ -30,7 +30,7 @@ test.describe('Frisbee RSVP App', () => {
   test('displays the main page with title', async ({ page }) => {
     await mockRsvpApi(page);
     await page.goto('/');
-    await expect(page.locator('h1')).toContainText('Weekly Frisbee');
+    await expect(page.locator('h1')).toContainText('PlayDay');
   });
 
   test('shows loading state initially', async ({ page }) => {
