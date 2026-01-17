@@ -3,6 +3,7 @@ import Head from 'next/head';
 
 const DEFAULT_MAIN_LIST_LIMIT = 30;
 const DEVICE_KEY = 'frisbee-device-id';
+const SAVED_NAME_KEY = 'frisbee-saved-name';
 
 // Generate a unique device ID based on browser characteristics
 function generateDeviceId() {
@@ -433,6 +434,8 @@ export default function FrisbeeRSVP() {
   const [snoozePassword, setSnoozePassword] = useState('');
   const [showConfetti, setShowConfetti] = useState(false);
   const [confirmModal, setConfirmModal] = useState({ show: false, personId: null, isWaitlist: false });
+  const [savedName, setSavedName] = useState('');
+  const [showNameEdit, setShowNameEdit] = useState(false);
 
   const checkMySignup = useCallback((mainList, waitlist, currentDeviceId) => {
     const allSignups = [...mainList, ...waitlist];
@@ -469,6 +472,12 @@ export default function FrisbeeRSVP() {
     const id = getDeviceId();
     setDeviceId(id);
     loadData(id);
+    // Load saved name for returning users
+    const remembered = localStorage.getItem(SAVED_NAME_KEY);
+    if (remembered) {
+      setSavedName(remembered);
+      setName(remembered);
+    }
   }, [loadData]);
 
   const showMessage = (text, type) => {
@@ -507,10 +516,14 @@ export default function FrisbeeRSVP() {
       if (response.ok) {
         setMainList(data.mainList);
         setWaitlist(data.waitlist);
-        setName('');
         setHasSignedUp(true);
         setMySignup(data.person);
         showMessage(data.message, data.listType === 'main' ? 'success' : 'warning');
+
+        // Save name for quick RSVP next time
+        localStorage.setItem(SAVED_NAME_KEY, trimmedName);
+        setSavedName(trimmedName);
+        setShowNameEdit(false);
 
         // Show confetti for main list signup
         if (data.listType === 'main') {
@@ -896,24 +909,67 @@ export default function FrisbeeRSVP() {
                 <p className="text-sm mt-1 text-gray-400">{accessStatus.message}</p>
               </div>
             ) : !hasSignedUp ? (
-              <div className="flex flex-col md:flex-row gap-3">
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && !submitting && handleRSVP()}
-                  placeholder="Enter your full name (first & last)"
-                  disabled={submitting}
-                  className="flex-1 px-4 py-3 md:py-4 border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:outline-none text-base md:text-lg disabled:bg-gray-50 transition-colors"
-                />
-                <button
-                  onClick={handleRSVP}
-                  disabled={submitting}
-                  className="px-6 md:px-8 py-3 md:py-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:from-gray-300 disabled:to-gray-400 text-white font-semibold rounded-xl transition-all text-base md:text-lg flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25"
-                >
-                  {submitting ? <Spinner /> : 'RSVP'}
-                </button>
-              </div>
+              savedName && !showNameEdit ? (
+                // Quick RSVP for returning users
+                <div className="space-y-3">
+                  <div className="text-center">
+                    <p className="text-gray-600 text-sm">Welcome back!</p>
+                    <p className="text-gray-800 font-semibold text-lg">{savedName}</p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <button
+                      onClick={handleRSVP}
+                      disabled={submitting}
+                      className="flex-1 px-6 py-3 md:py-4 min-h-[48px] bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:from-gray-300 disabled:to-gray-400 text-white font-semibold rounded-xl transition-all text-base md:text-lg flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25"
+                    >
+                      {submitting ? <Spinner /> : 'RSVP Now'}
+                    </button>
+                    <button
+                      onClick={() => setShowNameEdit(true)}
+                      disabled={submitting}
+                      className="px-4 py-3 md:py-4 min-h-[48px] bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl transition-colors text-sm"
+                    >
+                      Change name
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                // Regular form for new users or editing name
+                <div className="space-y-3">
+                  {showNameEdit && (
+                    <div className="flex justify-between items-center">
+                      <p className="text-gray-600 text-sm">Enter a different name:</p>
+                      <button
+                        onClick={() => {
+                          setShowNameEdit(false);
+                          setName(savedName);
+                        }}
+                        className="text-emerald-600 hover:text-emerald-700 text-sm font-medium"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                  <div className="flex flex-col md:flex-row gap-3">
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && !submitting && handleRSVP()}
+                      placeholder="Enter your full name (first & last)"
+                      disabled={submitting}
+                      className="flex-1 px-4 py-3 md:py-4 border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:outline-none text-base md:text-lg disabled:bg-gray-50 transition-colors"
+                    />
+                    <button
+                      onClick={handleRSVP}
+                      disabled={submitting}
+                      className="px-6 md:px-8 py-3 md:py-4 min-h-[48px] bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:from-gray-300 disabled:to-gray-400 text-white font-semibold rounded-xl transition-all text-base md:text-lg flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25"
+                    >
+                      {submitting ? <Spinner /> : 'RSVP'}
+                    </button>
+                  </div>
+                </div>
+              )
             ) : (
               <div className="text-center text-gray-500 py-2">
                 <p>You've already signed up for this week!</p>
