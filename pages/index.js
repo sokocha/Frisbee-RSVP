@@ -577,6 +577,7 @@ export default function FrisbeeRSVP() {
         <div className="max-w-2xl mx-auto">
           {/* Header */}
           <div className="text-center mb-6 md:mb-8 animate-fade-in-up">
+            <div className="text-4xl md:text-5xl mb-2">🥏</div>
             <h1 className="text-4xl md:text-5xl font-bold mb-2 bg-gradient-to-r from-white via-emerald-200 to-teal-200 bg-clip-text text-transparent">
               PlayDay
             </h1>
@@ -910,7 +911,7 @@ export default function FrisbeeRSVP() {
 
           {/* Footer */}
           <div className="text-center mt-6 md:mt-8 text-emerald-300/60 text-sm animate-fade-in-up">
-            <p>Catch-234 Weekly Pickup</p>
+            <p>Weekly Pickup</p>
           </div>
         </div>
       </div>
