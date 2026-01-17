@@ -92,11 +92,11 @@ function WeatherWidget() {
   };
 
   if (loading) {
-    return <div className="text-emerald-200/60 text-sm">Loading weather...</div>;
+    return <div className="text-emerald-200/80 text-sm">Loading weather...</div>;
   }
 
   if (!weather) {
-    return <div className="text-emerald-200/60 text-sm">Weather unavailable</div>;
+    return <div className="text-emerald-200/80 text-sm">Weather unavailable</div>;
   }
 
   const current = weather.current;
@@ -110,19 +110,19 @@ function WeatherWidget() {
           <div className="text-xl font-semibold text-white">{Math.round(current.temperature_2m)}°C</div>
           <div className="text-emerald-200/80 text-sm">{getWeatherDesc(current.weather_code)}</div>
         </div>
-        <div className="ml-auto text-right text-emerald-200/60 text-sm">
+        <div className="ml-auto text-right text-emerald-200/80 text-sm">
           <div>Wind: {Math.round(current.wind_speed_10m)} km/h</div>
         </div>
       </div>
       <div className="flex gap-2 pt-2 border-t border-emerald-500/20">
         {daily.time.slice(0, 3).map((date, i) => (
           <div key={date} className="flex-1 text-center p-2 rounded-lg bg-emerald-800/30">
-            <div className="text-emerald-200/60 text-xs">
+            <div className="text-emerald-200/80 text-xs">
               {i === 0 ? 'Today' : new Date(date).toLocaleDateString('en-US', { weekday: 'short' })}
             </div>
             <div className="text-lg">{getWeatherIcon(daily.weather_code[i])}</div>
             <div className="text-white text-sm">{Math.round(daily.temperature_2m_max[i])}°</div>
-            <div className="text-emerald-200/60 text-xs">{daily.precipitation_probability_max[i]}% rain</div>
+            <div className="text-emerald-200/80 text-xs">{daily.precipitation_probability_max[i]}% rain</div>
           </div>
         ))}
       </div>
@@ -138,7 +138,7 @@ function InfoSection({ title, icon, children, defaultOpen = false }) {
     <div className="glass-card rounded-2xl overflow-hidden">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-white/5 transition-colors"
+        className="w-full px-4 py-4 min-h-[48px] flex items-center justify-between text-left hover:bg-white/5 transition-colors"
       >
         <div className="flex items-center gap-2 text-white font-medium">
           <span>{icon}</span>
@@ -717,12 +717,12 @@ export default function FrisbeeRSVP() {
               </div>
               {nextOpenTime && (
                 <div className="mt-3">
-                  <p className="text-emerald-200/60 text-sm mb-1">Opens in</p>
+                  <p className="text-emerald-200/80 text-sm mb-1">Opens in</p>
                   <CountdownTimer targetTime={nextOpenTime} />
                 </div>
               )}
               {!nextOpenTime && accessStatus.message && (
-                <p className="text-emerald-200/60 text-sm">{accessStatus.message}</p>
+                <p className="text-emerald-200/80 text-sm">{accessStatus.message}</p>
               )}
             </div>
           )}
@@ -752,14 +752,14 @@ export default function FrisbeeRSVP() {
                     <button
                       key={index}
                       onClick={() => openSnoozeModal({ name: snoozedName }, 'unsnooze')}
-                      className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 px-3 py-1.5 rounded-full text-sm transition-all hover:scale-105"
+                      className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 px-4 py-2.5 min-h-[44px] rounded-full text-sm transition-all hover:scale-105"
                     >
                       {snoozedName} <span className="text-amber-400 ml-1">↩</span>
                     </button>
                   ) : (
                     <span
                       key={index}
-                      className="bg-amber-500/20 text-amber-200 px-3 py-1.5 rounded-full text-sm"
+                      className="bg-amber-500/20 text-amber-300 px-4 py-2.5 rounded-full text-sm"
                     >
                       {snoozedName}
                     </span>
@@ -950,7 +950,7 @@ export default function FrisbeeRSVP() {
                         <button
                           onClick={() => openConfirmModal(person.id, false)}
                           disabled={submitting}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 px-3 py-1.5 rounded-lg transition-all text-sm font-medium"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 px-4 py-2.5 min-h-[44px] rounded-lg transition-all text-sm font-medium"
                         >
                           Drop out
                         </button>
@@ -959,7 +959,7 @@ export default function FrisbeeRSVP() {
                         <button
                           onClick={() => openSnoozeModal(person, 'snooze')}
                           disabled={submitting}
-                          className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 disabled:opacity-50 px-3 py-1.5 rounded-lg transition-all text-sm font-medium"
+                          className="text-amber-700 hover:text-amber-800 hover:bg-amber-50 disabled:opacity-50 px-4 py-2.5 min-h-[44px] rounded-lg transition-all text-sm font-medium"
                         >
                           Skip week
                         </button>
@@ -1018,7 +1018,7 @@ export default function FrisbeeRSVP() {
                           <button
                             onClick={() => openConfirmModal(person.id, true)}
                             disabled={submitting}
-                            className="text-red-500 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 px-3 py-1.5 rounded-lg transition-all text-sm font-medium"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 px-4 py-2.5 min-h-[44px] rounded-lg transition-all text-sm font-medium"
                           >
                             Remove
                           </button>
@@ -1041,13 +1041,13 @@ export default function FrisbeeRSVP() {
               <div className="space-y-3">
                 <div>
                   <div className="text-white font-medium">{FIELD_CONFIG.name}</div>
-                  <div className="text-emerald-200/70 text-sm">{FIELD_CONFIG.address}</div>
+                  <div className="text-emerald-200/90 text-sm">{FIELD_CONFIG.address}</div>
                 </div>
                 <a
                   href={FIELD_CONFIG.googleMapsUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors text-sm font-medium"
+                  className="inline-flex items-center gap-2 px-5 py-3 min-h-[44px] bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors text-sm font-medium"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -1085,7 +1085,7 @@ export default function FrisbeeRSVP() {
           </div>
 
           {/* Footer */}
-          <div className="text-center mt-6 md:mt-8 text-emerald-300/60 text-sm animate-fade-in-up">
+          <div className="text-center mt-6 md:mt-8 text-emerald-300/80 text-sm animate-fade-in-up">
             <p>Weekly Pickup</p>
           </div>
         </div>
