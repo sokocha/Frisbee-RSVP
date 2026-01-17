@@ -49,16 +49,25 @@ const FIELD_CONFIG = {
   googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=1004+Estate+Victoria+Island+Lagos+Nigeria',
 };
 
-// Weather widget component
+// Weather widget component - shows Sunday 5pm-7pm forecast
 function WeatherWidget() {
   const [weather, setWeather] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [nextSunday, setNextSunday] = useState(null);
 
   useEffect(() => {
+    // Calculate next Sunday
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+    const sunday = new Date(today);
+    sunday.setDate(today.getDate() + daysUntilSunday);
+    setNextSunday(sunday);
+
     const fetchWeather = async () => {
       try {
         const response = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${FIELD_CONFIG.lat}&longitude=${FIELD_CONFIG.lng}&current=temperature_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Africa/Lagos&forecast_days=3`
+          `https://api.open-meteo.com/v1/forecast?latitude=${FIELD_CONFIG.lat}&longitude=${FIELD_CONFIG.lng}&hourly=temperature_2m,weather_code,precipitation_probability,wind_speed_10m&timezone=Africa/Lagos&forecast_days=8`
         );
         const data = await response.json();
         setWeather(data);
@@ -95,34 +104,67 @@ function WeatherWidget() {
     return <div className="text-emerald-200/80 text-sm">Loading weather...</div>;
   }
 
-  if (!weather) {
+  if (!weather || !nextSunday) {
     return <div className="text-emerald-200/80 text-sm">Weather unavailable</div>;
   }
 
-  const current = weather.current;
-  const daily = weather.daily;
+  // Find hourly data for Sunday 5pm-7pm (17:00-19:00)
+  const sundayDateStr = nextSunday.toISOString().split('T')[0];
+  const targetHours = ['17:00', '18:00', '19:00'];
+
+  const gameTimeData = targetHours.map(hour => {
+    const targetTime = `${sundayDateStr}T${hour}`;
+    const index = weather.hourly.time.findIndex(t => t === targetTime);
+    if (index === -1) return null;
+    return {
+      hour,
+      temp: weather.hourly.temperature_2m[index],
+      code: weather.hourly.weather_code[index],
+      rain: weather.hourly.precipitation_probability[index],
+      wind: weather.hourly.wind_speed_10m[index],
+    };
+  }).filter(Boolean);
+
+  if (gameTimeData.length === 0) {
+    return <div className="text-emerald-200/80 text-sm">Forecast not yet available for Sunday</div>;
+  }
+
+  // Calculate averages for the game time window
+  const avgTemp = Math.round(gameTimeData.reduce((sum, d) => sum + d.temp, 0) / gameTimeData.length);
+  const maxRain = Math.max(...gameTimeData.map(d => d.rain));
+  const avgWind = Math.round(gameTimeData.reduce((sum, d) => sum + d.wind, 0) / gameTimeData.length);
+  const primaryCode = gameTimeData[1]?.code || gameTimeData[0].code; // Use 6pm as primary
+
+  const formattedDate = nextSunday.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric'
+  });
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        <span className="text-3xl">{getWeatherIcon(current.weather_code)}</span>
+      <div className="text-emerald-200/80 text-sm mb-2">
+        {formattedDate} • 5:00 PM - 7:00 PM
+      </div>
+      <div className="flex items-center gap-4">
+        <span className="text-4xl">{getWeatherIcon(primaryCode)}</span>
         <div>
-          <div className="text-xl font-semibold text-white">{Math.round(current.temperature_2m)}°C</div>
-          <div className="text-emerald-200/80 text-sm">{getWeatherDesc(current.weather_code)}</div>
+          <div className="text-2xl font-semibold text-white">{avgTemp}°C</div>
+          <div className="text-emerald-200/80 text-sm">{getWeatherDesc(primaryCode)}</div>
         </div>
-        <div className="ml-auto text-right text-emerald-200/80 text-sm">
-          <div>Wind: {Math.round(current.wind_speed_10m)} km/h</div>
+        <div className="ml-auto text-right text-emerald-200/80 text-sm space-y-1">
+          <div>💨 {avgWind} km/h</div>
+          <div>🌧️ {maxRain}% chance</div>
         </div>
       </div>
-      <div className="flex gap-2 pt-2 border-t border-emerald-500/20">
-        {daily.time.slice(0, 3).map((date, i) => (
-          <div key={date} className="flex-1 text-center p-2 rounded-lg bg-emerald-800/30">
+      <div className="flex gap-2 pt-3 border-t border-emerald-500/20">
+        {gameTimeData.map((data) => (
+          <div key={data.hour} className="flex-1 text-center p-2 rounded-lg bg-emerald-800/30">
             <div className="text-emerald-200/80 text-xs">
-              {i === 0 ? 'Today' : new Date(date).toLocaleDateString('en-US', { weekday: 'short' })}
+              {data.hour === '17:00' ? '5 PM' : data.hour === '18:00' ? '6 PM' : '7 PM'}
             </div>
-            <div className="text-lg">{getWeatherIcon(daily.weather_code[i])}</div>
-            <div className="text-white text-sm">{Math.round(daily.temperature_2m_max[i])}°</div>
-            <div className="text-emerald-200/80 text-xs">{daily.precipitation_probability_max[i]}% rain</div>
+            <div className="text-lg">{getWeatherIcon(data.code)}</div>
+            <div className="text-white text-sm">{Math.round(data.temp)}°</div>
           </div>
         ))}
       </div>
@@ -1033,7 +1075,7 @@ export default function FrisbeeRSVP() {
 
           {/* Info Sections */}
           <div className="space-y-3 mt-6 animate-fade-in-up">
-            <InfoSection title="Weather" icon="🌤️" defaultOpen={true}>
+            <InfoSection title="Game Day Weather" icon="🌤️" defaultOpen={true}>
               <WeatherWidget />
             </InfoSection>
 
