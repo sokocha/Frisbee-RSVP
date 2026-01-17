@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <!-- Transparent background -->
+  <defs>
+    <clipPath id="brClip">
+      <circle cx="410" cy="410" r="295"/>
+    </clipPath>
+  </defs>
+
+  <!-- Rounded square -->
+  <rect x="56" y="56" width="400" height="400" rx="88" fill="#2A7A57"/>
+  <rect x="56" y="56" width="400" height="400" rx="88" fill="#1F6B48" clip-path="url(#brClip)" opacity="0.38"/>
+
+  <!-- Thick “P / slot” negative mark -->
+  <path
+    d="M190 342
+       L236 124
+       C241 98 265 88 288 88
+       H332
+       C392 88 424 124 424 174
+       C424 222 396 254 346 266
+       L314 273
+       C290 279 276 292 268 312
+       C258 336 222 346 200 348
+       Z"
+    fill="#F3F6EA"/>
+</svg>

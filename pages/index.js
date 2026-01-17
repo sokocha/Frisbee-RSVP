@@ -510,10 +510,13 @@ export default function FrisbeeRSVP() {
   return (
     <>
       <Head>
-        <title>Weekly Frisbee RSVP</title>
+        <title>PlayDay - Weekly Frisbee RSVP</title>
         <meta name="description" content="RSVP for weekly frisbee pickup games" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥏</text></svg>" />
+        <meta name="theme-color" content="#2e7d32" />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="apple-touch-icon" href="/favicon.svg" />
+        <link rel="manifest" href="/manifest.json" />
       </Head>
 
       <style jsx global>{`
@@ -574,10 +577,9 @@ export default function FrisbeeRSVP() {
         <div className="max-w-2xl mx-auto">
           {/* Header */}
           <div className="text-center mb-6 md:mb-8 animate-fade-in-up">
-            <div className="text-5xl md:text-6xl mb-2 animate-bounce-slow">🥏</div>
-            <h1 className="text-3xl md:text-4xl font-bold mb-2 bg-gradient-to-r from-white via-emerald-200 to-teal-200 bg-clip-text text-transparent">
-              Weekly Frisbee
-            </h1>
+            <div className="flex justify-center mb-3">
+              <img src="/logo.svg" alt="PlayDay" className="h-16 md:h-20" />
+            </div>
             <p className="text-emerald-200/80 text-sm md:text-base">First come, first served • {mainListLimit} spots available</p>
           </div>
 
