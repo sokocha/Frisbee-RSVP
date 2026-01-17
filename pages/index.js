@@ -40,6 +40,128 @@ function getDeviceId() {
   return deviceId;
 }
 
+// Field location configuration
+const FIELD_CONFIG = {
+  name: '1004 Estate',
+  address: '1004 Estate, Victoria Island, Lagos, Nigeria',
+  lat: 6.4281,
+  lng: 3.4219,
+  googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=1004+Estate+Victoria+Island+Lagos+Nigeria',
+};
+
+// Weather widget component
+function WeatherWidget() {
+  const [weather, setWeather] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchWeather = async () => {
+      try {
+        const response = await fetch(
+          `https://api.open-meteo.com/v1/forecast?latitude=${FIELD_CONFIG.lat}&longitude=${FIELD_CONFIG.lng}&current=temperature_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Africa/Lagos&forecast_days=3`
+        );
+        const data = await response.json();
+        setWeather(data);
+      } catch (error) {
+        console.error('Failed to fetch weather:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchWeather();
+  }, []);
+
+  const getWeatherIcon = (code) => {
+    if (code <= 3) return '☀️';
+    if (code <= 48) return '☁️';
+    if (code <= 67) return '🌧️';
+    if (code <= 77) return '🌨️';
+    if (code <= 99) return '⛈️';
+    return '🌤️';
+  };
+
+  const getWeatherDesc = (code) => {
+    if (code === 0) return 'Clear sky';
+    if (code <= 3) return 'Partly cloudy';
+    if (code <= 48) return 'Foggy';
+    if (code <= 57) return 'Drizzle';
+    if (code <= 67) return 'Rain';
+    if (code <= 77) return 'Snow';
+    if (code <= 99) return 'Thunderstorm';
+    return 'Unknown';
+  };
+
+  if (loading) {
+    return <div className="text-emerald-200/60 text-sm">Loading weather...</div>;
+  }
+
+  if (!weather) {
+    return <div className="text-emerald-200/60 text-sm">Weather unavailable</div>;
+  }
+
+  const current = weather.current;
+  const daily = weather.daily;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <span className="text-3xl">{getWeatherIcon(current.weather_code)}</span>
+        <div>
+          <div className="text-xl font-semibold text-white">{Math.round(current.temperature_2m)}°C</div>
+          <div className="text-emerald-200/80 text-sm">{getWeatherDesc(current.weather_code)}</div>
+        </div>
+        <div className="ml-auto text-right text-emerald-200/60 text-sm">
+          <div>Wind: {Math.round(current.wind_speed_10m)} km/h</div>
+        </div>
+      </div>
+      <div className="flex gap-2 pt-2 border-t border-emerald-500/20">
+        {daily.time.slice(0, 3).map((date, i) => (
+          <div key={date} className="flex-1 text-center p-2 rounded-lg bg-emerald-800/30">
+            <div className="text-emerald-200/60 text-xs">
+              {i === 0 ? 'Today' : new Date(date).toLocaleDateString('en-US', { weekday: 'short' })}
+            </div>
+            <div className="text-lg">{getWeatherIcon(daily.weather_code[i])}</div>
+            <div className="text-white text-sm">{Math.round(daily.temperature_2m_max[i])}°</div>
+            <div className="text-emerald-200/60 text-xs">{daily.precipitation_probability_max[i]}% rain</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Collapsible info section component
+function InfoSection({ title, icon, children, defaultOpen = false }) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  return (
+    <div className="glass-card rounded-2xl overflow-hidden">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-white/5 transition-colors"
+      >
+        <div className="flex items-center gap-2 text-white font-medium">
+          <span>{icon}</span>
+          <span>{title}</span>
+        </div>
+        <svg
+          className={`w-5 h-5 text-emerald-300 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {isOpen && (
+        <div className="px-4 pb-4 pt-1">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Confetti component
 function Confetti({ show }) {
   if (!show) return null;
@@ -908,6 +1030,59 @@ export default function FrisbeeRSVP() {
               )}
             </div>
           )}
+
+          {/* Info Sections */}
+          <div className="space-y-3 mt-6 animate-fade-in-up">
+            <InfoSection title="Weather" icon="🌤️" defaultOpen={true}>
+              <WeatherWidget />
+            </InfoSection>
+
+            <InfoSection title="Location & Directions" icon="📍">
+              <div className="space-y-3">
+                <div>
+                  <div className="text-white font-medium">{FIELD_CONFIG.name}</div>
+                  <div className="text-emerald-200/70 text-sm">{FIELD_CONFIG.address}</div>
+                </div>
+                <a
+                  href={FIELD_CONFIG.googleMapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors text-sm font-medium"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  Open in Google Maps
+                </a>
+              </div>
+            </InfoSection>
+
+            <InfoSection title="Field Rules" icon="📋">
+              <ul className="space-y-2 text-emerald-200/80 text-sm">
+                <li className="flex items-start gap-2">
+                  <span className="text-emerald-400">•</span>
+                  <span>Arrive 10-15 minutes early for warm-up</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-emerald-400">•</span>
+                  <span>Bring light and dark colored shirts for teams</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-emerald-400">•</span>
+                  <span>Cleats recommended but not required</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-emerald-400">•</span>
+                  <span>Stay hydrated - bring water!</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-emerald-400">•</span>
+                  <span>Spirit of the Game - play fair and have fun</span>
+                </li>
+              </ul>
+            </InfoSection>
+          </div>
 
           {/* Footer */}
           <div className="text-center mt-6 md:mt-8 text-emerald-300/60 text-sm animate-fade-in-up">
