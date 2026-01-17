@@ -514,8 +514,8 @@ export default function FrisbeeRSVP() {
         <meta name="description" content="RSVP for weekly frisbee pickup games" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="theme-color" content="#2e7d32" />
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/icon.svg" />
+        <link rel="icon" href="/favicon.png" type="image/png" />
+        <link rel="apple-touch-icon" href="/icon.png" />
         <link rel="manifest" href="/manifest.json" />
       </Head>
 
@@ -578,7 +578,7 @@ export default function FrisbeeRSVP() {
           {/* Header */}
           <div className="text-center mb-6 md:mb-8 animate-fade-in-up">
             <div className="flex justify-center mb-3">
-              <img src="/logo-white.svg" alt="PlayDay" className="h-16 md:h-20" />
+              <img src="/logo.png" alt="PlayDay" className="h-16 md:h-20" />
             </div>
             <p className="text-emerald-200/80 text-sm md:text-base">First come, first served • {mainListLimit} spots available</p>
           </div>
