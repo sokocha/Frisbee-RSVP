@@ -577,9 +577,9 @@ export default function FrisbeeRSVP() {
         <div className="max-w-2xl mx-auto">
           {/* Header */}
           <div className="text-center mb-6 md:mb-8 animate-fade-in-up">
-            <div className="flex justify-center mb-3">
-              <img src="/logo.svg" alt="PlayDay" className="h-16 md:h-20" />
-            </div>
+            <h1 className="text-4xl md:text-5xl font-bold mb-2 bg-gradient-to-r from-white via-emerald-200 to-teal-200 bg-clip-text text-transparent">
+              PlayDay
+            </h1>
             <p className="text-emerald-200/80 text-sm md:text-base">First come, first served • {mainListLimit} spots available</p>
           </div>
 
