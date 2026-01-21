@@ -176,12 +176,15 @@ function WeatherWidget() {
 // Collapsible info section component
 function InfoSection({ title, icon, children, defaultOpen = false }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
+  const sectionId = title.toLowerCase().replace(/\s+/g, '-');
 
   return (
     <div className="glass-card rounded-2xl overflow-hidden">
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="w-full px-4 py-4 min-h-[48px] flex items-center justify-between text-left hover:bg-white/5 transition-colors"
+        aria-expanded={isOpen}
+        aria-controls={`${sectionId}-content`}
       >
         <div className="flex items-center gap-2 text-white font-medium">
           <span>{icon}</span>
@@ -197,7 +200,7 @@ function InfoSection({ title, icon, children, defaultOpen = false }) {
         </svg>
       </button>
       {isOpen && (
-        <div className="px-4 pb-4 pt-1">
+        <div id={`${sectionId}-content`} className="px-4 pb-4 pt-1">
           {children}
         </div>
       )}
@@ -426,7 +429,7 @@ export default function FrisbeeRSVP() {
   const [deviceId, setDeviceId] = useState(null);
   const [hasSignedUp, setHasSignedUp] = useState(false);
   const [mySignup, setMySignup] = useState(null);
-  const [accessStatus, setAccessStatus] = useState({ isOpen: true, message: null });
+  const [accessStatus, setAccessStatus] = useState({ isOpen: true, message: null, nextOpenTime: null });
   const [mainListLimit, setMainListLimit] = useState(DEFAULT_MAIN_LIST_LIMIT);
   const [snoozedNames, setSnoozedNames] = useState([]);
   const [whitelist, setWhitelist] = useState([]);
@@ -456,7 +459,7 @@ export default function FrisbeeRSVP() {
         const data = await response.json();
         setMainList(data.mainList || []);
         setWaitlist(data.waitlist || []);
-        setAccessStatus(data.accessStatus || { isOpen: true, message: null });
+        setAccessStatus(data.accessStatus || { isOpen: true, message: null, nextOpenTime: null });
         setMainListLimit(data.mainListLimit || DEFAULT_MAIN_LIST_LIMIT);
         setSnoozedNames(data.snoozedNames || []);
         setWhitelist(data.whitelist || []);
@@ -654,31 +657,8 @@ export default function FrisbeeRSVP() {
   const spotsLeft = mainListLimit - mainList.length;
   const isLowSpots = spotsLeft > 0 && spotsLeft <= 5;
 
-  // Parse next open time from message (e.g., "Opens Thursday at 12:00 PM WAT")
-  const nextOpenTime = useMemo(() => {
-    if (!accessStatus.message) return null;
-    // This is a simplified parser - in production you'd want proper date parsing
-    const match = accessStatus.message.match(/Opens (\w+) at ([\d:]+\s*(?:AM|PM))/i);
-    if (match) {
-      const [, day, time] = match;
-      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      const today = new Date();
-      const targetDayIndex = days.findIndex(d => d.toLowerCase() === day.toLowerCase());
-      if (targetDayIndex !== -1) {
-        const daysUntil = (targetDayIndex - today.getDay() + 7) % 7 || 7;
-        const targetDate = new Date(today);
-        targetDate.setDate(today.getDate() + daysUntil);
-        const [timeStr, period] = time.split(/\s+/);
-        const [hours, minutes] = timeStr.split(':');
-        let hour = parseInt(hours);
-        if (period?.toUpperCase() === 'PM' && hour !== 12) hour += 12;
-        if (period?.toUpperCase() === 'AM' && hour === 12) hour = 0;
-        targetDate.setHours(hour, parseInt(minutes) || 0, 0, 0);
-        return targetDate.toISOString();
-      }
-    }
-    return null;
-  }, [accessStatus.message]);
+  // Get next open time from API (absolute UTC timestamp)
+  const nextOpenTime = accessStatus.nextOpenTime;
 
   if (loading) {
     return <SkeletonLoader />;
@@ -750,8 +730,16 @@ export default function FrisbeeRSVP() {
       <Confetti show={showConfetti} />
       <Toast message={message} onClose={() => setMessage(null)} />
 
+      {/* Skip to main content link for keyboard users */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-white focus:text-emerald-800 focus:rounded-lg focus:font-medium"
+      >
+        Skip to main content
+      </a>
+
       <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-green-800 to-teal-900 p-3 md:p-8">
-        <div className="max-w-2xl mx-auto">
+        <main id="main-content" className="max-w-2xl mx-auto">
           {/* Header */}
           <div className="text-center mb-6 md:mb-8 animate-fade-in-up">
             <div className="text-4xl md:text-5xl mb-2">🥏</div>
@@ -826,9 +814,14 @@ export default function FrisbeeRSVP() {
 
           {/* Snooze/Unsnooze Modal */}
           {snoozeModal.show && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in-up">
+            <div
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in-up"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="snooze-modal-title"
+            >
               <div className="glass-card-solid rounded-3xl shadow-2xl p-6 max-w-md w-full">
-                <h3 className="text-xl font-bold text-gray-800 mb-4">
+                <h3 id="snooze-modal-title" className="text-xl font-bold text-gray-800 mb-4">
                   {snoozeModal.action === 'snooze' ? '😴 Skip This Week' : '🎉 Rejoin This Week'}
                 </h3>
                 <p className="text-gray-600 mb-4">
@@ -836,7 +829,9 @@ export default function FrisbeeRSVP() {
                     ? `Confirm you are ${snoozeModal.person?.name} by entering the AIS password.`
                     : `Confirm your identity to rejoin this week's list.`}
                 </p>
+                <label htmlFor="snooze-password" className="sr-only">AIS Password</label>
                 <input
+                  id="snooze-password"
                   type="password"
                   value={snoozePassword}
                   onChange={(e) => setSnoozePassword(e.target.value)}
@@ -871,9 +866,14 @@ export default function FrisbeeRSVP() {
 
           {/* Confirmation Modal for Drop Out */}
           {confirmModal.show && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in-up">
+            <div
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in-up"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="confirm-modal-title"
+            >
               <div className="glass-card-solid rounded-3xl shadow-2xl p-6 max-w-md w-full">
-                <h3 className="text-xl font-bold text-gray-800 mb-4">
+                <h3 id="confirm-modal-title" className="text-xl font-bold text-gray-800 mb-4">
                   {confirmModal.isWaitlist ? '🚪 Leave Waitlist?' : '🚪 Cancel RSVP?'}
                 </h3>
                 <p className="text-gray-600 mb-6">
@@ -951,15 +951,21 @@ export default function FrisbeeRSVP() {
                     </div>
                   )}
                   <div className="flex flex-col md:flex-row gap-3">
-                    <input
-                      type="text"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && !submitting && handleRSVP()}
-                      placeholder="Enter your full name (first & last)"
-                      disabled={submitting}
-                      className="flex-1 px-4 py-3 md:py-4 border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:outline-none text-base md:text-lg disabled:bg-gray-50 transition-colors"
-                    />
+                    <div className="flex-1">
+                      <label htmlFor="rsvp-name" className="block text-sm font-medium text-gray-600 mb-1">
+                        Full Name <span className="text-gray-400">(first & last required)</span>
+                      </label>
+                      <input
+                        id="rsvp-name"
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && !submitting && handleRSVP()}
+                        placeholder="e.g. John Doe"
+                        disabled={submitting}
+                        className="w-full px-4 py-3 md:py-4 border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:outline-none text-base md:text-lg disabled:bg-gray-50 transition-colors"
+                      />
+                    </div>
                     <button
                       onClick={handleRSVP}
                       disabled={submitting}
@@ -1164,10 +1170,6 @@ export default function FrisbeeRSVP() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-emerald-400">•</span>
-                  <span>Bring light and dark colored shirts for teams</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-emerald-400">•</span>
                   <span>Cleats recommended but not required</span>
                 </li>
                 <li className="flex items-start gap-2">
@@ -1186,7 +1188,7 @@ export default function FrisbeeRSVP() {
           <div className="text-center mt-6 md:mt-8 text-emerald-300/80 text-sm animate-fade-in-up">
             <p>Weekly Pickup</p>
           </div>
-        </div>
+        </main>
       </div>
     </>
   );
