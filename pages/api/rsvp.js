@@ -92,7 +92,27 @@ function isFormOpen(settings) {
     ? null
     : `RSVP is closed. Opens ${days[startDay]} at ${formatTime(startHour, startMinute)} WAT`;
 
-  return { isOpen, message };
+  // Calculate the absolute next open time as ISO timestamp
+  let nextOpenTime = null;
+  if (!isOpen) {
+    // Calculate days until the start day
+    let daysUntil = startDay - currentDay;
+    if (daysUntil < 0 || (daysUntil === 0 && (currentHour > startHour || (currentHour === startHour && currentMinute >= startMinute)))) {
+      daysUntil += 7;
+    }
+
+    // Create a date in WAT timezone and convert to UTC
+    // WAT is UTC+1, so we subtract 1 hour from WAT time to get UTC
+    const targetDate = new Date(watTime);
+    targetDate.setDate(targetDate.getDate() + daysUntil);
+    targetDate.setHours(startHour, startMinute, 0, 0);
+
+    // Convert WAT to UTC by subtracting 1 hour (WAT = UTC+1)
+    const utcTime = new Date(targetDate.getTime() - (1 * 60 * 60 * 1000));
+    nextOpenTime = utcTime.toISOString();
+  }
+
+  return { isOpen, message, nextOpenTime };
 }
 
 // Check if we just transitioned to closed state (for auto-email)
@@ -265,7 +285,8 @@ export default async function handler(req, res) {
         mainListLimit,
         accessStatus: {
           isOpen: accessStatus.isOpen,
-          message: accessStatus.message
+          message: accessStatus.message,
+          nextOpenTime: accessStatus.nextOpenTime
         },
         snoozedNames,
         whitelist: whitelist.map(w => ({ name: w.name, deviceId: w.deviceId }))

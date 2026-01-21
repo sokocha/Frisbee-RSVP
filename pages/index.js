@@ -429,7 +429,7 @@ export default function FrisbeeRSVP() {
   const [deviceId, setDeviceId] = useState(null);
   const [hasSignedUp, setHasSignedUp] = useState(false);
   const [mySignup, setMySignup] = useState(null);
-  const [accessStatus, setAccessStatus] = useState({ isOpen: true, message: null });
+  const [accessStatus, setAccessStatus] = useState({ isOpen: true, message: null, nextOpenTime: null });
   const [mainListLimit, setMainListLimit] = useState(DEFAULT_MAIN_LIST_LIMIT);
   const [snoozedNames, setSnoozedNames] = useState([]);
   const [whitelist, setWhitelist] = useState([]);
@@ -459,7 +459,7 @@ export default function FrisbeeRSVP() {
         const data = await response.json();
         setMainList(data.mainList || []);
         setWaitlist(data.waitlist || []);
-        setAccessStatus(data.accessStatus || { isOpen: true, message: null });
+        setAccessStatus(data.accessStatus || { isOpen: true, message: null, nextOpenTime: null });
         setMainListLimit(data.mainListLimit || DEFAULT_MAIN_LIST_LIMIT);
         setSnoozedNames(data.snoozedNames || []);
         setWhitelist(data.whitelist || []);
@@ -657,31 +657,8 @@ export default function FrisbeeRSVP() {
   const spotsLeft = mainListLimit - mainList.length;
   const isLowSpots = spotsLeft > 0 && spotsLeft <= 5;
 
-  // Parse next open time from message (e.g., "Opens Thursday at 12:00 PM WAT")
-  const nextOpenTime = useMemo(() => {
-    if (!accessStatus.message) return null;
-    // This is a simplified parser - in production you'd want proper date parsing
-    const match = accessStatus.message.match(/Opens (\w+) at ([\d:]+\s*(?:AM|PM))/i);
-    if (match) {
-      const [, day, time] = match;
-      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      const today = new Date();
-      const targetDayIndex = days.findIndex(d => d.toLowerCase() === day.toLowerCase());
-      if (targetDayIndex !== -1) {
-        const daysUntil = (targetDayIndex - today.getDay() + 7) % 7 || 7;
-        const targetDate = new Date(today);
-        targetDate.setDate(today.getDate() + daysUntil);
-        const [timeStr, period] = time.split(/\s+/);
-        const [hours, minutes] = timeStr.split(':');
-        let hour = parseInt(hours);
-        if (period?.toUpperCase() === 'PM' && hour !== 12) hour += 12;
-        if (period?.toUpperCase() === 'AM' && hour === 12) hour = 0;
-        targetDate.setHours(hour, parseInt(minutes) || 0, 0, 0);
-        return targetDate.toISOString();
-      }
-    }
-    return null;
-  }, [accessStatus.message]);
+  // Get next open time from API (absolute UTC timestamp)
+  const nextOpenTime = accessStatus.nextOpenTime;
 
   if (loading) {
     return <SkeletonLoader />;
