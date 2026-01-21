@@ -40,6 +40,173 @@ function getDeviceId() {
   return deviceId;
 }
 
+// Field location configuration
+const FIELD_CONFIG = {
+  name: '1004 Estate',
+  address: '1004 Estate, Victoria Island, Lagos, Nigeria',
+  lat: 6.4281,
+  lng: 3.4219,
+  googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=1004+Estate+Victoria+Island+Lagos+Nigeria',
+};
+
+// Weather widget component - shows Sunday 5pm-7pm forecast
+function WeatherWidget() {
+  const [weather, setWeather] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [nextSunday, setNextSunday] = useState(null);
+
+  useEffect(() => {
+    // Calculate next Sunday
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+    const sunday = new Date(today);
+    sunday.setDate(today.getDate() + daysUntilSunday);
+    setNextSunday(sunday);
+
+    const fetchWeather = async () => {
+      try {
+        const response = await fetch(
+          `https://api.open-meteo.com/v1/forecast?latitude=${FIELD_CONFIG.lat}&longitude=${FIELD_CONFIG.lng}&hourly=temperature_2m,weather_code,precipitation_probability,wind_speed_10m&timezone=Africa/Lagos&forecast_days=8`
+        );
+        const data = await response.json();
+        setWeather(data);
+      } catch (error) {
+        console.error('Failed to fetch weather:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchWeather();
+  }, []);
+
+  const getWeatherIcon = (code) => {
+    if (code <= 3) return '☀️';
+    if (code <= 48) return '☁️';
+    if (code <= 67) return '🌧️';
+    if (code <= 77) return '🌨️';
+    if (code <= 99) return '⛈️';
+    return '🌤️';
+  };
+
+  const getWeatherDesc = (code) => {
+    if (code === 0) return 'Clear sky';
+    if (code <= 3) return 'Partly cloudy';
+    if (code <= 48) return 'Foggy';
+    if (code <= 57) return 'Drizzle';
+    if (code <= 67) return 'Rain';
+    if (code <= 77) return 'Snow';
+    if (code <= 99) return 'Thunderstorm';
+    return 'Unknown';
+  };
+
+  if (loading) {
+    return <div className="text-emerald-200/80 text-sm">Loading weather...</div>;
+  }
+
+  if (!weather || !nextSunday) {
+    return <div className="text-emerald-200/80 text-sm">Weather unavailable</div>;
+  }
+
+  // Find hourly data for Sunday 5pm-7pm (17:00-19:00)
+  const sundayDateStr = nextSunday.toISOString().split('T')[0];
+  const targetHours = ['17:00', '18:00', '19:00'];
+
+  const gameTimeData = targetHours.map(hour => {
+    const targetTime = `${sundayDateStr}T${hour}`;
+    const index = weather.hourly.time.findIndex(t => t === targetTime);
+    if (index === -1) return null;
+    return {
+      hour,
+      temp: weather.hourly.temperature_2m[index],
+      code: weather.hourly.weather_code[index],
+      rain: weather.hourly.precipitation_probability[index],
+      wind: weather.hourly.wind_speed_10m[index],
+    };
+  }).filter(Boolean);
+
+  if (gameTimeData.length === 0) {
+    return <div className="text-emerald-200/80 text-sm">Forecast not yet available for Sunday</div>;
+  }
+
+  // Calculate averages for the game time window
+  const avgTemp = Math.round(gameTimeData.reduce((sum, d) => sum + d.temp, 0) / gameTimeData.length);
+  const maxRain = Math.max(...gameTimeData.map(d => d.rain));
+  const avgWind = Math.round(gameTimeData.reduce((sum, d) => sum + d.wind, 0) / gameTimeData.length);
+  const primaryCode = gameTimeData[1]?.code || gameTimeData[0].code; // Use 6pm as primary
+
+  const formattedDate = nextSunday.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric'
+  });
+
+  return (
+    <div className="space-y-3">
+      <div className="text-emerald-200/80 text-sm mb-2">
+        {formattedDate} • 5:00 PM - 7:00 PM
+      </div>
+      <div className="flex items-center gap-4">
+        <span className="text-4xl">{getWeatherIcon(primaryCode)}</span>
+        <div>
+          <div className="text-2xl font-semibold text-white">{avgTemp}°C</div>
+          <div className="text-emerald-200/80 text-sm">{getWeatherDesc(primaryCode)}</div>
+        </div>
+        <div className="ml-auto text-right text-emerald-200/80 text-sm space-y-1">
+          <div>💨 {avgWind} km/h</div>
+          <div>🌧️ {maxRain}% chance</div>
+        </div>
+      </div>
+      <div className="flex gap-2 pt-3 border-t border-emerald-500/20">
+        {gameTimeData.map((data) => (
+          <div key={data.hour} className="flex-1 text-center p-2 rounded-lg bg-emerald-800/30">
+            <div className="text-emerald-200/80 text-xs">
+              {data.hour === '17:00' ? '5 PM' : data.hour === '18:00' ? '6 PM' : '7 PM'}
+            </div>
+            <div className="text-lg">{getWeatherIcon(data.code)}</div>
+            <div className="text-white text-sm">{Math.round(data.temp)}°</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Collapsible info section component
+function InfoSection({ title, icon, children, defaultOpen = false }) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  const sectionId = title.toLowerCase().replace(/\s+/g, '-');
+
+  return (
+    <div className="glass-card rounded-2xl overflow-hidden">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-4 py-4 min-h-[48px] flex items-center justify-between text-left hover:bg-white/5 transition-colors"
+        aria-expanded={isOpen}
+        aria-controls={`${sectionId}-content`}
+      >
+        <div className="flex items-center gap-2 text-white font-medium">
+          <span>{icon}</span>
+          <span>{title}</span>
+        </div>
+        <svg
+          className={`w-5 h-5 text-emerald-300 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {isOpen && (
+        <div id={`${sectionId}-content`} className="px-4 pb-4 pt-1">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Confetti component
 function Confetti({ show }) {
   if (!show) return null;
@@ -570,8 +737,16 @@ export default function FrisbeeRSVP() {
       <Confetti show={showConfetti} />
       <Toast message={message} onClose={() => setMessage(null)} />
 
+      {/* Skip to main content link for keyboard users */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-white focus:text-emerald-800 focus:rounded-lg focus:font-medium"
+      >
+        Skip to main content
+      </a>
+
       <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-green-800 to-teal-900 p-3 md:p-8">
-        <div className="max-w-2xl mx-auto">
+        <main id="main-content" className="max-w-2xl mx-auto">
           {/* Header */}
           <div className="text-center mb-6 md:mb-8 animate-fade-in-up">
             <div className="text-5xl md:text-6xl mb-2 animate-bounce-slow">🥏</div>
@@ -646,9 +821,14 @@ export default function FrisbeeRSVP() {
 
           {/* Snooze/Unsnooze Modal */}
           {snoozeModal.show && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in-up">
+            <div
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in-up"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="snooze-modal-title"
+            >
               <div className="glass-card-solid rounded-3xl shadow-2xl p-6 max-w-md w-full">
-                <h3 className="text-xl font-bold text-gray-800 mb-4">
+                <h3 id="snooze-modal-title" className="text-xl font-bold text-gray-800 mb-4">
                   {snoozeModal.action === 'snooze' ? '😴 Skip This Week' : '🎉 Rejoin This Week'}
                 </h3>
                 <p className="text-gray-600 mb-4">
@@ -656,7 +836,9 @@ export default function FrisbeeRSVP() {
                     ? `Confirm you are ${snoozeModal.person?.name} by entering the AIS password.`
                     : `Confirm your identity to rejoin this week's list.`}
                 </p>
+                <label htmlFor="snooze-password" className="sr-only">AIS Password</label>
                 <input
+                  id="snooze-password"
                   type="password"
                   value={snoozePassword}
                   onChange={(e) => setSnoozePassword(e.target.value)}
@@ -691,9 +873,14 @@ export default function FrisbeeRSVP() {
 
           {/* Confirmation Modal for Drop Out */}
           {confirmModal.show && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in-up">
+            <div
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in-up"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="confirm-modal-title"
+            >
               <div className="glass-card-solid rounded-3xl shadow-2xl p-6 max-w-md w-full">
-                <h3 className="text-xl font-bold text-gray-800 mb-4">
+                <h3 id="confirm-modal-title" className="text-xl font-bold text-gray-800 mb-4">
                   {confirmModal.isWaitlist ? '🚪 Leave Waitlist?' : '🚪 Cancel RSVP?'}
                 </h3>
                 <p className="text-gray-600 mb-6">
@@ -729,24 +916,73 @@ export default function FrisbeeRSVP() {
                 <p className="text-sm mt-1 text-gray-400">{accessStatus.message}</p>
               </div>
             ) : !hasSignedUp ? (
-              <div className="flex flex-col md:flex-row gap-3">
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && !submitting && handleRSVP()}
-                  placeholder="Enter your full name (first & last)"
-                  disabled={submitting}
-                  className="flex-1 px-4 py-3 md:py-4 border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:outline-none text-base md:text-lg disabled:bg-gray-50 transition-colors"
-                />
-                <button
-                  onClick={handleRSVP}
-                  disabled={submitting}
-                  className="px-6 md:px-8 py-3 md:py-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:from-gray-300 disabled:to-gray-400 text-white font-semibold rounded-xl transition-all text-base md:text-lg flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25"
-                >
-                  {submitting ? <Spinner /> : 'RSVP'}
-                </button>
-              </div>
+              savedName && !showNameEdit ? (
+                // Quick RSVP for returning users
+                <div className="space-y-3">
+                  <div className="text-center">
+                    <p className="text-gray-600 text-sm">Welcome back!</p>
+                    <p className="text-gray-800 font-semibold text-lg">{savedName}</p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <button
+                      onClick={handleRSVP}
+                      disabled={submitting}
+                      className="flex-1 px-6 py-3 md:py-4 min-h-[48px] bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:from-gray-300 disabled:to-gray-400 text-white font-semibold rounded-xl transition-all text-base md:text-lg flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25"
+                    >
+                      {submitting ? <Spinner /> : 'RSVP Now'}
+                    </button>
+                    <button
+                      onClick={() => setShowNameEdit(true)}
+                      disabled={submitting}
+                      className="px-4 py-3 md:py-4 min-h-[48px] bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl transition-colors text-sm"
+                    >
+                      Change name
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                // Regular form for new users or editing name
+                <div className="space-y-3">
+                  {showNameEdit && (
+                    <div className="flex justify-between items-center">
+                      <p className="text-gray-600 text-sm">Enter a different name:</p>
+                      <button
+                        onClick={() => {
+                          setShowNameEdit(false);
+                          setName(savedName);
+                        }}
+                        className="text-emerald-600 hover:text-emerald-700 text-sm font-medium"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                  <div className="flex flex-col md:flex-row gap-3">
+                    <div className="flex-1">
+                      <label htmlFor="rsvp-name" className="block text-sm font-medium text-gray-600 mb-1">
+                        Full Name <span className="text-gray-400">(first & last required)</span>
+                      </label>
+                      <input
+                        id="rsvp-name"
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && !submitting && handleRSVP()}
+                        placeholder="e.g. John Doe"
+                        disabled={submitting}
+                        className="w-full px-4 py-3 md:py-4 border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:outline-none text-base md:text-lg disabled:bg-gray-50 transition-colors"
+                      />
+                    </div>
+                    <button
+                      onClick={handleRSVP}
+                      disabled={submitting}
+                      className="px-6 md:px-8 py-3 md:py-4 min-h-[48px] bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:from-gray-300 disabled:to-gray-400 text-white font-semibold rounded-xl transition-all text-base md:text-lg flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25"
+                    >
+                      {submitting ? <Spinner /> : 'RSVP'}
+                    </button>
+                  </div>
+                </div>
+              )
             ) : (
               <div className="text-center text-gray-500 py-2">
                 <p>You've already signed up for this week!</p>
@@ -906,11 +1142,60 @@ export default function FrisbeeRSVP() {
             </div>
           )}
 
+          {/* Info Sections */}
+          <div className="space-y-3 mt-6 animate-fade-in-up">
+            <InfoSection title="Game Day Weather" icon="🌤️" defaultOpen={true}>
+              <WeatherWidget />
+            </InfoSection>
+
+            <InfoSection title="Location & Directions" icon="📍">
+              <div className="space-y-3">
+                <div>
+                  <div className="text-white font-medium">{FIELD_CONFIG.name}</div>
+                  <div className="text-emerald-200/90 text-sm">{FIELD_CONFIG.address}</div>
+                </div>
+                <a
+                  href={FIELD_CONFIG.googleMapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-5 py-3 min-h-[44px] bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors text-sm font-medium"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  Open in Google Maps
+                </a>
+              </div>
+            </InfoSection>
+
+            <InfoSection title="Field Rules" icon="📋">
+              <ul className="space-y-2 text-emerald-200/80 text-sm">
+                <li className="flex items-start gap-2">
+                  <span className="text-emerald-400">•</span>
+                  <span>Arrive 10-15 minutes early for warm-up</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-emerald-400">•</span>
+                  <span>Cleats recommended but not required</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-emerald-400">•</span>
+                  <span>Stay hydrated - bring water!</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-emerald-400">•</span>
+                  <span>Spirit of the Game - play fair and have fun</span>
+                </li>
+              </ul>
+            </InfoSection>
+          </div>
+
           {/* Footer */}
           <div className="text-center mt-6 md:mt-8 text-emerald-300/60 text-sm animate-fade-in-up">
             <p>Catch-234 Weekly Pickup</p>
           </div>
-        </div>
+        </main>
       </div>
     </>
   );

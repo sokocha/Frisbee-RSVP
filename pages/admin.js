@@ -3,6 +3,57 @@ import Head from 'next/head';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+// Helper to convert hour and minute to time string (HH:MM)
+const toTimeString = (hour, minute) => {
+  return `${String(hour).padStart(2, '0')}:${String(minute || 0).padStart(2, '0')}`;
+};
+
+// Helper to parse time string (HH:MM) to hour and minute
+const parseTimeString = (timeStr) => {
+  const [hour, minute] = timeStr.split(':').map(Number);
+  return { hour, minute };
+};
+
+// Collapsible section component for admin dashboard
+function AdminSection({ title, icon, children, defaultOpen = false, badge }) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  const sectionId = title.toLowerCase().replace(/\s+/g, '-');
+
+  return (
+    <div className="bg-white rounded-2xl shadow-xl overflow-hidden mb-6">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors"
+        aria-expanded={isOpen}
+        aria-controls={`${sectionId}-content`}
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-xl">{icon}</span>
+          <span className="text-xl font-bold text-gray-800">{title}</span>
+          {badge && (
+            <span className="text-sm bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+              {badge}
+            </span>
+          )}
+        </div>
+        <svg
+          className={`w-5 h-5 text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {isOpen && (
+        <div id={`${sectionId}-content`} className="px-6 pb-6 border-t border-gray-100">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const DEFAULT_SETTINGS = {
   mainListLimit: 30,
   accessPeriod: {
@@ -125,6 +176,19 @@ export default function AdminDashboard() {
       accessPeriod: {
         ...settings.accessPeriod,
         [field]: value
+      }
+    };
+    setSettings(newSettings);
+  };
+
+  const handleTimeChange = (prefix, timeString) => {
+    const { hour, minute } = parseTimeString(timeString);
+    const newSettings = {
+      ...settings,
+      accessPeriod: {
+        ...settings.accessPeriod,
+        [`${prefix}Hour`]: hour,
+        [`${prefix}Minute`]: minute
       }
     };
     setSettings(newSettings);
@@ -498,7 +562,11 @@ export default function AdminDashboard() {
             )}
 
             <form onSubmit={handleLogin}>
+              <label htmlFor="admin-password" className="block text-sm font-medium text-gray-700 mb-2">
+                Password
+              </label>
               <input
+                id="admin-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -587,14 +655,13 @@ export default function AdminDashboard() {
           </div>
 
           {/* General Settings */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Settings</h2>
-
+          <AdminSection title="Settings" icon="⚙️" defaultOpen={true}>
             {/* Main List Limit */}
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Main List Limit</label>
+              <label htmlFor="main-list-limit" className="block text-sm font-medium text-gray-700 mb-2">Main List Limit</label>
               <div className="flex items-center gap-3">
                 <input
+                  id="main-list-limit"
                   type="number"
                   min="1"
                   max="100"
@@ -613,14 +680,16 @@ export default function AdminDashboard() {
             <div className="border-t pt-4">
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
+                  id="access-period-enabled"
                   type="checkbox"
                   checked={settings.accessPeriod.enabled}
                   onChange={(e) => handleAccessPeriodChange('enabled', e.target.checked)}
                   className="w-5 h-5 rounded text-green-600"
+                  aria-describedby="access-period-desc"
                 />
                 <span className="font-medium text-gray-700">Enable access period restrictions</span>
               </label>
-              <p className="text-sm text-gray-500 mt-1 ml-8">
+              <p id="access-period-desc" className="text-sm text-gray-500 mt-1 ml-8">
                 When disabled, the RSVP form is always open
               </p>
             </div>
@@ -629,9 +698,10 @@ export default function AdminDashboard() {
               <div className="border-t pt-4 space-y-4">
                 {/* Start Time */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Opens at:</label>
-                  <div className="flex gap-2 flex-wrap items-center">
+                  <label htmlFor="start-day" className="block text-sm font-medium text-gray-700 mb-2">Opens at:</label>
+                  <div className="flex gap-3 flex-wrap items-center">
                     <select
+                      id="start-day"
                       value={settings.accessPeriod.startDay}
                       onChange={(e) => handleAccessPeriodChange('startDay', parseInt(e.target.value))}
                       className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none"
@@ -640,33 +710,24 @@ export default function AdminDashboard() {
                         <option key={i} value={i}>{day}</option>
                       ))}
                     </select>
-                    <select
-                      value={settings.accessPeriod.startHour}
-                      onChange={(e) => handleAccessPeriodChange('startHour', parseInt(e.target.value))}
+                    <span className="text-gray-500">at</span>
+                    <input
+                      id="start-time"
+                      type="time"
+                      value={toTimeString(settings.accessPeriod.startHour, settings.accessPeriod.startMinute)}
+                      onChange={(e) => handleTimeChange('start', e.target.value)}
                       className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none"
-                    >
-                      {Array.from({ length: 24 }, (_, i) => (
-                        <option key={i} value={i}>{i.toString().padStart(2, '0')}</option>
-                      ))}
-                    </select>
-                    <span className="text-gray-500">:</span>
-                    <select
-                      value={settings.accessPeriod.startMinute}
-                      onChange={(e) => handleAccessPeriodChange('startMinute', parseInt(e.target.value))}
-                      className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none"
-                    >
-                      {Array.from({ length: 60 }, (_, i) => (
-                        <option key={i} value={i}>{i.toString().padStart(2, '0')}</option>
-                      ))}
-                    </select>
+                      aria-label="Start time"
+                    />
                   </div>
                 </div>
 
                 {/* End Time */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Closes at:</label>
-                  <div className="flex gap-2 flex-wrap items-center">
+                  <label htmlFor="end-day" className="block text-sm font-medium text-gray-700 mb-2">Closes at:</label>
+                  <div className="flex gap-3 flex-wrap items-center">
                     <select
+                      id="end-day"
                       value={settings.accessPeriod.endDay}
                       onChange={(e) => handleAccessPeriodChange('endDay', parseInt(e.target.value))}
                       className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none"
@@ -675,25 +736,15 @@ export default function AdminDashboard() {
                         <option key={i} value={i}>{day}</option>
                       ))}
                     </select>
-                    <select
-                      value={settings.accessPeriod.endHour}
-                      onChange={(e) => handleAccessPeriodChange('endHour', parseInt(e.target.value))}
+                    <span className="text-gray-500">at</span>
+                    <input
+                      id="end-time"
+                      type="time"
+                      value={toTimeString(settings.accessPeriod.endHour, settings.accessPeriod.endMinute)}
+                      onChange={(e) => handleTimeChange('end', e.target.value)}
                       className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none"
-                    >
-                      {Array.from({ length: 24 }, (_, i) => (
-                        <option key={i} value={i}>{i.toString().padStart(2, '0')}</option>
-                      ))}
-                    </select>
-                    <span className="text-gray-500">:</span>
-                    <select
-                      value={settings.accessPeriod.endMinute}
-                      onChange={(e) => handleAccessPeriodChange('endMinute', parseInt(e.target.value))}
-                      className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none"
-                    >
-                      {Array.from({ length: 60 }, (_, i) => (
-                        <option key={i} value={i}>{i.toString().padStart(2, '0')}</option>
-                      ))}
-                    </select>
+                      aria-label="End time"
+                    />
                   </div>
                 </div>
 
@@ -713,32 +764,34 @@ export default function AdminDashboard() {
                 Save Settings
               </button>
             </div>
-          </div>
+          </AdminSection>
 
           {/* Email Settings */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Email Notifications</h2>
+          <AdminSection title="Email Notifications" icon="📧">
 
             <div className="mb-4">
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
+                  id="email-enabled"
                   type="checkbox"
                   checked={settings.email?.enabled || false}
                   onChange={(e) => handleEmailSettingChange('enabled', e.target.checked)}
                   className="w-5 h-5 rounded text-green-600"
+                  aria-describedby="email-enabled-desc"
                 />
                 <span className="font-medium text-gray-700">Auto-send list when RSVP closes</span>
               </label>
-              <p className="text-sm text-gray-500 mt-1 ml-8">
+              <p id="email-enabled-desc" className="text-sm text-gray-500 mt-1 ml-8">
                 Automatically email the participant list as a PDF when the access period ends
               </p>
             </div>
 
             {/* To Recipients */}
             <div className="border-t pt-4 mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">To (Main Recipients)</label>
+              <label htmlFor="new-recipient" className="block text-sm font-medium text-gray-700 mb-2">To (Main Recipients)</label>
               <div className="flex gap-2 mb-3">
                 <input
+                  id="new-recipient"
                   type="email"
                   value={newRecipient}
                   onChange={(e) => setNewRecipient(e.target.value)}
@@ -778,9 +831,10 @@ export default function AdminDashboard() {
 
             {/* CC Recipients */}
             <div className="border-t pt-4 mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">CC (Carbon Copy)</label>
+              <label htmlFor="new-cc-recipient" className="block text-sm font-medium text-gray-700 mb-2">CC (Carbon Copy)</label>
               <div className="flex gap-2 mb-3">
                 <input
+                  id="new-cc-recipient"
                   type="email"
                   value={newCcRecipient}
                   onChange={(e) => setNewCcRecipient(e.target.value)}
@@ -820,9 +874,10 @@ export default function AdminDashboard() {
 
             {/* BCC Recipients */}
             <div className="border-t pt-4 mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">BCC (Blind Carbon Copy)</label>
+              <label htmlFor="new-bcc-recipient" className="block text-sm font-medium text-gray-700 mb-2">BCC (Blind Carbon Copy)</label>
               <div className="flex gap-2 mb-3">
                 <input
+                  id="new-bcc-recipient"
                   type="email"
                   value={newBccRecipient}
                   onChange={(e) => setNewBccRecipient(e.target.value)}
@@ -862,8 +917,9 @@ export default function AdminDashboard() {
 
             {/* Subject */}
             <div className="border-t pt-4 mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Email Subject</label>
+              <label htmlFor="email-subject" className="block text-sm font-medium text-gray-700 mb-2">Email Subject</label>
               <input
+                id="email-subject"
                 type="text"
                 value={settings.email?.subject || ''}
                 onChange={(e) => handleEmailSettingChange('subject', e.target.value)}
@@ -877,8 +933,9 @@ export default function AdminDashboard() {
 
             {/* Body */}
             <div className="border-t pt-4 mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Email Body</label>
+              <label htmlFor="email-body" className="block text-sm font-medium text-gray-700 mb-2">Email Body</label>
               <textarea
+                id="email-body"
                 value={settings.email?.body || ''}
                 onChange={(e) => handleEmailSettingChange('body', e.target.value)}
                 rows={4}
@@ -910,21 +967,24 @@ export default function AdminDashboard() {
             <p className="text-xs text-gray-400 mt-2">
               "Send Now" will immediately send the current list to all recipients
             </p>
-          </div>
+          </AdminSection>
 
           {/* Add Whitelist */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Add AIS Alumni (Whitelist)</h2>
+          <AdminSection title="Add AIS Alumni" icon="👥" badge="Whitelist">
 
             {/* Single add */}
             <div className="flex gap-3 mb-4">
-              <input
-                type="text"
-                value={singleName}
-                onChange={(e) => setSingleName(e.target.value)}
-                placeholder="Enter name"
-                className="flex-1 px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none"
-              />
+              <div className="flex-1">
+                <label htmlFor="single-name" className="sr-only">Name to add</label>
+                <input
+                  id="single-name"
+                  type="text"
+                  value={singleName}
+                  onChange={(e) => setSingleName(e.target.value)}
+                  placeholder="Enter name"
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none"
+                />
+              </div>
               <button
                 onClick={addSingleName}
                 disabled={loading}
@@ -936,10 +996,11 @@ export default function AdminDashboard() {
 
             {/* Bulk add */}
             <div className="border-t pt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="bulk-names" className="block text-sm font-medium text-gray-700 mb-2">
                 Bulk Add (one name per line)
               </label>
               <textarea
+                id="bulk-names"
                 value={bulkNames}
                 onChange={(e) => setBulkNames(e.target.value)}
                 placeholder="John Doe&#10;Jane Smith&#10;Alex Johnson"
@@ -954,13 +1015,10 @@ export default function AdminDashboard() {
                 Add All
               </button>
             </div>
-          </div>
+          </AdminSection>
 
           {/* Main List */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">
-              Main List ({mainList.length}/{currentLimit})
-            </h2>
+          <AdminSection title="Main List" icon="🏃" badge={`${mainList.length}/${currentLimit}`} defaultOpen={true}>
 
             {mainList.length === 0 ? (
               <p className="text-gray-500 text-center py-4">No signups yet</p>
@@ -998,15 +1056,11 @@ export default function AdminDashboard() {
                 ))}
               </div>
             )}
-          </div>
+          </AdminSection>
 
           {/* Waitlist */}
           {waitlist.length > 0 && (
-            <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-              <h2 className="text-xl font-bold text-gray-800 mb-4">
-                Waitlist ({waitlist.length})
-              </h2>
-
+            <AdminSection title="Waitlist" icon="⏳" badge={waitlist.length}>
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {waitlist.map((person, index) => (
                   <div
@@ -1036,14 +1090,11 @@ export default function AdminDashboard() {
                   </div>
                 ))}
               </div>
-            </div>
+            </AdminSection>
           )}
 
           {/* Whitelist Record */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">
-              Whitelist Record ({whitelist.length})
-            </h2>
+          <AdminSection title="Whitelist Record" icon="📋" badge={whitelist.length}>
 
             {whitelist.length === 0 ? (
               <p className="text-gray-500 text-center py-4">No whitelisted alumni</p>
@@ -1065,15 +1116,11 @@ export default function AdminDashboard() {
                 ))}
               </div>
             )}
-          </div>
+          </AdminSection>
 
           {/* Archive */}
           {archive.length > 0 && (
-            <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-              <h2 className="text-xl font-bold text-gray-800 mb-4">
-                Past Weeks Archive ({archive.length})
-              </h2>
-
+            <AdminSection title="Past Weeks Archive" icon="📁" badge={archive.length}>
               <div className="space-y-2 mb-4">
                 {archive.map((entry, index) => (
                   <button
@@ -1136,31 +1183,41 @@ export default function AdminDashboard() {
                   )}
                 </div>
               )}
-            </div>
+            </AdminSection>
           )}
 
           {/* Danger Zone */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 border-2 border-red-200">
-            <h2 className="text-xl font-bold text-red-600 mb-4">Danger Zone</h2>
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={resetSignups}
-                disabled={loading}
-                className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white font-medium rounded-lg"
-              >
-                Reset Week (Keep Whitelist)
-              </button>
-              <button
-                onClick={resetAll}
-                disabled={loading}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-medium rounded-lg"
-              >
-                Reset Everything
-              </button>
+          <div className="bg-white rounded-2xl shadow-xl overflow-hidden border-2 border-red-200">
+            <button
+              onClick={() => {}}
+              className="hidden"
+              aria-hidden="true"
+            />
+            <div className="px-6 py-4 flex items-center gap-3 bg-red-50">
+              <span className="text-xl">⚠️</span>
+              <span className="text-xl font-bold text-red-600">Danger Zone</span>
             </div>
-            <p className="text-gray-500 text-sm mt-3">
-              "Reset Week" now happens automatically when the access period opens each week. The previous week's list is archived. Manual reset is still available if needed.
-            </p>
+            <div className="px-6 pb-6 pt-4">
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={resetSignups}
+                  disabled={loading}
+                  className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white font-medium rounded-lg"
+                >
+                  Reset Week (Keep Whitelist)
+                </button>
+                <button
+                  onClick={resetAll}
+                  disabled={loading}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-medium rounded-lg"
+                >
+                  Reset Everything
+                </button>
+              </div>
+              <p className="text-gray-500 text-sm mt-3">
+                "Reset Week" now happens automatically when the access period opens each week. The previous week's list is archived. Manual reset is still available if needed.
+              </p>
+            </div>
           </div>
         </div>
       </div>
