@@ -61,7 +61,7 @@ test.describe('Frisbee RSVP App', () => {
   test('displays RSVP form when access is open', async ({ page }) => {
     await mockRsvpApi(page);
     await page.goto('/');
-    await expect(page.locator('input[placeholder*="name"]')).toBeVisible();
+    await expect(page.locator('#rsvp-name')).toBeVisible();
     // Button says "RSVP" not "Sign Up"
     await expect(page.locator('button:has-text("RSVP")')).toBeVisible();
   });
@@ -117,7 +117,7 @@ test.describe('Frisbee RSVP App', () => {
     await page.goto('/');
 
     // Fill in name and submit
-    await page.fill('input[placeholder*="name"]', 'Test User');
+    await page.fill('#rsvp-name', 'Test User');
     await page.click('button:has-text("RSVP")');
 
     // Should show success message
