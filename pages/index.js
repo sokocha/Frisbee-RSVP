@@ -3,6 +3,7 @@ import Head from 'next/head';
 
 const DEFAULT_MAIN_LIST_LIMIT = 30;
 const DEVICE_KEY = 'frisbee-device-id';
+const SAVED_NAME_KEY = 'frisbee-saved-name';
 
 // Generate a unique device ID based on browser characteristics
 function generateDeviceId() {
@@ -436,6 +437,8 @@ export default function FrisbeeRSVP() {
   const [snoozePassword, setSnoozePassword] = useState('');
   const [showConfetti, setShowConfetti] = useState(false);
   const [confirmModal, setConfirmModal] = useState({ show: false, personId: null, isWaitlist: false });
+  const [savedName, setSavedName] = useState('');
+  const [showNameEdit, setShowNameEdit] = useState(false);
 
   const checkMySignup = useCallback((mainList, waitlist, currentDeviceId) => {
     const allSignups = [...mainList, ...waitlist];
@@ -472,6 +475,12 @@ export default function FrisbeeRSVP() {
     const id = getDeviceId();
     setDeviceId(id);
     loadData(id);
+    // Load saved name for returning users
+    const remembered = localStorage.getItem(SAVED_NAME_KEY);
+    if (remembered) {
+      setSavedName(remembered);
+      setName(remembered);
+    }
   }, [loadData]);
 
   const showMessage = (text, type) => {
@@ -510,10 +519,14 @@ export default function FrisbeeRSVP() {
       if (response.ok) {
         setMainList(data.mainList);
         setWaitlist(data.waitlist);
-        setName('');
         setHasSignedUp(true);
         setMySignup(data.person);
         showMessage(data.message, data.listType === 'main' ? 'success' : 'warning');
+
+        // Save name for quick RSVP next time
+        localStorage.setItem(SAVED_NAME_KEY, trimmedName);
+        setSavedName(trimmedName);
+        setShowNameEdit(false);
 
         // Show confetti for main list signup
         if (data.listType === 'main') {
@@ -677,10 +690,13 @@ export default function FrisbeeRSVP() {
   return (
     <>
       <Head>
-        <title>Weekly Frisbee RSVP</title>
+        <title>PlayDay - Weekly Frisbee RSVP</title>
         <meta name="description" content="RSVP for weekly frisbee pickup games" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥏</text></svg>" />
+        <meta name="theme-color" content="#2e7d32" />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="apple-touch-icon" href="/favicon.svg" />
+        <link rel="manifest" href="/manifest.json" />
       </Head>
 
       <style jsx global>{`
@@ -749,9 +765,9 @@ export default function FrisbeeRSVP() {
         <main id="main-content" className="max-w-2xl mx-auto">
           {/* Header */}
           <div className="text-center mb-6 md:mb-8 animate-fade-in-up">
-            <div className="text-5xl md:text-6xl mb-2 animate-bounce-slow">🥏</div>
-            <h1 className="text-3xl md:text-4xl font-bold mb-2 bg-gradient-to-r from-white via-emerald-200 to-teal-200 bg-clip-text text-transparent">
-              Weekly Frisbee
+            <div className="text-4xl md:text-5xl mb-2">🥏</div>
+            <h1 className="text-4xl md:text-5xl font-bold mb-2 bg-gradient-to-r from-white via-emerald-200 to-teal-200 bg-clip-text text-transparent">
+              PlayDay
             </h1>
             <p className="text-emerald-200/80 text-sm md:text-base">First come, first served • {mainListLimit} spots available</p>
           </div>
@@ -767,12 +783,12 @@ export default function FrisbeeRSVP() {
               </div>
               {nextOpenTime && (
                 <div className="mt-3">
-                  <p className="text-emerald-200/60 text-sm mb-1">Opens in</p>
+                  <p className="text-emerald-200/80 text-sm mb-1">Opens in</p>
                   <CountdownTimer targetTime={nextOpenTime} />
                 </div>
               )}
               {!nextOpenTime && accessStatus.message && (
-                <p className="text-emerald-200/60 text-sm">{accessStatus.message}</p>
+                <p className="text-emerald-200/80 text-sm">{accessStatus.message}</p>
               )}
             </div>
           )}
@@ -802,14 +818,14 @@ export default function FrisbeeRSVP() {
                     <button
                       key={index}
                       onClick={() => openSnoozeModal({ name: snoozedName }, 'unsnooze')}
-                      className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 px-3 py-1.5 rounded-full text-sm transition-all hover:scale-105"
+                      className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 px-4 py-2.5 min-h-[44px] rounded-full text-sm transition-all hover:scale-105"
                     >
                       {snoozedName} <span className="text-amber-400 ml-1">↩</span>
                     </button>
                   ) : (
                     <span
                       key={index}
-                      className="bg-amber-500/20 text-amber-200 px-3 py-1.5 rounded-full text-sm"
+                      className="bg-amber-500/20 text-amber-300 px-4 py-2.5 rounded-full text-sm"
                     >
                       {snoozedName}
                     </span>
@@ -1061,7 +1077,7 @@ export default function FrisbeeRSVP() {
                         <button
                           onClick={() => openConfirmModal(person.id, false)}
                           disabled={submitting}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 px-3 py-1.5 rounded-lg transition-all text-sm font-medium"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 px-4 py-2.5 min-h-[44px] rounded-lg transition-all text-sm font-medium"
                         >
                           Drop out
                         </button>
@@ -1070,7 +1086,7 @@ export default function FrisbeeRSVP() {
                         <button
                           onClick={() => openSnoozeModal(person, 'snooze')}
                           disabled={submitting}
-                          className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 disabled:opacity-50 px-3 py-1.5 rounded-lg transition-all text-sm font-medium"
+                          className="text-amber-700 hover:text-amber-800 hover:bg-amber-50 disabled:opacity-50 px-4 py-2.5 min-h-[44px] rounded-lg transition-all text-sm font-medium"
                         >
                           Skip week
                         </button>
@@ -1129,7 +1145,7 @@ export default function FrisbeeRSVP() {
                           <button
                             onClick={() => openConfirmModal(person.id, true)}
                             disabled={submitting}
-                            className="text-red-500 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 px-3 py-1.5 rounded-lg transition-all text-sm font-medium"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 px-4 py-2.5 min-h-[44px] rounded-lg transition-all text-sm font-medium"
                           >
                             Remove
                           </button>
@@ -1192,8 +1208,8 @@ export default function FrisbeeRSVP() {
           </div>
 
           {/* Footer */}
-          <div className="text-center mt-6 md:mt-8 text-emerald-300/60 text-sm animate-fade-in-up">
-            <p>Catch-234 Weekly Pickup</p>
+          <div className="text-center mt-6 md:mt-8 text-emerald-300/80 text-sm animate-fade-in-up">
+            <p>Weekly Pickup</p>
           </div>
         </main>
       </div>
