@@ -343,14 +343,10 @@ function CountdownTimer({ targetTime, onExpire }) {
       const diff = target - now;
 
       if (diff <= 0) {
-        setTimeLeft('Opening now...');
-        // Only trigger onExpire once
+        // Immediately refresh when time is up
         if (!hasExpired && onExpire) {
           setHasExpired(true);
-          // Small delay to ensure server has processed the time change
-          setTimeout(() => {
-            onExpire();
-          }, 1500);
+          onExpire();
         }
         return;
       }
