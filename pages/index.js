@@ -332,8 +332,9 @@ function SkeletonLoader() {
 }
 
 // Countdown timer component
-function CountdownTimer({ targetTime }) {
+function CountdownTimer({ targetTime, onExpire }) {
   const [timeLeft, setTimeLeft] = useState('');
+  const [hasExpired, setHasExpired] = useState(false);
 
   useEffect(() => {
     const calculateTimeLeft = () => {
@@ -342,7 +343,15 @@ function CountdownTimer({ targetTime }) {
       const diff = target - now;
 
       if (diff <= 0) {
-        setTimeLeft('Opening soon...');
+        setTimeLeft('Opening now...');
+        // Only trigger onExpire once
+        if (!hasExpired && onExpire) {
+          setHasExpired(true);
+          // Small delay to ensure server has processed the time change
+          setTimeout(() => {
+            onExpire();
+          }, 1500);
+        }
         return;
       }
 
@@ -363,7 +372,7 @@ function CountdownTimer({ targetTime }) {
     calculateTimeLeft();
     const interval = setInterval(calculateTimeLeft, 1000);
     return () => clearInterval(interval);
-  }, [targetTime]);
+  }, [targetTime, hasExpired, onExpire]);
 
   return (
     <div className="text-2xl font-mono font-bold text-white animate-pulse">
@@ -761,7 +770,7 @@ export default function FrisbeeRSVP() {
               {nextOpenTime && (
                 <div className="mt-3">
                   <p className="text-emerald-200/80 text-sm mb-1">Opens in</p>
-                  <CountdownTimer targetTime={nextOpenTime} />
+                  <CountdownTimer targetTime={nextOpenTime} onExpire={() => loadData(deviceId)} />
                 </div>
               )}
               {!nextOpenTime && accessStatus.message && (
