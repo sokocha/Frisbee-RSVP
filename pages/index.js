@@ -332,9 +332,8 @@ function SkeletonLoader() {
 }
 
 // Countdown timer component
-function CountdownTimer({ targetTime, onExpire }) {
+function CountdownTimer({ targetTime }) {
   const [timeLeft, setTimeLeft] = useState('');
-  const [hasExpired, setHasExpired] = useState(false);
 
   useEffect(() => {
     const calculateTimeLeft = () => {
@@ -343,11 +342,8 @@ function CountdownTimer({ targetTime, onExpire }) {
       const diff = target - now;
 
       if (diff <= 0) {
-        // Immediately refresh when time is up
-        if (!hasExpired && onExpire) {
-          setHasExpired(true);
-          onExpire();
-        }
+        // Full page reload when time is up
+        window.location.reload();
         return;
       }
 
@@ -368,7 +364,7 @@ function CountdownTimer({ targetTime, onExpire }) {
     calculateTimeLeft();
     const interval = setInterval(calculateTimeLeft, 1000);
     return () => clearInterval(interval);
-  }, [targetTime, hasExpired, onExpire]);
+  }, [targetTime]);
 
   return (
     <div className="text-2xl font-mono font-bold text-white animate-pulse">
@@ -766,7 +762,7 @@ export default function FrisbeeRSVP() {
               {nextOpenTime && (
                 <div className="mt-3">
                   <p className="text-emerald-200/80 text-sm mb-1">Opens in</p>
-                  <CountdownTimer targetTime={nextOpenTime} onExpire={() => loadData(deviceId)} />
+                  <CountdownTimer targetTime={nextOpenTime} />
                 </div>
               )}
               {!nextOpenTime && accessStatus.message && (
