@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -11,6 +11,10 @@ export default function Dashboard() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [copiedSlug, setCopiedSlug] = useState(null);
+  const [draggedOrg, setDraggedOrg] = useState(null);
+  const [dragOverOrg, setDragOverOrg] = useState(null);
 
   // New org form state
   const [newOrg, setNewOrg] = useState({
@@ -107,6 +111,99 @@ export default function Dashboard() {
     router.push('/');
   }
 
+  // Copy link to clipboard
+  async function handleCopyLink(slug) {
+    const url = `${window.location.origin}/${slug}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedSlug(slug);
+      setTimeout(() => setCopiedSlug(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  }
+
+  // Format relative time
+  function formatRelativeTime(timestamp) {
+    if (!timestamp) return null;
+    const now = new Date();
+    const then = new Date(timestamp);
+    const diffMs = now - then;
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return then.toLocaleDateString();
+  }
+
+  // Filter organizations by search
+  const filteredOrgs = organizations.filter(org =>
+    org.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    org.slug.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    org.sport?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Drag and drop handlers
+  function handleDragStart(e, org) {
+    setDraggedOrg(org);
+    e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function handleDragOver(e, org) {
+    e.preventDefault();
+    if (draggedOrg && draggedOrg.id !== org.id) {
+      setDragOverOrg(org);
+    }
+  }
+
+  function handleDragLeave() {
+    setDragOverOrg(null);
+  }
+
+  function handleDrop(e, targetOrg) {
+    e.preventDefault();
+    if (!draggedOrg || draggedOrg.id === targetOrg.id) return;
+
+    const newOrgs = [...organizations];
+    const draggedIndex = newOrgs.findIndex(o => o.id === draggedOrg.id);
+    const targetIndex = newOrgs.findIndex(o => o.id === targetOrg.id);
+
+    // Remove dragged item and insert at target position
+    const [removed] = newOrgs.splice(draggedIndex, 1);
+    newOrgs.splice(targetIndex, 0, removed);
+
+    // Update display order
+    const reordered = newOrgs.map((org, index) => ({ ...org, displayOrder: index }));
+    setOrganizations(reordered);
+
+    // Save new order to backend
+    saveOrgOrder(reordered.map(o => ({ id: o.id, displayOrder: o.displayOrder })));
+
+    setDraggedOrg(null);
+    setDragOverOrg(null);
+  }
+
+  function handleDragEnd() {
+    setDraggedOrg(null);
+    setDragOverOrg(null);
+  }
+
+  async function saveOrgOrder(orderData) {
+    try {
+      await fetch('/api/organizations/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order: orderData }),
+      });
+    } catch (err) {
+      console.error('Failed to save order:', err);
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -151,14 +248,25 @@ export default function Dashboard() {
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Organizations */}
           <div className="mb-8">
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
               <h2 className="text-lg font-semibold text-gray-900">Your Organizations</h2>
-              <button
-                onClick={() => setShowCreateForm(true)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
-              >
-                Create Organization
-              </button>
+              <div className="flex gap-3 w-full sm:w-auto">
+                {organizations.length > 1 && (
+                  <input
+                    type="text"
+                    placeholder="Search organizations..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    className="flex-1 sm:w-64 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                )}
+                <button
+                  onClick={() => setShowCreateForm(true)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium whitespace-nowrap"
+                >
+                  Create Organization
+                </button>
+              </div>
             </div>
 
             {organizations.length === 0 ? (
@@ -171,46 +279,124 @@ export default function Dashboard() {
                   Create your first organization
                 </button>
               </div>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {organizations.map(org => (
-                  <div
-                    key={org.id}
-                    className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <h3 className="font-semibold text-gray-900">{org.name}</h3>
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        org.status === 'active'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-yellow-100 text-yellow-700'
-                      }`}>
-                        {org.status}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-500 mb-1 capitalize">{org.sport}</p>
-                    {org.location && (
-                      <p className="text-sm text-gray-400 mb-4">{org.location}</p>
-                    )}
-                    <div className="flex gap-2">
-                      <a
-                        href={`/${org.slug}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-1 text-center px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50"
-                      >
-                        View Page
-                      </a>
-                      <a
-                        href={`/${org.slug}/admin`}
-                        className="flex-1 text-center px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                      >
-                        Manage
-                      </a>
-                    </div>
-                  </div>
-                ))}
+            ) : filteredOrgs.length === 0 ? (
+              <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+                <p className="text-gray-500">No organizations match "{searchQuery}"</p>
               </div>
+            ) : (
+              <>
+                {organizations.length > 1 && (
+                  <p className="text-xs text-gray-400 mb-3">Drag cards to reorder</p>
+                )}
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {filteredOrgs.map(org => (
+                    <div
+                      key={org.id}
+                      draggable
+                      onDragStart={e => handleDragStart(e, org)}
+                      onDragOver={e => handleDragOver(e, org)}
+                      onDragLeave={handleDragLeave}
+                      onDrop={e => handleDrop(e, org)}
+                      onDragEnd={handleDragEnd}
+                      className={`bg-white rounded-lg border p-5 transition-all cursor-move ${
+                        draggedOrg?.id === org.id
+                          ? 'opacity-50 border-blue-300'
+                          : dragOverOrg?.id === org.id
+                          ? 'border-blue-500 shadow-lg'
+                          : 'border-gray-200 hover:shadow-md'
+                      }`}
+                    >
+                      {/* Header row */}
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-gray-900 truncate">{org.name}</h3>
+                          <p className="text-sm text-gray-500 capitalize">{org.sport}</p>
+                        </div>
+                        {/* Window status badge */}
+                        <span className={`ml-2 px-2 py-1 text-xs rounded-full font-medium whitespace-nowrap ${
+                          org.stats?.windowStatus === 'open'
+                            ? 'bg-green-100 text-green-700'
+                            : org.stats?.windowStatus === 'always_open'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {org.stats?.windowStatus === 'open' && (
+                            <>Open{org.stats.windowTimeUntilChange && ` · ${org.stats.windowTimeUntilChange}`}</>
+                          )}
+                          {org.stats?.windowStatus === 'closed' && (
+                            <>Closed{org.stats.windowTimeUntilChange && ` · Opens in ${org.stats.windowTimeUntilChange}`}</>
+                          )}
+                          {org.stats?.windowStatus === 'always_open' && 'Always Open'}
+                        </span>
+                      </div>
+
+                      {/* Stats row */}
+                      <div className="flex items-center gap-4 mb-3 text-sm">
+                        <div className="flex items-center gap-1.5">
+                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          <span className="font-medium text-gray-900">
+                            {org.stats?.mainListCount || 0}/{org.stats?.mainListLimit || 30}
+                          </span>
+                          <span className="text-gray-500">signed up</span>
+                        </div>
+                        {org.stats?.waitlistCount > 0 && (
+                          <span className="text-orange-600 text-xs">
+                            +{org.stats.waitlistCount} waitlist
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Last activity */}
+                      {org.stats?.lastSignup && (
+                        <p className="text-xs text-gray-400 mb-3">
+                          Last signup: {formatRelativeTime(org.stats.lastSignup)}
+                        </p>
+                      )}
+
+                      {/* Action buttons */}
+                      <div className="flex gap-2 items-center">
+                        <a
+                          href={`/${org.slug}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          className="flex-1 text-center px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50"
+                        >
+                          View
+                        </a>
+                        <button
+                          onClick={e => { e.stopPropagation(); handleCopyLink(org.slug); }}
+                          className={`px-3 py-2 text-sm border rounded-lg transition-colors ${
+                            copiedSlug === org.slug
+                              ? 'border-green-500 bg-green-50 text-green-700'
+                              : 'border-gray-200 hover:bg-gray-50 text-gray-600'
+                          }`}
+                          title="Copy public link"
+                        >
+                          {copiedSlug === org.slug ? (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                            </svg>
+                          )}
+                        </button>
+                        <a
+                          href={`/${org.slug}/admin`}
+                          onClick={e => e.stopPropagation()}
+                          className="flex-1 text-center px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        >
+                          Manage
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         </main>

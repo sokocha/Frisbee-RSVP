@@ -296,10 +296,16 @@ export default function OrgAdmin() {
         showMessage(data.message || 'Email sent successfully!');
         setEmailStatus(data);
       } else {
-        showMessage(data.error || 'Failed to send email', 'error');
+        // Show more detailed error message
+        const errorMsg = data.details
+          ? `${data.error}: ${data.details}`
+          : (data.error || 'Failed to send email');
+        showMessage(errorMsg, 'error');
+        console.error('Send email error:', data);
       }
     } catch (error) {
       showMessage('Failed to send email: ' + error.message, 'error');
+      console.error('Send email exception:', error);
     }
     setSendingEmail(false);
   }
