@@ -91,12 +91,17 @@ export default async function handler(req, res) {
   }
 
   const organizer = await getOrganizerById(organizerId);
-  if (!organizer || organizer.status !== 'approved') {
-    return res.status(403).json({ error: 'Account not approved' });
+  if (!organizer) {
+    return res.status(403).json({ error: 'Organizer not found' });
   }
 
   // Check permission
   const isAdmin = isSuperAdmin(organizer.email);
+
+  // Check if approved (super admins bypass this check)
+  if (organizer.status !== 'approved' && !isAdmin) {
+    return res.status(403).json({ error: 'Account not approved' });
+  }
   const hasPermission = isAdmin || await organizerOwnsOrg(organizerId, orgId);
   if (!hasPermission) {
     return res.status(403).json({ error: 'You do not have permission to manage this organization' });
