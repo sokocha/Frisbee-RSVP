@@ -23,6 +23,7 @@ export default function Dashboard() {
     sport: '',
     location: '',
     timezone: 'Africa/Lagos',
+    maxParticipants: 30,
   });
   const [slugStatus, setSlugStatus] = useState({ checking: false, available: null, error: null });
 
@@ -98,7 +99,7 @@ export default function Dashboard() {
 
       setOrganizations([...organizations, data.organization]);
       setShowCreateForm(false);
-      setNewOrg({ name: '', slug: '', sport: '', location: '', timezone: 'Africa/Lagos' });
+      setNewOrg({ name: '', slug: '', sport: '', location: '', timezone: 'Africa/Lagos', maxParticipants: 30 });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -477,6 +478,22 @@ export default function Dashboard() {
                       <option value="swimming">Swimming</option>
                       <option value="other">Other</option>
                     </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Max Participants *
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      max={500}
+                      value={newOrg.maxParticipants}
+                      onChange={e => setNewOrg({ ...newOrg, maxParticipants: parseInt(e.target.value) || 30 })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Maximum number of people who can sign up (others go to waitlist)</p>
                   </div>
 
                   <div>

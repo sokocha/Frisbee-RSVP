@@ -49,7 +49,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const { slug, name, sport, location, timezone } = req.body;
+    const { slug, name, sport, location, timezone, maxParticipants } = req.body;
 
     // Validate required fields
     if (!slug || !name || !sport) {
@@ -61,6 +61,9 @@ export default async function handler(req, res) {
     if (!slugValidation.valid) {
       return res.status(400).json({ error: slugValidation.error });
     }
+
+    // Validate max participants
+    const participantLimit = Math.min(Math.max(parseInt(maxParticipants) || 30, 1), 500);
 
     try {
       // Check if slug is available
@@ -75,6 +78,7 @@ export default async function handler(req, res) {
         location,
         timezone,
         ownerId: organizerId,
+        maxParticipants: participantLimit,
       });
 
       return res.status(201).json({ organization });
