@@ -24,10 +24,45 @@ function getDefaultSettings(timezone = 'Africa/Lagos') {
   };
 }
 
-// Geocode address to lat/lng using Nominatim (free, no API key)
-async function geocodeAddress(address) {
+// Common city coordinates as fallback
+const CITY_COORDINATES = {
+  'lagos': { lat: 6.5244, lng: 3.3792 },
+  'lagos, nigeria': { lat: 6.5244, lng: 3.3792 },
+  'victoria island': { lat: 6.4281, lng: 3.4219 },
+  'victoria island, lagos': { lat: 6.4281, lng: 3.4219 },
+  'lekki': { lat: 6.4698, lng: 3.5852 },
+  'ikeja': { lat: 6.6018, lng: 3.3515 },
+  'abuja': { lat: 9.0765, lng: 7.3986 },
+  'abuja, nigeria': { lat: 9.0765, lng: 7.3986 },
+  'port harcourt': { lat: 4.8156, lng: 7.0498 },
+  'ibadan': { lat: 7.3775, lng: 3.9470 },
+  'kano': { lat: 12.0022, lng: 8.5920 },
+  'accra': { lat: 5.6037, lng: -0.1870 },
+  'accra, ghana': { lat: 5.6037, lng: -0.1870 },
+  'nairobi': { lat: -1.2921, lng: 36.8219 },
+  'nairobi, kenya': { lat: -1.2921, lng: 36.8219 },
+  'johannesburg': { lat: -26.2041, lng: 28.0473 },
+  'cape town': { lat: -33.9249, lng: 18.4241 },
+  'london': { lat: 51.5074, lng: -0.1278 },
+  'new york': { lat: 40.7128, lng: -74.0060 },
+};
+
+// Timezone to approximate coordinates fallback
+const TIMEZONE_COORDINATES = {
+  'Africa/Lagos': { lat: 6.5244, lng: 3.3792 },
+  'Africa/Accra': { lat: 5.6037, lng: -0.1870 },
+  'Africa/Nairobi': { lat: -1.2921, lng: 36.8219 },
+  'Africa/Johannesburg': { lat: -26.2041, lng: 28.0473 },
+  'Africa/Cairo': { lat: 30.0444, lng: 31.2357 },
+  'Europe/London': { lat: 51.5074, lng: -0.1278 },
+  'America/New_York': { lat: 40.7128, lng: -74.0060 },
+  'America/Los_Angeles': { lat: 34.0522, lng: -118.2437 },
+};
+
+// Try to geocode using Nominatim
+async function tryGeocode(query) {
   try {
-    const encoded = encodeURIComponent(address);
+    const encoded = encodeURIComponent(query);
     const response = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encoded}&limit=1`,
       {
@@ -51,6 +86,55 @@ async function geocodeAddress(address) {
     console.error('Geocoding error:', error);
     return null;
   }
+}
+
+// Geocode address with fallback strategies
+async function geocodeAddress(address, orgLocation, timezone) {
+  // Strategy 1: Try full address
+  let coords = await tryGeocode(address);
+  if (coords) return coords;
+
+  // Strategy 2: Try progressively broader searches
+  // Split by common separators and try removing the first part each time
+  const parts = address.split(/[,\-]/).map(p => p.trim()).filter(Boolean);
+
+  for (let i = 1; i < parts.length; i++) {
+    const broaderAddress = parts.slice(i).join(', ');
+    coords = await tryGeocode(broaderAddress);
+    if (coords) return coords;
+  }
+
+  // Strategy 3: Check if any known city name is in the address
+  const lowerAddress = address.toLowerCase();
+  for (const [city, cityCoords] of Object.entries(CITY_COORDINATES)) {
+    if (lowerAddress.includes(city)) {
+      console.log(`Using known coordinates for ${city}`);
+      return cityCoords;
+    }
+  }
+
+  // Strategy 4: Try using org location if available
+  if (orgLocation) {
+    coords = await tryGeocode(orgLocation);
+    if (coords) return coords;
+
+    // Check known cities in org location
+    const lowerOrgLocation = orgLocation.toLowerCase();
+    for (const [city, cityCoords] of Object.entries(CITY_COORDINATES)) {
+      if (lowerOrgLocation.includes(city)) {
+        console.log(`Using known coordinates for ${city} from org location`);
+        return cityCoords;
+      }
+    }
+  }
+
+  // Strategy 5: Fall back to timezone-based coordinates
+  if (timezone && TIMEZONE_COORDINATES[timezone]) {
+    console.log(`Falling back to timezone coordinates for ${timezone}`);
+    return TIMEZONE_COORDINATES[timezone];
+  }
+
+  return null;
 }
 
 // Get weather from Open-Meteo (free, no API key)
@@ -143,20 +227,20 @@ export default async function handler(req, res) {
     return res.status(200).json({ weather: null, message: 'Weather not enabled' });
   }
 
+  // Get timezone first (needed for geocoding fallback)
+  const timezone = settings.accessPeriod?.timezone || org.timezone || 'Africa/Lagos';
+
   // Get location for geocoding
   const address = settings.gameInfo?.location?.address;
   if (!address) {
     return res.status(200).json({ weather: null, message: 'No address configured' });
   }
 
-  // Geocode the address
-  const coords = await geocodeAddress(address);
+  // Geocode the address with fallback strategies
+  const coords = await geocodeAddress(address, org.location, timezone);
   if (!coords) {
     return res.status(200).json({ weather: null, message: 'Could not geocode address' });
   }
-
-  // Get timezone
-  const timezone = settings.accessPeriod?.timezone || org.timezone || 'Africa/Lagos';
 
   // Get weather forecast
   const forecast = await getWeatherForecast(coords.lat, coords.lng, timezone);
