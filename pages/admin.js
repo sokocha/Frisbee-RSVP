@@ -93,6 +93,9 @@ export default function AdminDashboard() {
   const [newCcRecipient, setNewCcRecipient] = useState('');
   const [newBccRecipient, setNewBccRecipient] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailStatus, setEmailStatus] = useState(null);
+  const [lastEmailWeek, setLastEmailWeek] = useState(null);
+  const [currentWeekId, setCurrentWeekId] = useState(null);
 
   const showMessage = (text, type) => {
     setMessage({ text, type });
@@ -113,6 +116,9 @@ export default function AdminDashboard() {
         setWhitelist(data.whitelist || []);
         setSettings(data.settings || DEFAULT_SETTINGS);
         setArchive(data.archive || []);
+        setEmailStatus(data.emailStatus || null);
+        setLastEmailWeek(data.lastEmailWeek || null);
+        setCurrentWeekId(data.currentWeekId || null);
         setIsAuthenticated(true);
       } else {
         showMessage('Invalid password', 'error');
@@ -249,7 +255,7 @@ export default function AdminDashboard() {
     handleEmailSettingChange(type, currentList.filter(e => e !== email));
   };
 
-  const sendTestEmail = async () => {
+  const sendTestEmail = async (force = true) => {
     setSendingEmail(true);
     try {
       const response = await fetch('/api/send-list', {
@@ -258,15 +264,19 @@ export default function AdminDashboard() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${password}`
         },
-        body: JSON.stringify({ force: true })
+        body: JSON.stringify({ force })
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        showMessage(`Email sent successfully!`, 'success');
+        showMessage(`Email sent successfully! ID: ${data.emailId}`, 'success');
+        // Refresh data to get updated email status
+        fetchData();
       } else {
         showMessage(data.error || 'Failed to send email', 'error');
+        // Refresh to show failed status
+        fetchData();
       }
     } catch (error) {
       showMessage('Failed to send email', 'error');
@@ -969,6 +979,136 @@ export default function AdminDashboard() {
             <p className="text-xs text-gray-400 mt-2">
               "Send Now" will immediately send the current list to all recipients
             </p>
+          </AdminSection>
+
+          {/* Email Status */}
+          <AdminSection title="Email Status" icon="📊" defaultOpen={true}>
+            <div className="space-y-4">
+              {/* Current Week Info */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="text-sm text-gray-500 mb-1">Current Week</div>
+                <div className="text-lg font-bold text-gray-800">{currentWeekId || 'Loading...'}</div>
+              </div>
+
+              {/* Status Display */}
+              {emailStatus ? (
+                <div className={`rounded-lg p-4 border-2 ${
+                  emailStatus.status === 'sent' ? 'bg-green-50 border-green-200' :
+                  emailStatus.status === 'failed' ? 'bg-red-50 border-red-200' :
+                  'bg-yellow-50 border-yellow-200'
+                }`}>
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className={`w-3 h-3 rounded-full ${
+                      emailStatus.status === 'sent' ? 'bg-green-500' :
+                      emailStatus.status === 'failed' ? 'bg-red-500' :
+                      'bg-yellow-500'
+                    }`}></div>
+                    <span className={`font-bold text-lg ${
+                      emailStatus.status === 'sent' ? 'text-green-700' :
+                      emailStatus.status === 'failed' ? 'text-red-700' :
+                      'text-yellow-700'
+                    }`}>
+                      {emailStatus.status === 'sent' ? 'Email Sent' :
+                       emailStatus.status === 'failed' ? 'Email Failed' :
+                       'Email Pending'}
+                    </span>
+                    <span className="text-sm text-gray-500">
+                      Week {emailStatus.weekId}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    {emailStatus.status === 'sent' && (
+                      <>
+                        <div>
+                          <span className="text-gray-500">Sent At:</span>
+                          <div className="font-medium">{new Date(emailStatus.sentAt).toLocaleString()}</div>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Email ID:</span>
+                          <div className="font-mono text-xs bg-gray-100 p-1 rounded break-all">{emailStatus.emailId}</div>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Recipients:</span>
+                          <div className="font-medium">{emailStatus.recipientCount} To, {emailStatus.ccCount || 0} CC, {emailStatus.bccCount || 0} BCC</div>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">List Counts:</span>
+                          <div className="font-medium">{emailStatus.mainListCount} main, {emailStatus.waitlistCount} waitlist</div>
+                        </div>
+                      </>
+                    )}
+
+                    {emailStatus.status === 'failed' && (
+                      <>
+                        <div className="col-span-2">
+                          <span className="text-gray-500">Attempted At:</span>
+                          <div className="font-medium">{new Date(emailStatus.attemptedAt).toLocaleString()}</div>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="text-gray-500">Error:</span>
+                          <div className="font-medium text-red-600">{emailStatus.error}</div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Show if current week email is sent or not */}
+                  {currentWeekId && emailStatus.weekId !== currentWeekId && (
+                    <div className="mt-3 p-2 bg-yellow-100 rounded text-yellow-800 text-sm">
+                      ⚠️ This status is from a previous week ({emailStatus.weekId}). Current week ({currentWeekId}) email has not been sent yet.
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-gray-50 rounded-lg p-4 text-center text-gray-500">
+                  No email has been sent yet
+                </div>
+              )}
+
+              {/* Quick Actions */}
+              <div className="border-t pt-4">
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={() => sendTestEmail(true)}
+                    disabled={sendingEmail || !(settings.email?.recipients?.length > 0)}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white font-medium rounded-lg flex items-center gap-2"
+                  >
+                    {sendingEmail ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Sending...
+                      </>
+                    ) : (
+                      <>Send Email Now</>
+                    )}
+                  </button>
+
+                  {emailStatus?.status === 'sent' && emailStatus.weekId === currentWeekId && (
+                    <button
+                      onClick={() => {
+                        if (confirm('Email was already sent for this week. Send again?')) {
+                          sendTestEmail(true);
+                        }
+                      }}
+                      disabled={sendingEmail}
+                      className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white font-medium rounded-lg"
+                    >
+                      Resend Email
+                    </button>
+                  )}
+                </div>
+
+                {!(settings.email?.recipients?.length > 0) && (
+                  <p className="text-sm text-red-500 mt-2">
+                    Add at least one recipient in Email Settings to send emails
+                  </p>
+                )}
+              </div>
+            </div>
           </AdminSection>
 
           {/* Add Whitelist */}

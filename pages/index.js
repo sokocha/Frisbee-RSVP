@@ -1167,6 +1167,10 @@ export default function FrisbeeRSVP() {
               <ul className="space-y-2 text-emerald-200/80 text-sm">
                 <li className="flex items-start gap-2">
                   <span className="text-emerald-400">•</span>
+                  <span>No ID card, No entry</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-emerald-400">•</span>
                   <span>Arrive 10-15 minutes early for warm-up</span>
                 </li>
                 <li className="flex items-start gap-2">

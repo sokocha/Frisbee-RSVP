@@ -4,6 +4,8 @@ const RSVP_KEY = 'frisbee-rsvp-data';
 const WHITELIST_KEY = 'frisbee-whitelist';
 const SETTINGS_KEY = 'frisbee-settings';
 const ARCHIVE_KEY = 'frisbee-archive';
+const EMAIL_STATUS_KEY = 'frisbee-email-status';
+const LAST_EMAIL_KEY = 'frisbee-last-email';
 
 // Admin password - change this or set via environment variables
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'frisbee-admin-2024';
@@ -64,12 +66,14 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    // Get all data including whitelist, settings, and archive
+    // Get all data including whitelist, settings, archive, and email status
     try {
       const rsvpData = await kv.get(RSVP_KEY) || { mainList: [], waitlist: [] };
       const whitelist = await kv.get(WHITELIST_KEY) || [];
       const settings = await kv.get(SETTINGS_KEY) || DEFAULT_SETTINGS;
       const archive = await kv.get(ARCHIVE_KEY) || [];
+      const emailStatus = await kv.get(EMAIL_STATUS_KEY) || null;
+      const lastEmailWeek = await kv.get(LAST_EMAIL_KEY) || null;
       const limit = settings.mainListLimit || 30;
 
       // Auto-rebalance on load to ensure correct priority order
@@ -81,12 +85,25 @@ export default async function handler(req, res) {
         await kv.set(RSVP_KEY, rebalanced);
       }
 
+      // Calculate current week ID for comparison
+      const timezone = settings.accessPeriod?.timezone || 'Africa/Lagos';
+      const now = new Date();
+      const watTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+      const year = watTime.getFullYear();
+      const startOfYear = new Date(year, 0, 1);
+      const days = Math.floor((watTime - startOfYear) / (24 * 60 * 60 * 1000));
+      const weekNum = Math.ceil((days + startOfYear.getDay() + 1) / 7);
+      const currentWeekId = `${year}-W${weekNum.toString().padStart(2, '0')}`;
+
       return res.status(200).json({
         mainList: rebalanced.mainList,
         waitlist: rebalanced.waitlist,
         whitelist,
         settings,
-        archive
+        archive,
+        emailStatus,
+        lastEmailWeek,
+        currentWeekId
       });
     } catch (error) {
       console.error('Failed to get admin data:', error);
