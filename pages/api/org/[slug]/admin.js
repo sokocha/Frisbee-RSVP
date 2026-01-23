@@ -42,6 +42,8 @@ function getDefaultSettings(timezone = 'Africa/Lagos') {
     email: {
       enabled: false,
       recipients: [],
+      cc: [],
+      bcc: [],
       subject: 'Weekly RSVP List - {{week}}',
       body: 'Please find attached the RSVP list for this week.\n\nTotal participants: {{count}}'
     },

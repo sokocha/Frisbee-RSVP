@@ -38,6 +38,14 @@ export default function OrgAdmin() {
       endHour: 10,
       endMinute: 0,
     },
+    email: {
+      enabled: false,
+      recipients: [],
+      cc: [],
+      bcc: [],
+      subject: 'Weekly RSVP List - {{week}}',
+      body: 'Please find attached the RSVP list for this week.\n\nTotal participants: {{count}}',
+    },
     gameInfo: {
       enabled: false,
       gameDay: 0, // Sunday
@@ -94,6 +102,7 @@ export default function OrgAdmin() {
           setSettingsForm({
             mainListLimit: data.settings.mainListLimit || 30,
             accessPeriod: data.settings.accessPeriod || settingsForm.accessPeriod,
+            email: data.settings.email || settingsForm.email,
             gameInfo: data.settings.gameInfo || settingsForm.gameInfo,
           });
         }
@@ -324,12 +333,12 @@ export default function OrgAdmin() {
         {/* Tabs */}
         <div className="bg-white border-b border-gray-200">
           <div className="max-w-5xl mx-auto px-4">
-            <nav className="flex gap-6">
-              {['lists', 'whitelist', 'settings', 'gameinfo', 'archive'].map(tab => (
+            <nav className="flex gap-6 overflow-x-auto">
+              {['lists', 'whitelist', 'settings', 'email', 'gameinfo', 'archive'].map(tab => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`py-3 border-b-2 font-medium text-sm ${
+                  className={`py-3 border-b-2 font-medium text-sm whitespace-nowrap ${
                     activeTab === tab
                       ? 'border-blue-600 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -597,6 +606,140 @@ export default function OrgAdmin() {
                   {saving ? 'Saving...' : 'Save Settings'}
                 </button>
               </form>
+            </div>
+          )}
+
+          {/* Email Tab */}
+          {activeTab === 'email' && (
+            <div className="space-y-6 max-w-2xl">
+              {/* Master Toggle */}
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={settingsForm.email?.enabled || false}
+                    onChange={e => setSettingsForm({
+                      ...settingsForm,
+                      email: { ...settingsForm.email, enabled: e.target.checked }
+                    })}
+                    className="w-5 h-5 rounded"
+                  />
+                  <div>
+                    <span className="font-medium text-gray-900">Auto-send RSVP List</span>
+                    <p className="text-sm text-gray-500">Automatically email the RSVP list when sign-ups close</p>
+                  </div>
+                </label>
+              </div>
+
+              {settingsForm.email?.enabled && (
+                <>
+                  {/* Recipients */}
+                  <div className="bg-white rounded-lg border border-gray-200 p-6">
+                    <h3 className="font-semibold mb-4">Email Recipients</h3>
+
+                    {/* To */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">To (Main Recipients)</label>
+                      <input
+                        type="text"
+                        value={(settingsForm.email?.recipients || []).join(', ')}
+                        onChange={e => setSettingsForm({
+                          ...settingsForm,
+                          email: {
+                            ...settingsForm.email,
+                            recipients: e.target.value.split(',').map(email => email.trim()).filter(Boolean)
+                          }
+                        })}
+                        placeholder="email1@example.com, email2@example.com"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Separate multiple emails with commas</p>
+                    </div>
+
+                    {/* CC */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">CC (Carbon Copy)</label>
+                      <input
+                        type="text"
+                        value={(settingsForm.email?.cc || []).join(', ')}
+                        onChange={e => setSettingsForm({
+                          ...settingsForm,
+                          email: {
+                            ...settingsForm.email,
+                            cc: e.target.value.split(',').map(email => email.trim()).filter(Boolean)
+                          }
+                        })}
+                        placeholder="manager@example.com"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Optional - these recipients will be visible to all</p>
+                    </div>
+
+                    {/* BCC */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">BCC (Blind Carbon Copy)</label>
+                      <input
+                        type="text"
+                        value={(settingsForm.email?.bcc || []).join(', ')}
+                        onChange={e => setSettingsForm({
+                          ...settingsForm,
+                          email: {
+                            ...settingsForm.email,
+                            bcc: e.target.value.split(',').map(email => email.trim()).filter(Boolean)
+                          }
+                        })}
+                        placeholder="backup@example.com"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Optional - these recipients will be hidden from others</p>
+                    </div>
+                  </div>
+
+                  {/* Email Content */}
+                  <div className="bg-white rounded-lg border border-gray-200 p-6">
+                    <h3 className="font-semibold mb-4">Email Content</h3>
+
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Subject</label>
+                      <input
+                        type="text"
+                        value={settingsForm.email?.subject || ''}
+                        onChange={e => setSettingsForm({
+                          ...settingsForm,
+                          email: { ...settingsForm.email, subject: e.target.value }
+                        })}
+                        placeholder="Weekly RSVP List - {{week}}"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Use {'{{week}}'} for current week, {'{{org}}'} for organization name</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Body</label>
+                      <textarea
+                        value={settingsForm.email?.body || ''}
+                        onChange={e => setSettingsForm({
+                          ...settingsForm,
+                          email: { ...settingsForm.email, body: e.target.value }
+                        })}
+                        placeholder="Please find attached the RSVP list for this week."
+                        rows={4}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Use {'{{count}}'} for participant count, {'{{list}}'} for names</p>
+                    </div>
+                  </div>
+
+                  {/* Save Button */}
+                  <button
+                    onClick={handleSaveSettings}
+                    disabled={saving}
+                    className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
+                  >
+                    {saving ? 'Saving...' : 'Save Email Settings'}
+                  </button>
+                </>
+              )}
             </div>
           )}
 
