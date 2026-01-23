@@ -26,6 +26,11 @@ export default function OrgAdmin() {
   // Game info form
   const [newRule, setNewRule] = useState('');
 
+  // Email form - separate state for text inputs to allow typing commas
+  const [emailRecipients, setEmailRecipients] = useState('');
+  const [emailCc, setEmailCc] = useState('');
+  const [emailBcc, setEmailBcc] = useState('');
+
   // Settings form
   const [settingsForm, setSettingsForm] = useState({
     mainListLimit: 30,
@@ -105,6 +110,10 @@ export default function OrgAdmin() {
             email: data.settings.email || settingsForm.email,
             gameInfo: data.settings.gameInfo || settingsForm.gameInfo,
           });
+          // Initialize email text fields from arrays
+          setEmailRecipients((data.settings.email?.recipients || []).join(', '));
+          setEmailCc((data.settings.email?.cc || []).join(', '));
+          setEmailBcc((data.settings.email?.bcc || []).join(', '));
         }
       }
     } catch (error) {
@@ -206,10 +215,20 @@ export default function OrgAdmin() {
     e.preventDefault();
     setSaving(true);
     try {
+      // Parse email text fields into arrays before saving
+      const settingsToSave = {
+        ...settingsForm,
+        email: {
+          ...settingsForm.email,
+          recipients: emailRecipients.split(',').map(e => e.trim()).filter(Boolean),
+          cc: emailCc.split(',').map(e => e.trim()).filter(Boolean),
+          bcc: emailBcc.split(',').map(e => e.trim()).filter(Boolean),
+        }
+      };
       const res = await fetch(`/api/org/${slug}/admin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'update-settings', data: { settings: settingsForm } }),
+        body: JSON.stringify({ action: 'update-settings', data: { settings: settingsToSave } }),
       });
 
       const data = await res.json();
@@ -642,14 +661,8 @@ export default function OrgAdmin() {
                       <label className="block text-sm font-medium text-gray-700 mb-2">To (Main Recipients)</label>
                       <input
                         type="text"
-                        value={(settingsForm.email?.recipients || []).join(', ')}
-                        onChange={e => setSettingsForm({
-                          ...settingsForm,
-                          email: {
-                            ...settingsForm.email,
-                            recipients: e.target.value.split(',').map(email => email.trim()).filter(Boolean)
-                          }
-                        })}
+                        value={emailRecipients}
+                        onChange={e => setEmailRecipients(e.target.value)}
                         placeholder="email1@example.com, email2@example.com"
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
                       />
@@ -661,14 +674,8 @@ export default function OrgAdmin() {
                       <label className="block text-sm font-medium text-gray-700 mb-2">CC (Carbon Copy)</label>
                       <input
                         type="text"
-                        value={(settingsForm.email?.cc || []).join(', ')}
-                        onChange={e => setSettingsForm({
-                          ...settingsForm,
-                          email: {
-                            ...settingsForm.email,
-                            cc: e.target.value.split(',').map(email => email.trim()).filter(Boolean)
-                          }
-                        })}
+                        value={emailCc}
+                        onChange={e => setEmailCc(e.target.value)}
                         placeholder="manager@example.com"
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
                       />
@@ -680,14 +687,8 @@ export default function OrgAdmin() {
                       <label className="block text-sm font-medium text-gray-700 mb-2">BCC (Blind Carbon Copy)</label>
                       <input
                         type="text"
-                        value={(settingsForm.email?.bcc || []).join(', ')}
-                        onChange={e => setSettingsForm({
-                          ...settingsForm,
-                          email: {
-                            ...settingsForm.email,
-                            bcc: e.target.value.split(',').map(email => email.trim()).filter(Boolean)
-                          }
-                        })}
+                        value={emailBcc}
+                        onChange={e => setEmailBcc(e.target.value)}
                         placeholder="backup@example.com"
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
                       />
