@@ -49,7 +49,19 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const { slug, name, sport, location, timezone, maxParticipants } = req.body;
+    const {
+      slug,
+      name,
+      sport,
+      location,
+      timezone,
+      maxParticipants,
+      gameDay,
+      gameStartHour,
+      gameStartMinute,
+      gameEndHour,
+      gameEndMinute,
+    } = req.body;
 
     // Validate required fields
     if (!slug || !name || !sport) {
@@ -65,6 +77,15 @@ export default async function handler(req, res) {
     // Validate max participants
     const participantLimit = Math.min(Math.max(parseInt(maxParticipants) || 30, 1), 500);
 
+    // Build game schedule
+    const gameSchedule = {
+      gameDay: parseInt(gameDay) || 0,
+      startHour: Math.min(Math.max(parseInt(gameStartHour) || 17, 0), 23),
+      startMinute: Math.min(Math.max(parseInt(gameStartMinute) || 0, 0), 59),
+      endHour: Math.min(Math.max(parseInt(gameEndHour) || 19, 0), 23),
+      endMinute: Math.min(Math.max(parseInt(gameEndMinute) || 0, 0), 59),
+    };
+
     try {
       // Check if slug is available
       if (await isSlugTaken(slugValidation.normalized)) {
@@ -79,6 +100,8 @@ export default async function handler(req, res) {
         timezone,
         ownerId: organizerId,
         maxParticipants: participantLimit,
+        gameSchedule,
+        organizerEmail: organizer.email, // Pass organizer email for CC preset
       });
 
       return res.status(201).json({ organization });

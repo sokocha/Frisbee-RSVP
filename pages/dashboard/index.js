@@ -24,6 +24,11 @@ export default function Dashboard() {
     location: '',
     timezone: 'Africa/Lagos',
     maxParticipants: 30,
+    gameDay: 0, // Sunday
+    gameStartHour: 17,
+    gameStartMinute: 0,
+    gameEndHour: 19,
+    gameEndMinute: 0,
   });
   const [slugStatus, setSlugStatus] = useState({ checking: false, available: null, error: null });
 
@@ -99,7 +104,19 @@ export default function Dashboard() {
 
       setOrganizations([...organizations, data.organization]);
       setShowCreateForm(false);
-      setNewOrg({ name: '', slug: '', sport: '', location: '', timezone: 'Africa/Lagos', maxParticipants: 30 });
+      setNewOrg({
+        name: '',
+        slug: '',
+        sport: '',
+        location: '',
+        timezone: 'Africa/Lagos',
+        maxParticipants: 30,
+        gameDay: 0,
+        gameStartHour: 17,
+        gameStartMinute: 0,
+        gameEndHour: 19,
+        gameEndMinute: 0,
+      });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -494,6 +511,86 @@ export default function Dashboard() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                     <p className="text-xs text-gray-500 mt-1">Maximum number of people who can sign up (others go to waitlist)</p>
+                  </div>
+
+                  {/* Game Schedule */}
+                  <div className="border-t border-gray-200 pt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Recurring Game Schedule
+                    </label>
+                    <p className="text-xs text-gray-500 mb-3">When does your game typically take place each week?</p>
+
+                    <div className="grid grid-cols-3 gap-2 mb-3">
+                      <div className="col-span-3">
+                        <label className="block text-xs text-gray-500 mb-1">Day</label>
+                        <select
+                          value={newOrg.gameDay}
+                          onChange={e => setNewOrg({ ...newOrg, gameDay: parseInt(e.target.value) })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                        >
+                          <option value={0}>Sunday</option>
+                          <option value={1}>Monday</option>
+                          <option value={2}>Tuesday</option>
+                          <option value={3}>Wednesday</option>
+                          <option value={4}>Thursday</option>
+                          <option value={5}>Friday</option>
+                          <option value={6}>Saturday</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Start Time</label>
+                        <div className="flex gap-1">
+                          <input
+                            type="number"
+                            min={0}
+                            max={23}
+                            value={newOrg.gameStartHour}
+                            onChange={e => setNewOrg({ ...newOrg, gameStartHour: parseInt(e.target.value) || 0 })}
+                            className="w-16 px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm text-center"
+                            placeholder="HH"
+                          />
+                          <span className="self-center text-gray-400">:</span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={59}
+                            step={5}
+                            value={newOrg.gameStartMinute.toString().padStart(2, '0')}
+                            onChange={e => setNewOrg({ ...newOrg, gameStartMinute: parseInt(e.target.value) || 0 })}
+                            className="w-16 px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm text-center"
+                            placeholder="MM"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">End Time</label>
+                        <div className="flex gap-1">
+                          <input
+                            type="number"
+                            min={0}
+                            max={23}
+                            value={newOrg.gameEndHour}
+                            onChange={e => setNewOrg({ ...newOrg, gameEndHour: parseInt(e.target.value) || 0 })}
+                            className="w-16 px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm text-center"
+                            placeholder="HH"
+                          />
+                          <span className="self-center text-gray-400">:</span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={59}
+                            step={5}
+                            value={newOrg.gameEndMinute.toString().padStart(2, '0')}
+                            onChange={e => setNewOrg({ ...newOrg, gameEndMinute: parseInt(e.target.value) || 0 })}
+                            className="w-16 px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm text-center"
+                            placeholder="MM"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
                   <div>
