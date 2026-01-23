@@ -248,7 +248,7 @@ export default function Dashboard() {
                       URL Slug *
                     </label>
                     <div className="flex items-center">
-                      <span className="text-gray-500 text-sm mr-1">playday.app/</span>
+                      <span className="text-gray-500 text-sm mr-1">itsplayday.com/</span>
                       <input
                         type="text"
                         required

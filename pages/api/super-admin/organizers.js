@@ -97,7 +97,7 @@ async function sendApprovalEmail(email, name, token, req) {
 
   try {
     await resend.emails.send({
-      from: 'PlayDay <noreply@updates.playday.app>',
+      from: 'PlayDay <noreply@updates.itsplayday.com>',
       to: email,
       subject: 'Your PlayDay Account is Approved!',
       html: `
@@ -130,7 +130,7 @@ async function sendRejectionEmail(email, name) {
 
   try {
     await resend.emails.send({
-      from: 'PlayDay <noreply@updates.playday.app>',
+      from: 'PlayDay <noreply@updates.itsplayday.com>',
       to: email,
       subject: 'PlayDay Account Request Update',
       html: `
