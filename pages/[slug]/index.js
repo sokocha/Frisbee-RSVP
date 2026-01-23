@@ -175,6 +175,9 @@ export default function OrgRSVP() {
   const [showNameEdit, setShowNameEdit] = useState(false);
   const [confirmModal, setConfirmModal] = useState({ show: false, personId: null, isWaitlist: false });
   const [gameInfo, setGameInfo] = useState(null);
+  const [weather, setWeather] = useState(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherMessage, setWeatherMessage] = useState(null);
 
   const checkMySignup = useCallback((mainList, waitlist, currentDeviceId) => {
     const allSignups = [...mainList, ...waitlist];
@@ -206,12 +209,33 @@ export default function OrgRSVP() {
         setMainListLimit(data.mainListLimit || DEFAULT_MAIN_LIST_LIMIT);
         setGameInfo(data.gameInfo || null);
         checkMySignup(data.mainList || [], data.waitlist || [], currentDeviceId);
+
+        // Fetch weather if enabled
+        if (data.gameInfo?.weather) {
+          fetchWeather();
+        }
       }
     } catch (error) {
       console.error('Failed to load data:', error);
     }
     setLoading(false);
   }, [slug, checkMySignup]);
+
+  const fetchWeather = useCallback(async () => {
+    if (!slug) return;
+    setWeatherLoading(true);
+    try {
+      const response = await fetch(`/api/org/${slug}/weather`);
+      if (response.ok) {
+        const data = await response.json();
+        setWeather(data.weather);
+        setWeatherMessage(data.message || null);
+      }
+    } catch (error) {
+      console.error('Failed to fetch weather:', error);
+    }
+    setWeatherLoading(false);
+  }, [slug]);
 
   useEffect(() => {
     if (!slug) return;
@@ -630,7 +654,42 @@ export default function OrgRSVP() {
                   <h2 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
                     <span>🌤️</span> Game Day Weather
                   </h2>
-                  <p className="text-gray-500 text-sm">Weather forecast will be available closer to game day.</p>
+                  {weatherLoading ? (
+                    <div className="flex items-center gap-2 text-gray-500">
+                      <Spinner /> <span className="text-sm">Loading weather...</span>
+                    </div>
+                  ) : weather ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-4">
+                        <span className="text-4xl">{weather.summary.icon}</span>
+                        <div>
+                          <p className="text-2xl font-bold text-gray-800">{weather.summary.temperature}°C</p>
+                          <p className="text-gray-600">{weather.summary.description}</p>
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-500">
+                        {weather.gameDay}, {weather.gameDate}
+                      </p>
+                      {weather.summary.precipitationProbability > 20 && (
+                        <p className="text-sm text-blue-600">
+                          💧 {weather.summary.precipitationProbability}% chance of rain
+                        </p>
+                      )}
+                      {weather.hourly && weather.hourly.length > 1 && (
+                        <div className="flex gap-2 mt-3 overflow-x-auto pb-2">
+                          {weather.hourly.map((hour, i) => (
+                            <div key={i} className="flex-shrink-0 text-center px-3 py-2 bg-gray-50 rounded-lg">
+                              <p className="text-xs text-gray-500">{hour.hour}:00</p>
+                              <p className="text-lg">{hour.icon}</p>
+                              <p className="text-sm font-medium">{hour.temperature}°</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-sm">{weatherMessage || 'Weather forecast will be available closer to game day.'}</p>
+                  )}
                 </div>
               )}
 
@@ -647,9 +706,9 @@ export default function OrgRSVP() {
                     {gameInfo.location.address && (
                       <p className="text-gray-600">{gameInfo.location.address}</p>
                     )}
-                    {gameInfo.location.googleMapsUrl && (
+                    {(gameInfo.location.googleMapsUrl || gameInfo.location.address) && (
                       <a
-                        href={gameInfo.location.googleMapsUrl}
+                        href={gameInfo.location.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(gameInfo.location.address)}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-2 mt-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl transition-colors"
