@@ -213,7 +213,8 @@ test.describe('Organization RSVP Page', () => {
 
     // Waitlist header shows with count
     await expect(page.locator('text=Waitlist (1)')).toBeVisible();
-    await expect(page.locator('text=Person')).toBeVisible();
+    // Use first() since "Person" appears in both "Person One" and "Person Two"
+    await expect(page.locator('text=Person').first()).toBeVisible();
   });
 
   test('progress bar reflects list capacity', async ({ page }) => {
@@ -259,8 +260,8 @@ test.describe('Organization Admin Dashboard', () => {
 
     await page.goto(`/${TEST_ORG_SLUG}/admin`);
 
-    // Should show login prompt or unauthorized message
-    await expect(page.locator('text=Log in').or(page.locator('text=Unauthorized'))).toBeVisible();
+    // Should show unauthorized message (use first() since both heading and link may be visible)
+    await expect(page.locator('h1:has-text("Unauthorized")')).toBeVisible();
   });
 });
 

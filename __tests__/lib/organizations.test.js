@@ -2,6 +2,20 @@
  * Unit tests for organizations library functions
  */
 
+// Mock crypto.randomUUID for Node versions that don't support it
+if (!global.crypto) {
+  global.crypto = {};
+}
+if (!global.crypto.randomUUID) {
+  global.crypto.randomUUID = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+}
+
 // Mock @vercel/kv
 const mockKvStore = {};
 jest.mock('@vercel/kv', () => ({
