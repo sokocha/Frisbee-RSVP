@@ -112,7 +112,7 @@ async function sendMagicLinkEmail(email, name, token, req) {
 
   try {
     await resend.emails.send({
-      from: 'PlayDay <noreply@updates.itsplayday.com>',
+      from: 'PlayDay <noreply@itsplayday.com>',
       to: email,
       subject: 'Your PlayDay Login Link',
       html: `
@@ -146,7 +146,7 @@ async function notifySuperAdmin(email, name, intendedSport, intendedLocation, re
 
   try {
     await resend.emails.send({
-      from: 'PlayDay <noreply@updates.itsplayday.com>',
+      from: 'PlayDay <noreply@itsplayday.com>',
       to: superAdminEmail,
       subject: 'New PlayDay Organizer Request',
       html: `

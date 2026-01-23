@@ -57,7 +57,7 @@ async function sendMagicLinkEmail(email, name, token, req) {
 
   try {
     await resend.emails.send({
-      from: 'PlayDay <noreply@updates.itsplayday.com>',
+      from: 'PlayDay <noreply@itsplayday.com>',
       to: email,
       subject: 'Your PlayDay Login Link',
       html: `
