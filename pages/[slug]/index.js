@@ -174,6 +174,7 @@ export default function OrgRSVP() {
   const [savedName, setStoredName] = useState('');
   const [showNameEdit, setShowNameEdit] = useState(false);
   const [confirmModal, setConfirmModal] = useState({ show: false, personId: null, isWaitlist: false });
+  const [gameInfo, setGameInfo] = useState(null);
 
   const checkMySignup = useCallback((mainList, waitlist, currentDeviceId) => {
     const allSignups = [...mainList, ...waitlist];
@@ -203,6 +204,7 @@ export default function OrgRSVP() {
         setWaitlist(data.waitlist || []);
         setAccessStatus(data.accessStatus || { isOpen: true, message: null, nextOpenTime: null });
         setMainListLimit(data.mainListLimit || DEFAULT_MAIN_LIST_LIMIT);
+        setGameInfo(data.gameInfo || null);
         checkMySignup(data.mainList || [], data.waitlist || [], currentDeviceId);
       }
     } catch (error) {
@@ -591,6 +593,94 @@ export default function OrgRSVP() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Game Info Section */}
+          {gameInfo && gameInfo.enabled && (
+            <div className="space-y-4 mb-4">
+              {/* Game Schedule Card */}
+              <div className="glass-card-solid rounded-3xl shadow-2xl p-4 md:p-6">
+                <h2 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+                  <span>📅</span> Game Day Schedule
+                </h2>
+                <div className="text-gray-600">
+                  <p className="text-lg font-medium">
+                    {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][gameInfo.gameDay]}
+                  </p>
+                  <p className="text-gray-500">
+                    {(() => {
+                      const formatGameTime = (h, m) => {
+                        const hour = h % 12 || 12;
+                        const minute = m.toString().padStart(2, '0');
+                        const ampm = h < 12 ? 'AM' : 'PM';
+                        return `${hour}:${minute} ${ampm}`;
+                      };
+                      return `${formatGameTime(gameInfo.startHour, gameInfo.startMinute)} - ${formatGameTime(gameInfo.endHour, gameInfo.endMinute)}`;
+                    })()}
+                  </p>
+                </div>
+              </div>
+
+              {/* Weather Card */}
+              {gameInfo.weather && (
+                <div className="glass-card-solid rounded-3xl shadow-2xl p-4 md:p-6">
+                  <h2 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+                    <span>🌤️</span> Game Day Weather
+                  </h2>
+                  <p className="text-gray-500 text-sm">Weather forecast will be available closer to game day.</p>
+                </div>
+              )}
+
+              {/* Location Card */}
+              {gameInfo.location && (
+                <div className="glass-card-solid rounded-3xl shadow-2xl p-4 md:p-6">
+                  <h2 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+                    <span>📍</span> Location & Directions
+                  </h2>
+                  <div className="space-y-2">
+                    {gameInfo.location.name && (
+                      <p className="text-lg font-medium text-gray-800">{gameInfo.location.name}</p>
+                    )}
+                    {gameInfo.location.address && (
+                      <p className="text-gray-600">{gameInfo.location.address}</p>
+                    )}
+                    {gameInfo.location.googleMapsUrl && (
+                      <a
+                        href={gameInfo.location.googleMapsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 mt-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        Open in Google Maps
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Rules Card */}
+              {gameInfo.rules && gameInfo.rules.items && gameInfo.rules.items.length > 0 && (
+                <div className="glass-card-solid rounded-3xl shadow-2xl p-4 md:p-6">
+                  <h2 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+                    <span>📋</span> Field Rules
+                  </h2>
+                  <ul className="space-y-2">
+                    {gameInfo.rules.items.map((rule, index) => (
+                      <li key={index} className="flex items-start gap-3 text-gray-600">
+                        <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-medium">
+                          {index + 1}
+                        </span>
+                        <span>{rule}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </div>

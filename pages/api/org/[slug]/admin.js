@@ -44,6 +44,27 @@ function getDefaultSettings(timezone = 'Africa/Lagos') {
       recipients: [],
       subject: 'Weekly RSVP List - {{week}}',
       body: 'Please find attached the RSVP list for this week.\n\nTotal participants: {{count}}'
+    },
+    gameInfo: {
+      enabled: false,
+      gameDay: 0,
+      startHour: 17,
+      startMinute: 0,
+      endHour: 19,
+      endMinute: 0,
+      location: {
+        enabled: false,
+        name: '',
+        address: '',
+        googleMapsUrl: '',
+      },
+      rules: {
+        enabled: false,
+        items: [],
+      },
+      weather: {
+        enabled: false,
+      },
     }
   };
 }
@@ -327,7 +348,23 @@ export default async function handler(req, res) {
           email: {
             ...(currentSettings.email || getDefaultSettings().email),
             ...(settings.email || {})
-          }
+          },
+          gameInfo: settings.gameInfo ? {
+            ...(currentSettings.gameInfo || getDefaultSettings().gameInfo),
+            ...settings.gameInfo,
+            location: {
+              ...(currentSettings.gameInfo?.location || getDefaultSettings().gameInfo.location),
+              ...(settings.gameInfo?.location || {})
+            },
+            rules: {
+              ...(currentSettings.gameInfo?.rules || getDefaultSettings().gameInfo.rules),
+              ...(settings.gameInfo?.rules || {})
+            },
+            weather: {
+              ...(currentSettings.gameInfo?.weather || getDefaultSettings().gameInfo.weather),
+              ...(settings.gameInfo?.weather || {})
+            }
+          } : (currentSettings.gameInfo || getDefaultSettings().gameInfo)
         };
 
         await setOrgData(orgId, ORG_KEY_SUFFIXES.SETTINGS, newSettings);

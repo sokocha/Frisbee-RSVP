@@ -41,6 +41,27 @@ function getDefaultSettings(timezone = 'Africa/Lagos') {
       endHour: 10,
       endMinute: 0,
       timezone
+    },
+    gameInfo: {
+      enabled: false,
+      gameDay: 0,
+      startHour: 17,
+      startMinute: 0,
+      endHour: 19,
+      endMinute: 0,
+      location: {
+        enabled: false,
+        name: '',
+        address: '',
+        googleMapsUrl: '',
+      },
+      rules: {
+        enabled: false,
+        items: [],
+      },
+      weather: {
+        enabled: false,
+      },
     }
   };
 }
@@ -198,6 +219,19 @@ export default async function handler(req, res) {
 
       const whitelist = await getOrgData(orgId, ORG_KEY_SUFFIXES.WHITELIST, []);
 
+      // Prepare gameInfo for public display (only if enabled)
+      const gameInfo = settings.gameInfo?.enabled ? {
+        enabled: true,
+        gameDay: settings.gameInfo.gameDay,
+        startHour: settings.gameInfo.startHour,
+        startMinute: settings.gameInfo.startMinute,
+        endHour: settings.gameInfo.endHour,
+        endMinute: settings.gameInfo.endMinute,
+        location: settings.gameInfo.location?.enabled ? settings.gameInfo.location : null,
+        rules: settings.gameInfo.rules?.enabled ? settings.gameInfo.rules : null,
+        weather: settings.gameInfo.weather?.enabled ? settings.gameInfo.weather : null,
+      } : null;
+
       return res.status(200).json({
         organization: {
           slug: org.slug,
@@ -214,7 +248,8 @@ export default async function handler(req, res) {
           nextOpenTime: accessStatus.nextOpenTime
         },
         snoozedNames,
-        whitelist: whitelist.map(w => ({ name: w.name, deviceId: w.deviceId }))
+        whitelist: whitelist.map(w => ({ name: w.name, deviceId: w.deviceId })),
+        gameInfo
       });
     } catch (error) {
       console.error('Failed to get RSVP data:', error);
