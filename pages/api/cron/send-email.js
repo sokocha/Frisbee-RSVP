@@ -51,29 +51,69 @@ function shouldSendEmail(settings, timezone, lastEmailWeek) {
 
   const { endDay, endHour, endMinute } = settings.accessPeriod;
 
-  // Check if we're within the first 70 minutes after closing (to catch hourly cron)
+  // Calculate minutes since the start of the week (Sunday 00:00)
   const currentTotalMinutes = currentDay * 24 * 60 + currentHour * 60 + currentMinute;
   const endTotalMinutes = endDay * 24 * 60 + endHour * 60 + endMinute;
 
-  // Window closed in the last 70 minutes?
+  // Calculate minutes since the window closed
   let minutesSinceClosed = currentTotalMinutes - endTotalMinutes;
 
-  // Handle week wrap-around
+  // Handle week wrap-around (if we're before the end time in the weekly cycle)
   if (minutesSinceClosed < 0) {
-    minutesSinceClosed += 7 * 24 * 60;
+    minutesSinceClosed += 7 * 24 * 60; // Add a full week
+  }
+
+  // Only send if window closed within the last 70 minutes (to catch hourly cron)
+  // Also allow sending if it's been less than a full week (to catch missed crons)
+  // but only if this week's email hasn't been sent yet
+  const weekId = getCurrentWeekId(timezone);
+
+  // Check if we already sent for this week
+  if (lastEmailWeek === weekId) {
+    return false;
   }
 
   // Send if window closed in the last 70 minutes
   if (minutesSinceClosed >= 0 && minutesSinceClosed <= 70) {
-    const weekId = getCurrentWeekId(timezone);
-    // Check if we already sent for this week
-    if (lastEmailWeek === weekId) {
-      return false;
-    }
+    return true;
+  }
+
+  // Also check: if the window is currently closed and we haven't sent yet this week
+  // This catches cases where the cron might have been missed
+  const isCurrentlyOpen = isAccessPeriodOpen(settings, timezone);
+  if (!isCurrentlyOpen && minutesSinceClosed > 0 && minutesSinceClosed < 7 * 24 * 60 - 120) {
+    // Window is closed and hasn't been closed for almost a full week
+    // (exclude the 2 hours before the window opens to avoid sending right before next session)
     return true;
   }
 
   return false;
+}
+
+// Helper to check if access period is currently open
+function isAccessPeriodOpen(settings, timezone) {
+  if (!settings?.accessPeriod?.enabled) return true;
+
+  const now = new Date();
+  const localTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+  const currentDay = localTime.getDay();
+  const currentHour = localTime.getHours();
+  const currentMinute = localTime.getMinutes();
+
+  const { startDay, startHour, startMinute, endDay, endHour, endMinute } = settings.accessPeriod;
+
+  const currentTotalMinutes = currentDay * 24 * 60 + currentHour * 60 + currentMinute;
+  const startTotalMinutes = startDay * 24 * 60 + startHour * 60 + startMinute;
+  const endTotalMinutes = endDay * 24 * 60 + endHour * 60 + endMinute;
+
+  // Handle wrap-around (e.g., Friday to Monday)
+  if (startTotalMinutes <= endTotalMinutes) {
+    // Normal case: start and end in same week order
+    return currentTotalMinutes >= startTotalMinutes && currentTotalMinutes < endTotalMinutes;
+  } else {
+    // Wrap-around case: window spans week boundary
+    return currentTotalMinutes >= startTotalMinutes || currentTotalMinutes < endTotalMinutes;
+  }
 }
 
 export default async function handler(req, res) {

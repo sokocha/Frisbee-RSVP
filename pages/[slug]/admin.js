@@ -275,6 +275,35 @@ export default function OrgAdmin() {
 
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+  // State for email status
+  const [emailStatus, setEmailStatus] = useState(null);
+  const [sendingEmail, setSendingEmail] = useState(false);
+
+  async function handleSendEmailNow() {
+    if (!confirm('Send the RSVP list email now?')) return;
+
+    setSendingEmail(true);
+    try {
+      const res = await fetch(`/api/org/${slug}/send-list`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force: true }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        showMessage(data.message || 'Email sent successfully!');
+        setEmailStatus(data);
+      } else {
+        showMessage(data.error || 'Failed to send email', 'error');
+      }
+    } catch (error) {
+      showMessage('Failed to send email: ' + error.message, 'error');
+    }
+    setSendingEmail(false);
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -739,6 +768,24 @@ export default function OrgAdmin() {
                   >
                     {saving ? 'Saving...' : 'Save Email Settings'}
                   </button>
+
+                  {/* Manual Send Section */}
+                  <div className="bg-white rounded-lg border border-gray-200 p-6">
+                    <h3 className="font-semibold mb-2">Manual Send</h3>
+                    <p className="text-sm text-gray-500 mb-4">
+                      Send the RSVP list email immediately, regardless of the schedule.
+                    </p>
+                    <button
+                      onClick={handleSendEmailNow}
+                      disabled={sendingEmail || !emailRecipients.trim()}
+                      className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium"
+                    >
+                      {sendingEmail ? 'Sending...' : 'Send Email Now'}
+                    </button>
+                    {!emailRecipients.trim() && (
+                      <p className="text-sm text-orange-600 mt-2">Add at least one recipient and save settings first</p>
+                    )}
+                  </div>
                 </>
               )}
             </div>
