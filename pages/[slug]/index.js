@@ -651,44 +651,55 @@ export default function OrgRSVP() {
               {/* Weather Card */}
               {gameInfo.weather && (
                 <div className="glass-card-solid rounded-3xl shadow-2xl p-4 md:p-6">
-                  <h2 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+                  <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
                     <span>🌤️</span> Game Day Weather
                   </h2>
                   {weatherLoading ? (
-                    <div className="flex items-center gap-2 text-gray-500">
+                    <div className="flex items-center justify-center gap-2 text-gray-500 py-4">
                       <Spinner /> <span className="text-sm">Loading weather...</span>
                     </div>
                   ) : weather ? (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-4">
-                        <span className="text-4xl">{weather.summary.icon}</span>
-                        <div>
-                          <p className="text-2xl font-bold text-gray-800">{weather.summary.temperature}°C</p>
-                          <p className="text-gray-600">{weather.summary.description}</p>
+                    <div className="space-y-4">
+                      {/* Main weather summary */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <span className="text-5xl">{weather.summary.icon}</span>
+                          <div>
+                            <p className="text-3xl font-bold text-gray-800">{weather.summary.temperature}°C</p>
+                            <p className="text-gray-600">{weather.summary.description}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-medium text-gray-700">{weather.gameDay}</p>
+                          <p className="text-xs text-gray-500">{weather.gameDate}</p>
+                          {weather.summary.precipitationProbability > 20 && (
+                            <p className="text-sm text-blue-600 mt-1">
+                              💧 {weather.summary.precipitationProbability}%
+                            </p>
+                          )}
                         </div>
                       </div>
-                      <p className="text-sm text-gray-500">
-                        {weather.gameDay}, {weather.gameDate}
-                      </p>
-                      {weather.summary.precipitationProbability > 20 && (
-                        <p className="text-sm text-blue-600">
-                          💧 {weather.summary.precipitationProbability}% chance of rain
-                        </p>
-                      )}
-                      {weather.hourly && weather.hourly.length > 1 && (
-                        <div className="flex gap-2 mt-3 overflow-x-auto pb-2">
+
+                      {/* Hourly forecast */}
+                      {weather.hourly && weather.hourly.length > 0 && (
+                        <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-100">
                           {weather.hourly.map((hour, i) => (
-                            <div key={i} className="flex-shrink-0 text-center px-3 py-2 bg-gray-50 rounded-lg">
-                              <p className="text-xs text-gray-500">{hour.hour}:00</p>
-                              <p className="text-lg">{hour.icon}</p>
-                              <p className="text-sm font-medium">{hour.temperature}°</p>
+                            <div key={i} className="text-center py-3 bg-gradient-to-b from-gray-50 to-gray-100/50 rounded-xl">
+                              <p className="text-xs font-medium text-gray-500 mb-1">
+                                {hour.hour % 12 || 12}:00 {hour.hour < 12 ? 'AM' : 'PM'}
+                              </p>
+                              <p className="text-2xl mb-1">{hour.icon}</p>
+                              <p className="text-lg font-semibold text-gray-800">{hour.temperature}°</p>
+                              {hour.precipitationProbability > 20 && (
+                                <p className="text-xs text-blue-500 mt-1">💧 {hour.precipitationProbability}%</p>
+                              )}
                             </div>
                           ))}
                         </div>
                       )}
                     </div>
                   ) : (
-                    <p className="text-gray-500 text-sm">{weatherMessage || 'Weather forecast will be available closer to game day.'}</p>
+                    <p className="text-gray-500 text-sm text-center py-4">{weatherMessage || 'Weather forecast will be available closer to game day.'}</p>
                   )}
                 </div>
               )}
