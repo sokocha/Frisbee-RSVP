@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
 
 export default function SuperAdmin() {
@@ -104,9 +105,9 @@ export default function SuperAdmin() {
               <p className="text-sm text-purple-200">{user?.email}</p>
             </div>
             <div className="flex items-center gap-4">
-              <a href="/dashboard" className="text-sm text-purple-200 hover:text-white">
+              <Link href="/dashboard" className="text-sm text-purple-200 hover:text-white">
                 Dashboard
-              </a>
+              </Link>
               <button
                 onClick={handleLogout}
                 className="text-sm text-purple-200 hover:text-white"

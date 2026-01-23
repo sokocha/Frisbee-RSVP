@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Head from 'next/head';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
 
 export default function Login() {
@@ -253,9 +254,9 @@ export default function Login() {
           )}
 
           <div className="mt-8 pt-6 border-t border-gray-200 text-center">
-            <a href="/" className="text-sm text-gray-500 hover:text-gray-700">
+            <Link href="/" className="text-sm text-gray-500 hover:text-gray-700">
               Back to home
-            </a>
+            </Link>
           </div>
         </div>
       </div>

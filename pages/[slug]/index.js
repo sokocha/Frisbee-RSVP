@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
 
 const DEFAULT_MAIN_LIST_LIMIT = 30;
@@ -318,7 +319,7 @@ export default function OrgRSVP() {
             <div className="text-6xl mb-4">🔍</div>
             <h1 className="text-2xl font-bold text-white mb-2">Organization Not Found</h1>
             <p className="text-gray-400 mb-6">This organization doesn't exist or is not active.</p>
-            <a href="/" className="text-blue-400 hover:text-blue-300">Go to PlayDay home</a>
+            <Link href="/" className="text-blue-400 hover:text-blue-300">Go to PlayDay home</Link>
           </div>
         </div>
       </>
@@ -597,7 +598,7 @@ export default function OrgRSVP() {
 
           {/* Footer */}
           <div className="text-center mt-6 text-white/50 text-sm">
-            <p>Powered by <a href="/" className="text-white/70 hover:text-white">PlayDay</a></p>
+            <p>Powered by <Link href="/" className="text-white/70 hover:text-white">PlayDay</Link></p>
           </div>
         </main>
 

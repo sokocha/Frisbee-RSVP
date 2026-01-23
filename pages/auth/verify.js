@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
 
 export default function Verify() {
@@ -83,12 +84,12 @@ export default function Verify() {
               </div>
               <h1 className="text-xl font-semibold text-gray-900 mb-2">Link Invalid</h1>
               <p className="text-gray-500 mb-6">{error}</p>
-              <a
+              <Link
                 href="/auth/login"
                 className="inline-block px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
               >
                 Request New Link
-              </a>
+              </Link>
             </>
           )}
         </div>

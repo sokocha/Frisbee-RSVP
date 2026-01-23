@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
 
 export default function Dashboard() {
@@ -130,12 +131,12 @@ export default function Dashboard() {
             </div>
             <div className="flex items-center gap-4">
               {user?.isSuperAdmin && (
-                <a
+                <Link
                   href="/super-admin"
                   className="text-sm text-purple-600 hover:text-purple-700 font-medium"
                 >
                   Super Admin
-                </a>
+                </Link>
               )}
               <button
                 onClick={handleLogout}

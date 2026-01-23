@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
 
 export default function OrgAdmin() {
@@ -234,7 +235,7 @@ export default function OrgAdmin() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Organization Not Found</h1>
-          <a href="/" className="text-blue-600">Go home</a>
+          <Link href="/" className="text-blue-600">Go home</Link>
         </div>
       </div>
     );
@@ -246,7 +247,7 @@ export default function OrgAdmin() {
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Unauthorized</h1>
           <p className="text-gray-600 mb-4">You need to be logged in as an organizer to access this page.</p>
-          <a href="/auth/login" className="text-blue-600">Log in</a>
+          <Link href="/auth/login" className="text-blue-600">Log in</Link>
         </div>
       </div>
     );
@@ -275,12 +276,12 @@ export default function OrgAdmin() {
                 >
                   View Public Page
                 </a>
-                <a
+                <Link
                   href="/dashboard"
                   className="px-3 py-2 text-sm text-blue-600 hover:text-blue-700"
                 >
                   Dashboard
-                </a>
+                </Link>
               </div>
             </div>
           </div>
