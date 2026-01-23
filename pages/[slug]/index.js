@@ -1,0 +1,640 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import Head from 'next/head';
+import { useRouter } from 'next/router';
+
+const DEFAULT_MAIN_LIST_LIMIT = 30;
+
+// Device ID helpers
+function generateDeviceId() {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.textBaseline = 'top';
+  ctx.font = '14px Arial';
+  ctx.fillText('device-fingerprint', 2, 2);
+  const canvasData = canvas.toDataURL();
+  const screenData = `${window.screen.width}x${window.screen.height}x${window.screen.colorDepth}`;
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const language = navigator.language;
+  const platform = navigator.platform;
+  const fingerprint = `${canvasData}-${screenData}-${timezone}-${language}-${platform}`;
+  let hash = 0;
+  for (let i = 0; i < fingerprint.length; i++) {
+    const char = fingerprint.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash).toString(36) + Date.now().toString(36);
+}
+
+function getDeviceId(slug) {
+  const key = `playday-device-id-${slug}`;
+  let deviceId = localStorage.getItem(key);
+  if (!deviceId) {
+    deviceId = generateDeviceId();
+    localStorage.setItem(key, deviceId);
+  }
+  return deviceId;
+}
+
+function getSavedName(slug) {
+  return localStorage.getItem(`playday-saved-name-${slug}`) || '';
+}
+
+function setSavedName(slug, name) {
+  localStorage.setItem(`playday-saved-name-${slug}`, name);
+}
+
+// UI Components
+function Toast({ message, onClose }) {
+  if (!message) return null;
+  const styles = {
+    success: 'bg-emerald-500/95 text-white',
+    error: 'bg-red-500/95 text-white',
+    warning: 'bg-amber-500/95 text-black',
+  };
+  return (
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-slide-down">
+      <div className={`flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl backdrop-blur-sm ${styles[message.type]}`}>
+        <span className="font-medium">{message.text}</span>
+        <button onClick={onClose} className="ml-2 opacity-70 hover:opacity-100">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CountdownTimer({ targetTime }) {
+  const [timeLeft, setTimeLeft] = useState('');
+  useEffect(() => {
+    const calculateTimeLeft = () => {
+      const now = new Date();
+      const target = new Date(targetTime);
+      const diff = target - now;
+      if (diff <= 0) {
+        window.location.reload();
+        return;
+      }
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+      if (days > 0) setTimeLeft(`${days}d ${hours}h ${minutes}m`);
+      else if (hours > 0) setTimeLeft(`${hours}h ${minutes}m ${seconds}s`);
+      else setTimeLeft(`${minutes}m ${seconds}s`);
+    };
+    calculateTimeLeft();
+    const interval = setInterval(calculateTimeLeft, 1000);
+    return () => clearInterval(interval);
+  }, [targetTime]);
+  return <div className="text-2xl font-mono font-bold text-white animate-pulse">{timeLeft}</div>;
+}
+
+function Spinner() {
+  return (
+    <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+    </svg>
+  );
+}
+
+function getInitials(name) {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
+function getAvatarColor(name) {
+  const colors = [
+    'from-emerald-400 to-teal-500', 'from-blue-400 to-indigo-500',
+    'from-purple-400 to-pink-500', 'from-amber-400 to-orange-500',
+    'from-rose-400 to-red-500', 'from-cyan-400 to-blue-500',
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+}
+
+function formatDisplayName(fullName) {
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0];
+  const firstName = parts[0];
+  const lastName = parts[parts.length - 1];
+  return `${firstName} ${lastName.slice(0, 3)}.`;
+}
+
+function formatTime(timestamp) {
+  return new Date(timestamp).toLocaleString('en-US', {
+    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+  });
+}
+
+const sportEmojis = {
+  frisbee: '🥏', padel: '🎾', tennis: '🎾', volleyball: '🏐',
+  basketball: '🏀', football: '⚽', cycling: '🚴', running: '🏃',
+  swimming: '🏊', other: '🏆',
+};
+
+const sportColors = {
+  frisbee: { gradient: 'from-emerald-900 via-green-800 to-teal-900', accent: 'emerald' },
+  padel: { gradient: 'from-blue-900 via-indigo-800 to-purple-900', accent: 'blue' },
+  tennis: { gradient: 'from-lime-900 via-green-800 to-emerald-900', accent: 'lime' },
+  volleyball: { gradient: 'from-orange-900 via-amber-800 to-yellow-900', accent: 'orange' },
+  basketball: { gradient: 'from-orange-900 via-red-800 to-rose-900', accent: 'orange' },
+  football: { gradient: 'from-green-900 via-emerald-800 to-teal-900', accent: 'green' },
+  cycling: { gradient: 'from-sky-900 via-blue-800 to-indigo-900', accent: 'sky' },
+  running: { gradient: 'from-purple-900 via-violet-800 to-indigo-900', accent: 'purple' },
+  swimming: { gradient: 'from-cyan-900 via-blue-800 to-sky-900', accent: 'cyan' },
+  other: { gradient: 'from-gray-900 via-slate-800 to-zinc-900', accent: 'gray' },
+};
+
+export default function OrgRSVP() {
+  const router = useRouter();
+  const { slug } = router.query;
+
+  const [org, setOrg] = useState(null);
+  const [mainList, setMainList] = useState([]);
+  const [waitlist, setWaitlist] = useState([]);
+  const [name, setName] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState(null);
+  const [deviceId, setDeviceId] = useState(null);
+  const [hasSignedUp, setHasSignedUp] = useState(false);
+  const [mySignup, setMySignup] = useState(null);
+  const [accessStatus, setAccessStatus] = useState({ isOpen: true, message: null, nextOpenTime: null });
+  const [mainListLimit, setMainListLimit] = useState(DEFAULT_MAIN_LIST_LIMIT);
+  const [savedName, setStoredName] = useState('');
+  const [showNameEdit, setShowNameEdit] = useState(false);
+  const [confirmModal, setConfirmModal] = useState({ show: false, personId: null, isWaitlist: false });
+
+  const checkMySignup = useCallback((mainList, waitlist, currentDeviceId) => {
+    const allSignups = [...mainList, ...waitlist];
+    const existingSignup = allSignups.find(p => p.deviceId === currentDeviceId);
+    if (existingSignup) {
+      setHasSignedUp(true);
+      setMySignup(existingSignup);
+    } else {
+      setHasSignedUp(false);
+      setMySignup(null);
+    }
+  }, []);
+
+  const loadData = useCallback(async (currentDeviceId) => {
+    if (!slug) return;
+    try {
+      const response = await fetch(`/api/org/${slug}/rsvp`);
+      if (response.status === 404) {
+        setNotFound(true);
+        setLoading(false);
+        return;
+      }
+      if (response.ok) {
+        const data = await response.json();
+        setOrg(data.organization);
+        setMainList(data.mainList || []);
+        setWaitlist(data.waitlist || []);
+        setAccessStatus(data.accessStatus || { isOpen: true, message: null, nextOpenTime: null });
+        setMainListLimit(data.mainListLimit || DEFAULT_MAIN_LIST_LIMIT);
+        checkMySignup(data.mainList || [], data.waitlist || [], currentDeviceId);
+      }
+    } catch (error) {
+      console.error('Failed to load data:', error);
+    }
+    setLoading(false);
+  }, [slug, checkMySignup]);
+
+  useEffect(() => {
+    if (!slug) return;
+    const id = getDeviceId(slug);
+    setDeviceId(id);
+    const remembered = getSavedName(slug);
+    if (remembered) {
+      setStoredName(remembered);
+      setName(remembered);
+    }
+    loadData(id);
+  }, [slug, loadData]);
+
+  const showToast = (text, type) => {
+    setMessage({ text, type });
+    setTimeout(() => setMessage(null), 4000);
+  };
+
+  const handleRSVP = async () => {
+    if (hasSignedUp) {
+      showToast("You've already signed up from this device!", 'error');
+      return;
+    }
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      showToast('Please enter your name', 'error');
+      return;
+    }
+    const nameParts = trimmedName.split(/\s+/);
+    if (nameParts.length < 2) {
+      showToast('Please enter your first and last name', 'error');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const response = await fetch(`/api/org/${slug}/rsvp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmedName, deviceId })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setMainList(data.mainList);
+        setWaitlist(data.waitlist);
+        setHasSignedUp(true);
+        setMySignup(data.person);
+        showToast(data.message, data.listType === 'main' ? 'success' : 'warning');
+        setSavedName(slug, trimmedName);
+        setStoredName(trimmedName);
+        setShowNameEdit(false);
+      } else {
+        showToast(data.error, 'error');
+      }
+    } catch (error) {
+      showToast('Failed to submit RSVP. Please try again.', 'error');
+    }
+    setSubmitting(false);
+  };
+
+  const handleDropout = async (personId, isWaitlist = false) => {
+    setSubmitting(true);
+    try {
+      const response = await fetch(`/api/org/${slug}/rsvp`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ personId, deviceId, isWaitlist })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setMainList(data.mainList);
+        setWaitlist(data.waitlist);
+        setHasSignedUp(false);
+        setMySignup(null);
+        showToast(data.message, 'success');
+      } else {
+        showToast(data.error, 'error');
+      }
+    } catch (error) {
+      showToast('Failed to remove RSVP. Please try again.', 'error');
+    }
+    setSubmitting(false);
+  };
+
+  const isMySignup = (person) => person.deviceId === deviceId;
+  const spotsLeft = mainListLimit - mainList.length;
+  const isLowSpots = spotsLeft > 0 && spotsLeft <= 5;
+
+  const colors = sportColors[org?.sport] || sportColors.other;
+  const emoji = sportEmojis[org?.sport] || sportEmojis.other;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+      </div>
+    );
+  }
+
+  if (notFound) {
+    return (
+      <>
+        <Head>
+          <title>Not Found - PlayDay</title>
+        </Head>
+        <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center p-4">
+          <div className="text-center">
+            <div className="text-6xl mb-4">🔍</div>
+            <h1 className="text-2xl font-bold text-white mb-2">Organization Not Found</h1>
+            <p className="text-gray-400 mb-6">This organization doesn't exist or is not active.</p>
+            <a href="/" className="text-blue-400 hover:text-blue-300">Go to PlayDay home</a>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Head>
+        <title>{org?.name || 'RSVP'} - PlayDay</title>
+        <meta name="description" content={`RSVP for ${org?.name} ${org?.sport} sessions`} />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+      </Head>
+
+      <style jsx global>{`
+        @keyframes slide-down {
+          0% { transform: translate(-50%, -100%); opacity: 0; }
+          100% { transform: translate(-50%, 0); opacity: 1; }
+        }
+        .animate-slide-down { animation: slide-down 0.3s ease-out forwards; }
+        .glass-card {
+          background: rgba(255, 255, 255, 0.1);
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .glass-card-solid {
+          background: rgba(255, 255, 255, 0.95);
+          backdrop-filter: blur(20px);
+        }
+      `}</style>
+
+      <Toast message={message} onClose={() => setMessage(null)} />
+
+      <div className={`min-h-screen bg-gradient-to-br ${colors.gradient} p-3 md:p-8`}>
+        <main className="max-w-2xl mx-auto">
+          {/* Header */}
+          <div className="text-center mb-6 md:mb-8">
+            <div className="text-4xl md:text-5xl mb-2">{emoji}</div>
+            <h1 className="text-3xl md:text-4xl font-bold mb-2 text-white">
+              {org?.name}
+            </h1>
+            <p className="text-white/70 text-sm capitalize">
+              {org?.sport} {org?.location && `• ${org.location}`}
+            </p>
+            <p className="text-white/50 text-sm mt-1">{mainListLimit} spots available</p>
+          </div>
+
+          {/* Access Status Banner */}
+          {!accessStatus.isOpen && (
+            <div className="mb-4 glass-card rounded-2xl p-4 text-center border-red-500/30">
+              <div className="flex items-center justify-center gap-2 text-red-300 mb-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H9" />
+                </svg>
+                <span className="font-medium">RSVP is currently closed</span>
+              </div>
+              {accessStatus.nextOpenTime && (
+                <div className="mt-3">
+                  <p className="text-white/70 text-sm mb-1">Opens in</p>
+                  <CountdownTimer targetTime={accessStatus.nextOpenTime} />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Already Signed Up Notice */}
+          {hasSignedUp && mySignup && (
+            <div className="mb-4 glass-card rounded-2xl p-4 text-center border-blue-400/30">
+              <div className="flex items-center justify-center gap-2 text-blue-300">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="font-medium">You're signed up as: {mySignup.name}</span>
+              </div>
+            </div>
+          )}
+
+          {/* RSVP Form */}
+          <div className="glass-card-solid rounded-3xl shadow-2xl p-4 md:p-6 mb-4 md:mb-6">
+            {!accessStatus.isOpen ? (
+              <div className="text-center text-gray-400 py-4">
+                <p className="text-lg font-medium text-gray-500">RSVP is currently closed</p>
+              </div>
+            ) : !hasSignedUp ? (
+              savedName && !showNameEdit ? (
+                <div className="space-y-3">
+                  <div className="text-center">
+                    <p className="text-gray-600 text-sm">Welcome back!</p>
+                    <p className="text-gray-800 font-semibold text-lg">{savedName}</p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <button
+                      onClick={handleRSVP}
+                      disabled={submitting}
+                      className={`flex-1 px-6 py-3 bg-gradient-to-r from-${colors.accent}-500 to-${colors.accent}-600 hover:from-${colors.accent}-600 hover:to-${colors.accent}-700 disabled:from-gray-300 disabled:to-gray-400 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2`}
+                    >
+                      {submitting ? <Spinner /> : 'RSVP Now'}
+                    </button>
+                    <button
+                      onClick={() => setShowNameEdit(true)}
+                      className="px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl text-sm"
+                    >
+                      Change name
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {showNameEdit && (
+                    <div className="flex justify-between items-center">
+                      <p className="text-gray-600 text-sm">Enter a different name:</p>
+                      <button
+                        onClick={() => { setShowNameEdit(false); setName(savedName); }}
+                        className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                  <div className="flex flex-col md:flex-row gap-3">
+                    <div className="flex-1">
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && !submitting && handleRSVP()}
+                        placeholder="Your full name (first & last)"
+                        disabled={submitting}
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none text-base disabled:bg-gray-50"
+                      />
+                    </div>
+                    <button
+                      onClick={handleRSVP}
+                      disabled={submitting}
+                      className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-400 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2"
+                    >
+                      {submitting ? <Spinner /> : 'RSVP'}
+                    </button>
+                  </div>
+                </div>
+              )
+            ) : (
+              <div className="text-center text-gray-500 py-2">
+                <p>You've already signed up for this week!</p>
+              </div>
+            )}
+
+            {/* Progress Bar */}
+            <div className="mt-4">
+              <div className="flex justify-between text-sm text-gray-600 mb-2">
+                <span className="font-medium">{mainList.length} / {mainListLimit} spots filled</span>
+                <span className={`font-semibold ${spotsLeft === 0 ? 'text-orange-500' : isLowSpots ? 'text-red-500' : 'text-green-600'}`}>
+                  {spotsLeft > 0 ? `${spotsLeft} spots left` : 'Waitlist open'}
+                </span>
+              </div>
+              <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-700 rounded-full ${
+                    spotsLeft === 0 ? 'bg-orange-500' : isLowSpots ? 'bg-red-500' : 'bg-green-500'
+                  }`}
+                  style={{ width: `${(mainList.length / mainListLimit) * 100}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Main List */}
+          <div className="glass-card-solid rounded-3xl shadow-2xl p-4 md:p-6 mb-4">
+            <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <span>🏃</span> Playing ({mainList.length})
+            </h2>
+            {mainList.length === 0 ? (
+              <div className="text-center py-8">
+                <div className="text-5xl mb-3">{emoji}</div>
+                <p className="text-gray-400">No RSVPs yet</p>
+                <p className="text-gray-500 text-sm mt-1">Be the first to claim your spot!</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {mainList.map((person, index) => (
+                  <div
+                    key={person.id}
+                    className={`flex items-center justify-between p-3 rounded-xl ${
+                      isMySignup(person) ? 'bg-blue-50 ring-2 ring-blue-300' : 'bg-gray-50 hover:bg-gray-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-white bg-gradient-to-br ${
+                        isMySignup(person) ? 'from-blue-400 to-blue-600' : getAvatarColor(person.name)
+                      }`}>
+                        {getInitials(person.name)}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-gray-800">{formatDisplayName(person.name)}</span>
+                          {person.isWhitelisted && (
+                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Member</span>
+                          )}
+                          {isMySignup(person) && (
+                            <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full">You</span>
+                          )}
+                        </div>
+                        <span className="text-xs text-gray-400">{formatTime(person.timestamp)}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400">#{index + 1}</span>
+                      {isMySignup(person) && !person.isWhitelisted && (
+                        <button
+                          onClick={() => setConfirmModal({ show: true, personId: person.id, isWaitlist: false })}
+                          disabled={submitting}
+                          className="text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg text-sm font-medium"
+                        >
+                          Drop out
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Waitlist */}
+          {(waitlist.length > 0 || mainList.length >= mainListLimit) && (
+            <div className="glass-card-solid rounded-3xl shadow-2xl p-4 md:p-6 mb-4">
+              <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <span>⏳</span> Waitlist ({waitlist.length})
+              </h2>
+              {waitlist.length === 0 ? (
+                <p className="text-gray-400 text-center py-6">Waitlist is empty</p>
+              ) : (
+                <div className="space-y-2">
+                  {waitlist.map((person, index) => (
+                    <div
+                      key={person.id}
+                      className={`flex items-center justify-between p-3 rounded-xl ${
+                        isMySignup(person) ? 'bg-blue-50 ring-2 ring-blue-300' : 'bg-orange-50 hover:bg-orange-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-white bg-gradient-to-br ${
+                          isMySignup(person) ? 'from-blue-400 to-blue-600' : 'from-orange-400 to-amber-500'
+                        }`}>
+                          {getInitials(person.name)}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-gray-800">{formatDisplayName(person.name)}</span>
+                            {isMySignup(person) && (
+                              <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full">You</span>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-400">{formatTime(person.timestamp)}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400">#{index + 1}</span>
+                        {isMySignup(person) && (
+                          <button
+                            onClick={() => setConfirmModal({ show: true, personId: person.id, isWaitlist: true })}
+                            disabled={submitting}
+                            className="text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg text-sm font-medium"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="text-center mt-6 text-white/50 text-sm">
+            <p>Powered by <a href="/" className="text-white/70 hover:text-white">PlayDay</a></p>
+          </div>
+        </main>
+
+        {/* Confirm Modal */}
+        {confirmModal.show && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="glass-card-solid rounded-3xl shadow-2xl p-6 max-w-md w-full">
+              <h3 className="text-xl font-bold text-gray-800 mb-4">
+                {confirmModal.isWaitlist ? 'Leave Waitlist?' : 'Cancel RSVP?'}
+              </h3>
+              <p className="text-gray-600 mb-6">
+                {confirmModal.isWaitlist
+                  ? 'Are you sure you want to remove yourself from the waitlist?'
+                  : 'Are you sure you want to cancel your RSVP? Your spot will be given to the next person.'}
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setConfirmModal({ show: false, personId: null, isWaitlist: false })}
+                  className="flex-1 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl"
+                >
+                  Keep my spot
+                </button>
+                <button
+                  onClick={async () => {
+                    await handleDropout(confirmModal.personId, confirmModal.isWaitlist);
+                    setConfirmModal({ show: false, personId: null, isWaitlist: false });
+                  }}
+                  disabled={submitting}
+                  className="flex-1 px-4 py-3 bg-red-500 hover:bg-red-600 text-white font-medium rounded-xl flex items-center justify-center"
+                >
+                  {submitting ? <Spinner /> : 'Yes, cancel'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}

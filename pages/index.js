@@ -1,3 +1,11 @@
+// Re-export the landing page as the new index
+// The original frisbee RSVP code is preserved below but commented out
+// It will be migrated to the /frisbee organization route
+
+export { default } from './landing';
+
+/* PRESERVED ORIGINAL CODE - TO BE MIGRATED TO /frisbee organization
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Head from 'next/head';
 
@@ -1198,3 +1206,5 @@ export default function FrisbeeRSVP() {
     </>
   );
 }
+
+END OF PRESERVED ORIGINAL CODE */
