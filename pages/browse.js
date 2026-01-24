@@ -131,8 +131,8 @@ export default function BrowsePage() {
   return (
     <>
       <Head>
-        <title>Browse Events - PlayDay</title>
-        <meta name="description" content="Find and join sports events near you" />
+        <title>Browse Communities - PlayDay</title>
+        <meta name="description" content="Find and join sports communities near you" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
       </Head>
@@ -165,7 +165,7 @@ export default function BrowsePage() {
               Find Your Game
             </h1>
             <p className="text-gray-600">
-              Browse sports events and sign up to play
+              Browse sports communities and sign up to play
             </p>
           </div>
 
@@ -178,7 +178,7 @@ export default function BrowsePage() {
                   type="text"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Search events..."
+                  placeholder="Search communities..."
                   className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
                 />
               </div>
@@ -315,7 +315,7 @@ export default function BrowsePage() {
           {/* Results count */}
           {!loading && (
             <p className="text-gray-500 text-sm mb-4">
-              {filteredOrgs.length} event{filteredOrgs.length !== 1 ? 's' : ''} found
+              {filteredOrgs.length} communit{filteredOrgs.length !== 1 ? 'ies' : 'y'} found
             </p>
           )}
 
@@ -334,9 +334,9 @@ export default function BrowsePage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
-              <h3 className="text-xl font-semibold text-gray-800 mb-2">No events found</h3>
+              <h3 className="text-xl font-semibold text-gray-800 mb-2">No communities found</h3>
               <p className="text-gray-500 mb-6 max-w-sm mx-auto">
-                We couldn't find any events matching your criteria. Try adjusting your filters or search query.
+                We couldn't find any communities matching your criteria. Try adjusting your filters or search query.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 {(selectedSport || selectedLocation || selectedDay !== '' || selectedTimeOfDay || searchQuery) && (
@@ -357,7 +357,7 @@ export default function BrowsePage() {
                   href={isLoggedIn ? "/dashboard" : "/auth/login"}
                   className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-medium"
                 >
-                  Create Your Own Event
+                  Create Your Own Community
                 </Link>
               </div>
             </div>

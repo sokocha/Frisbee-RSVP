@@ -453,7 +453,7 @@ export default function OrgRSVP() {
           </div>
           {/* Breadcrumb */}
           <div className="flex items-center gap-2 mt-2 text-sm text-white/50">
-            <Link href="/browse" className="hover:text-white/70 transition-colors">Events</Link>
+            <Link href="/browse" className="hover:text-white/70 transition-colors">Communities</Link>
             <span>›</span>
             <Link href={`/browse?sport=${org?.sport}`} className="capitalize hover:text-white/70 transition-colors">{org?.sport}</Link>
             <span>›</span>
@@ -869,7 +869,7 @@ export default function OrgRSVP() {
           {/* Footer */}
           <div className="text-center mt-6 text-white/50 text-sm space-y-2">
             <p>
-              <Link href="/browse" className="text-white/70 hover:text-white">Browse all events</Link>
+              <Link href="/browse" className="text-white/70 hover:text-white">Browse all communities</Link>
             </p>
             <p>Powered by <Link href="/" className="text-white/70 hover:text-white">PlayDay</Link></p>
           </div>

@@ -315,7 +315,7 @@ export default function Dashboard() {
                 href="/browse"
                 className="text-sm text-gray-600 hover:text-gray-900"
               >
-                Browse Events
+                Browse Communities
               </Link>
               {user?.isSuperAdmin && (
                 <Link
