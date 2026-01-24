@@ -2,13 +2,33 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 
+// Maximum communities to display on home page
+const MAX_COMMUNITIES_DISPLAY = 6;
+
 export default function Landing() {
   const [organizations, setOrganizations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
   useEffect(() => {
     fetchOrganizations();
+    checkAuth();
   }, []);
+
+  async function checkAuth() {
+    try {
+      const res = await fetch('/api/auth/me');
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data.organizer);
+      }
+    } catch (err) {
+      // Not logged in, that's fine
+    } finally {
+      setCheckingAuth(false);
+    }
+  }
 
   async function fetchOrganizations() {
     try {
@@ -24,6 +44,10 @@ export default function Landing() {
       setLoading(false);
     }
   }
+
+  // Limit displayed organizations - prioritize by signup count (most active)
+  const displayedOrgs = organizations.slice(0, MAX_COMMUNITIES_DISPLAY);
+  const hasMoreOrgs = organizations.length > MAX_COMMUNITIES_DISPLAY;
 
   const sportEmojis = {
     frisbee: '🥏',
@@ -55,15 +79,33 @@ export default function Landing() {
           <nav className="flex justify-between items-center">
             <div className="text-2xl font-bold text-gray-900">PlayDay</div>
             <div className="flex items-center gap-4">
-              <Link href="/auth/login" className="text-gray-600 hover:text-gray-900">
-                Log in
-              </Link>
-              <Link
-                href="/auth/login"
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Get Started
-              </Link>
+              {checkingAuth ? (
+                <div className="w-20 h-8" /> // Placeholder while checking auth
+              ) : user ? (
+                <>
+                  <Link href="/dashboard" className="text-gray-600 hover:text-gray-900">
+                    Dashboard
+                  </Link>
+                  <Link
+                    href="/dashboard"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    My Organizations
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link href="/auth/login" className="text-gray-600 hover:text-gray-900">
+                    Log in
+                  </Link>
+                  <Link
+                    href="/auth/login"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Get Started
+                  </Link>
+                </>
+              )}
             </div>
           </nav>
         </header>
@@ -147,29 +189,44 @@ export default function Landing() {
               <div className="flex justify-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               </div>
-            ) : organizations.length > 0 ? (
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {organizations.map(org => (
-                  <Link
-                    key={org.id}
-                    href={`/${org.slug}`}
-                    className="block bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md hover:border-gray-200 transition-all"
-                  >
-                    <div className="flex items-start gap-4">
-                      <div className="text-3xl">
-                        {sportEmojis[org.sport] || sportEmojis.other}
+            ) : displayedOrgs.length > 0 ? (
+              <>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {displayedOrgs.map(org => (
+                    <Link
+                      key={org.id}
+                      href={`/${org.slug}`}
+                      className="block bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md hover:border-gray-200 transition-all"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="text-3xl">
+                          {sportEmojis[org.sport] || sportEmojis.other}
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-gray-900">{org.name}</h3>
+                          <p className="text-sm text-gray-500 capitalize">{org.sport}</p>
+                          {org.location && (
+                            <p className="text-sm text-gray-400 mt-1">{org.location}</p>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <h3 className="font-semibold text-gray-900">{org.name}</h3>
-                        <p className="text-sm text-gray-500 capitalize">{org.sport}</p>
-                        {org.location && (
-                          <p className="text-sm text-gray-400 mt-1">{org.location}</p>
-                        )}
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
+                    </Link>
+                  ))}
+                </div>
+                {hasMoreOrgs && (
+                  <div className="text-center mt-8">
+                    <Link
+                      href="/browse"
+                      className="inline-flex items-center gap-2 px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-medium"
+                    >
+                      View All {organizations.length} Communities
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </Link>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="text-center py-12 text-gray-500">
                 <p>No active communities yet.</p>
@@ -182,16 +239,33 @@ export default function Landing() {
 
           {/* CTA */}
           <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl p-12 text-center text-white">
-            <h2 className="text-3xl font-bold mb-4">Ready to organize your group?</h2>
-            <p className="text-blue-100 mb-8 max-w-xl mx-auto">
-              Request organizer access and start managing your sports community in minutes.
-            </p>
-            <Link
-              href="/auth/login"
-              className="inline-block px-8 py-4 bg-white text-blue-600 text-lg font-medium rounded-xl hover:bg-blue-50 transition-colors"
-            >
-              Request Access
-            </Link>
+            {user ? (
+              <>
+                <h2 className="text-3xl font-bold mb-4">Create another community?</h2>
+                <p className="text-blue-100 mb-8 max-w-xl mx-auto">
+                  Add a new organization for a different sport or location.
+                </p>
+                <Link
+                  href="/dashboard"
+                  className="inline-block px-8 py-4 bg-white text-blue-600 text-lg font-medium rounded-xl hover:bg-blue-50 transition-colors"
+                >
+                  Go to Dashboard
+                </Link>
+              </>
+            ) : (
+              <>
+                <h2 className="text-3xl font-bold mb-4">Ready to organize your group?</h2>
+                <p className="text-blue-100 mb-8 max-w-xl mx-auto">
+                  Request organizer access and start managing your sports community in minutes.
+                </p>
+                <Link
+                  href="/auth/login"
+                  className="inline-block px-8 py-4 bg-white text-blue-600 text-lg font-medium rounded-xl hover:bg-blue-50 transition-colors"
+                >
+                  Request Access
+                </Link>
+              </>
+            )}
           </div>
         </main>
 

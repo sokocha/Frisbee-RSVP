@@ -10,10 +10,16 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Prevent caching to ensure visibility changes take effect immediately
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+
   try {
     const allOrgs = await getOrganizations();
 
     // Filter to only active AND public organizations
+    // Organizations without visibility field or with visibility !== 'public' are excluded
     const activeOrgs = allOrgs.filter(org => org.status === 'active' && org.visibility === 'public');
 
     // Get additional info for each org (settings for RSVP status)
