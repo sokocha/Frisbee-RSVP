@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 
 const sportEmojis = {
   frisbee: '🥏', padel: '🎾', tennis: '🎾', volleyball: '🏐',
@@ -29,6 +30,7 @@ function CardSkeleton() {
 }
 
 export default function BrowsePage() {
+  const router = useRouter();
   const [organizations, setOrganizations] = useState([]);
   const [filters, setFilters] = useState({ sports: [], locations: [] });
   const [loading, setLoading] = useState(true);
@@ -36,6 +38,13 @@ export default function BrowsePage() {
   const [selectedLocation, setSelectedLocation] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [showBackToTop, setShowBackToTop] = useState(false);
+
+  // Handle URL query parameters for sport filter
+  useEffect(() => {
+    if (router.isReady && router.query.sport) {
+      setSelectedSport(router.query.sport);
+    }
+  }, [router.isReady, router.query.sport]);
 
   useEffect(() => {
     fetchOrganizations();
