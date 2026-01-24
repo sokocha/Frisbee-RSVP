@@ -546,7 +546,15 @@ export default function Dashboard() {
                   </div>
                 )}
 
-                <form onSubmit={handleCreateOrg}>
+                <form
+                  onSubmit={handleCreateOrg}
+                  onKeyDown={e => {
+                    // Prevent Enter key from submitting on non-final steps
+                    if (e.key === 'Enter' && createStep < 3) {
+                      e.preventDefault();
+                    }
+                  }}
+                >
                   {/* Step 1: Basics */}
                   {createStep === 1 && (
                     <div className="space-y-4">
