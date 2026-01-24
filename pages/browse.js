@@ -138,9 +138,9 @@ export default function BrowsePage() {
         <header className="border-b border-gray-200 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
           <div className="max-w-6xl mx-auto px-4 py-4">
             <div className="flex items-center justify-between">
-              <Link href="/" className="flex items-center gap-2">
+              <Link href={isLoggedIn ? "/browse" : "/"} className="flex items-center gap-2">
                 <span className="text-2xl">🏆</span>
-                <span className="text-xl font-bold text-gray-900">PlayDay</span>
+                <span className="text-xl font-bold text-gray-900 hover:text-blue-600 transition-colors">PlayDay</span>
               </Link>
               {isLoggedIn && (
                 <Link

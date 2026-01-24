@@ -40,6 +40,15 @@ export default function Dashboard() {
     fetchUserData();
   }, []);
 
+  // Check for create=true query param to auto-open the create modal
+  useEffect(() => {
+    if (router.isReady && router.query.create === 'true' && !loading) {
+      setShowCreateForm(true);
+      // Remove the query param from URL without refreshing
+      router.replace('/dashboard', undefined, { shallow: true });
+    }
+  }, [router.isReady, router.query.create, loading]);
+
   async function fetchUserData() {
     try {
       const res = await fetch('/api/auth/me');
@@ -126,6 +135,12 @@ export default function Dashboard() {
 
     // Only submit on the final step
     if (createStep < 3) {
+      return;
+    }
+
+    // Validate step 3 fields
+    if (!newOrg.location || !newOrg.streetAddress) {
+      setError('Please fill in all required fields');
       return;
     }
 
@@ -731,14 +746,15 @@ export default function Dashboard() {
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Area (Lagos)
+                          Area (Lagos) *
                         </label>
                         <select
                           value={newOrg.location}
                           onChange={e => setNewOrg({ ...newOrg, location: e.target.value })}
+                          required
                           className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         >
-                          <option value="">Select area (optional)</option>
+                          <option value="">Select area</option>
                           {LAGOS_AREAS.map(area => (
                             <option key={area} value={formatLocation(area)}>
                               {area}
@@ -749,13 +765,14 @@ export default function Dashboard() {
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Street Address
+                          Street Address *
                         </label>
                         <input
                           type="text"
                           value={newOrg.streetAddress}
                           onChange={e => setNewOrg({ ...newOrg, streetAddress: e.target.value })}
                           placeholder="e.g., 15 Adeola Odeku Street"
+                          required
                           className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                         <p className="text-xs text-gray-500 mt-1">Specific venue address for players to find you</p>

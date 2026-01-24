@@ -87,7 +87,13 @@ export default function Landing() {
         {/* Header */}
         <header className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <nav className="flex justify-between items-center">
-            <div className="text-2xl font-bold text-gray-900">PlayDay</div>
+            {user ? (
+              <Link href="/browse" className="text-2xl font-bold text-gray-900 hover:text-blue-600 transition-colors">
+                PlayDay
+              </Link>
+            ) : (
+              <div className="text-2xl font-bold text-gray-900">PlayDay</div>
+            )}
             <div className="flex items-center gap-4">
               {checkingAuth ? (
                 <div className="w-20 h-8" /> // Placeholder while checking auth
@@ -128,7 +134,7 @@ export default function Landing() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link
-                href="/auth/login"
+                href={user ? "/dashboard?create=true" : "/auth/login"}
                 className="px-8 py-4 bg-blue-600 text-white text-lg font-medium rounded-xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/20"
               >
                 Start Organizing
