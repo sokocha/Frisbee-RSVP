@@ -123,6 +123,12 @@ export default function Dashboard() {
 
   async function handleCreateOrg(e) {
     e.preventDefault();
+
+    // Only submit on the final step
+    if (createStep < 3) {
+      return;
+    }
+
     setCreating(true);
     setError('');
 
@@ -552,7 +558,6 @@ export default function Dashboard() {
                         </label>
                         <input
                           type="text"
-                          required
                           value={newOrg.name}
                           onChange={handleNameChange}
                           placeholder="e.g., Lagos Padel Club"
@@ -568,7 +573,6 @@ export default function Dashboard() {
                           <span className="text-gray-400 text-sm mr-1">itsplayday.com/</span>
                           <input
                             type="text"
-                            required
                             value={newOrg.slug}
                             onChange={handleSlugChange}
                             placeholder="lagos-padel"
@@ -595,7 +599,6 @@ export default function Dashboard() {
                           Sport *
                         </label>
                         <select
-                          required
                           value={newOrg.sport}
                           onChange={e => setNewOrg({ ...newOrg, sport: e.target.value })}
                           className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -629,7 +632,6 @@ export default function Dashboard() {
                         </label>
                         <input
                           type="number"
-                          required
                           min={1}
                           max={500}
                           value={newOrg.maxParticipants}
