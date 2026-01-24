@@ -9,6 +9,14 @@ const sportEmojis = {
   swimming: '🏊', yoga: '🧘', pickleball: '🏓', other: '🏆',
 };
 
+const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+const timeOfDayOptions = [
+  { value: 'morning', label: 'Morning', range: [5, 12] },
+  { value: 'afternoon', label: 'Afternoon', range: [12, 17] },
+  { value: 'evening', label: 'Evening', range: [17, 24] },
+];
+
 // Loading skeleton component
 function CardSkeleton() {
   return (
@@ -32,10 +40,12 @@ function CardSkeleton() {
 export default function BrowsePage() {
   const router = useRouter();
   const [organizations, setOrganizations] = useState([]);
-  const [filters, setFilters] = useState({ sports: [], locations: [] });
+  const [filters, setFilters] = useState({ sports: [], locations: [], gameDays: [] });
   const [loading, setLoading] = useState(true);
   const [selectedSport, setSelectedSport] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('');
+  const [selectedDay, setSelectedDay] = useState('');
+  const [selectedTimeOfDay, setSelectedTimeOfDay] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -77,7 +87,7 @@ export default function BrowsePage() {
       if (res.ok) {
         const data = await res.json();
         setOrganizations(data.organizations || []);
-        setFilters(data.filters || { sports: [], locations: [] });
+        setFilters(data.filters || { sports: [], locations: [], gameDays: [] });
       }
     } catch (error) {
       console.error('Failed to fetch organizations:', error);
@@ -93,6 +103,16 @@ export default function BrowsePage() {
   const filteredOrgs = organizations.filter(org => {
     if (selectedSport && org.sport !== selectedSport) return false;
     if (selectedLocation && org.location !== selectedLocation) return false;
+    if (selectedDay !== '' && org.gameDay !== parseInt(selectedDay)) return false;
+    if (selectedTimeOfDay) {
+      const timeOption = timeOfDayOptions.find(t => t.value === selectedTimeOfDay);
+      if (timeOption && org.startHour !== null) {
+        const [start, end] = timeOption.range;
+        if (org.startHour < start || org.startHour >= end) return false;
+      } else if (org.startHour === null) {
+        return false; // Exclude events without a set time when filtering by time
+      }
+    }
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return (
@@ -194,11 +214,45 @@ export default function BrowsePage() {
                   </select>
                 </div>
               )}
+
+              {/* Day of Week Filter */}
+              {filters.gameDays.length > 0 && (
+                <div className="md:w-44">
+                  <select
+                    value={selectedDay}
+                    onChange={e => setSelectedDay(e.target.value)}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 appearance-none cursor-pointer"
+                  >
+                    <option value="">Any Day</option>
+                    {filters.gameDays.map(day => (
+                      <option key={day} value={day}>
+                        {dayNames[day]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Time of Day Filter */}
+              <div className="md:w-40">
+                <select
+                  value={selectedTimeOfDay}
+                  onChange={e => setSelectedTimeOfDay(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 appearance-none cursor-pointer"
+                >
+                  <option value="">Any Time</option>
+                  {timeOfDayOptions.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* Active filters */}
-            {(selectedSport || selectedLocation) && (
-              <div className="flex items-center gap-2 mt-3">
+            {(selectedSport || selectedLocation || selectedDay !== '' || selectedTimeOfDay) && (
+              <div className="flex flex-wrap items-center gap-2 mt-3">
                 <span className="text-gray-500 text-sm">Filters:</span>
                 {selectedSport && (
                   <button
@@ -222,8 +276,30 @@ export default function BrowsePage() {
                     </svg>
                   </button>
                 )}
+                {selectedDay !== '' && (
+                  <button
+                    onClick={() => setSelectedDay('')}
+                    className="inline-flex items-center gap-1 px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm hover:bg-purple-200 transition-colors"
+                  >
+                    {dayNames[parseInt(selectedDay)]}
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+                {selectedTimeOfDay && (
+                  <button
+                    onClick={() => setSelectedTimeOfDay('')}
+                    className="inline-flex items-center gap-1 px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm hover:bg-orange-200 transition-colors"
+                  >
+                    {timeOfDayOptions.find(t => t.value === selectedTimeOfDay)?.label}
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
                 <button
-                  onClick={() => { setSelectedSport(''); setSelectedLocation(''); }}
+                  onClick={() => { setSelectedSport(''); setSelectedLocation(''); setSelectedDay(''); setSelectedTimeOfDay(''); }}
                   className="text-gray-500 hover:text-gray-700 text-sm ml-2"
                 >
                   Clear all
@@ -259,11 +335,13 @@ export default function BrowsePage() {
                 We couldn't find any events matching your criteria. Try adjusting your filters or search query.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                {(selectedSport || selectedLocation || searchQuery) && (
+                {(selectedSport || selectedLocation || selectedDay !== '' || selectedTimeOfDay || searchQuery) && (
                   <button
                     onClick={() => {
                       setSelectedSport('');
                       setSelectedLocation('');
+                      setSelectedDay('');
+                      setSelectedTimeOfDay('');
                       setSearchQuery('');
                     }}
                     className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium"
@@ -298,16 +376,29 @@ export default function BrowsePage() {
                     </div>
                   </div>
 
-                  {/* Location */}
-                  {org.location && (
-                    <div className="flex items-center gap-2 text-gray-500 text-sm mb-3">
-                      <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      <span className="truncate">{org.location}</span>
-                    </div>
-                  )}
+                  {/* Location and Schedule */}
+                  <div className="space-y-1 mb-3">
+                    {org.location && (
+                      <div className="flex items-center gap-2 text-gray-500 text-sm">
+                        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span className="truncate">{org.location}</span>
+                      </div>
+                    )}
+                    {org.gameDay !== null && (
+                      <div className="flex items-center gap-2 text-gray-500 text-sm">
+                        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <span>
+                          {dayNames[org.gameDay]}
+                          {org.startHour !== null && ` at ${org.startHour > 12 ? org.startHour - 12 : org.startHour || 12}${org.startHour >= 12 ? 'pm' : 'am'}`}
+                        </span>
+                      </div>
+                    )}
+                  </div>
 
                   {/* Stats */}
                   <div className="flex items-center justify-between pt-3 border-t border-gray-100">

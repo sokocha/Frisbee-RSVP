@@ -53,6 +53,10 @@ export default async function handler(req, res) {
         }
       }
 
+      // Get game day and time info
+      const gameDay = settings.gameInfo?.gameDay;
+      const startHour = settings.gameInfo?.startHour;
+
       return {
         slug: org.slug,
         name: org.name,
@@ -61,6 +65,8 @@ export default async function handler(req, res) {
         signupCount: rsvpData.mainList?.length || 0,
         maxParticipants: settings.mainListLimit || 30,
         isOpen,
+        gameDay: gameDay !== undefined ? gameDay : null,
+        startHour: startHour !== undefined ? startHour : null,
       };
     }));
 
@@ -68,11 +74,15 @@ export default async function handler(req, res) {
     const sports = [...new Set(orgsWithInfo.map(o => o.sport).filter(Boolean))].sort();
     const locations = [...new Set(orgsWithInfo.map(o => o.location).filter(Boolean))].sort();
 
+    // Get unique game days (only include days that have events)
+    const gameDays = [...new Set(orgsWithInfo.map(o => o.gameDay).filter(d => d !== null))].sort((a, b) => a - b);
+
     return res.status(200).json({
       organizations: orgsWithInfo,
       filters: {
         sports,
         locations,
+        gameDays,
       }
     });
   } catch (error) {
