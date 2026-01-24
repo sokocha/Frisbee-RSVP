@@ -104,7 +104,7 @@ async function sendApprovalEmail(email, name, token, req) {
         <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto;">
           <h2>Welcome to PlayDay, ${name}!</h2>
           <p>Great news! Your organizer account has been approved.</p>
-          <p>Click the button below to log in and start creating your organization:</p>
+          <p>Click the button below to log in and start creating your community:</p>
           <a href="${magicLink}"
              style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 16px 0;">
             Log in to PlayDay

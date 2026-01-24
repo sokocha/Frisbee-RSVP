@@ -447,7 +447,7 @@ export default function OrgAdmin() {
 
       if (res.ok) {
         setOrg({ ...org, visibility: newVisibility });
-        showMessage(`Organization is now ${newVisibility}`);
+        showMessage(`Community is now ${newVisibility}`);
       } else {
         showMessage(data.error, 'error');
       }
@@ -487,9 +487,9 @@ export default function OrgAdmin() {
     setSavingLocation(false);
   }
 
-  async function handleDeleteOrganization() {
+  async function handleDeleteCommunity() {
     if (deleteConfirmName !== org?.name) {
-      showMessage('Organization name does not match', 'error');
+      showMessage('Community name does not match', 'error');
       return;
     }
 
@@ -503,10 +503,10 @@ export default function OrgAdmin() {
         router.push('/dashboard');
       } else {
         const data = await res.json();
-        showMessage(data.error || 'Failed to delete organization', 'error');
+        showMessage(data.error || 'Failed to delete community', 'error');
       }
     } catch (error) {
-      showMessage('Failed to delete organization', 'error');
+      showMessage('Failed to delete community', 'error');
     }
     setDeleting(false);
   }
@@ -599,7 +599,7 @@ export default function OrgAdmin() {
   function getEmailPreview() {
     const subject = (settingsForm.email?.subject || '')
       .replace(/\{\{week\}\}/g, '2026-W04')
-      .replace(/\{\{org\}\}/g, org?.name || 'Organization')
+      .replace(/\{\{org\}\}/g, org?.name || 'Community')
       .replace(/\{\{sport\}\}/g, org?.sport || 'sport');
 
     const sampleNames = mainList.length > 0
@@ -610,7 +610,7 @@ export default function OrgAdmin() {
       .replace(/\{\{count\}\}/g, mainList.length.toString())
       .replace(/\{\{list\}\}/g, sampleNames)
       .replace(/\{\{week\}\}/g, '2026-W04')
-      .replace(/\{\{org\}\}/g, org?.name || 'Organization')
+      .replace(/\{\{org\}\}/g, org?.name || 'Community')
       .replace(/\{\{sport\}\}/g, org?.sport || 'sport');
 
     return { subject, body };
@@ -709,7 +709,7 @@ export default function OrgAdmin() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Organization Not Found</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Community Not Found</h1>
           <Link href="/" className="text-blue-600">Go home</Link>
         </div>
       </div>
@@ -1180,7 +1180,7 @@ export default function OrgAdmin() {
                   <span>📍</span> Location
                 </h3>
                 <p className="text-sm text-gray-500 mb-4">
-                  Where your organization plays.
+                  Where your community plays.
                 </p>
                 <form onSubmit={handleUpdateLocation} className="space-y-3">
                   <div>
@@ -1225,7 +1225,7 @@ export default function OrgAdmin() {
                   <span>👁️</span> Visibility
                 </h3>
                 <p className="text-sm text-gray-500 mb-4">
-                  Control whether your organization appears in the public browse page.
+                  Control whether your community appears in the public browse page.
                 </p>
                 <div className="flex gap-3">
                   <button
@@ -1255,8 +1255,8 @@ export default function OrgAdmin() {
                 </div>
                 <p className="text-xs text-gray-400 mt-2">
                   {org?.visibility === 'public'
-                    ? 'Anyone can find this organization on the browse page.'
-                    : 'Only people with the direct link can access this organization.'}
+                    ? 'Anyone can find this community on the browse page.'
+                    : 'Only people with the direct link can access this community.'}
                 </p>
               </div>
 
@@ -1275,14 +1275,14 @@ export default function OrgAdmin() {
                   <span>⚠️</span> Danger Zone
                 </h3>
                 <p className="text-sm text-gray-500 mb-4">
-                  Permanently delete this organization and all its data.
+                  Permanently delete this community and all its data.
                 </p>
                 <button
                   type="button"
                   onClick={() => setShowDeleteModal(true)}
                   className="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-medium hover:bg-red-100 border border-red-200"
                 >
-                  Delete Organization
+                  Delete Community
                 </button>
               </div>
             </div>
@@ -1418,7 +1418,7 @@ export default function OrgAdmin() {
                         placeholder="Weekly RSVP List - {{week}}"
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
                       />
-                      <p className="text-xs text-gray-500 mt-1">Use {'{{week}}'} for current week, {'{{org}}'} for organization name</p>
+                      <p className="text-xs text-gray-500 mt-1">Use {'{{week}}'} for current week, {'{{org}}'} for community name</p>
                     </div>
 
                     <div>
@@ -1659,7 +1659,7 @@ export default function OrgAdmin() {
                     </label>
                     {settingsForm.gameInfo?.weather?.enabled && (
                       <p className="text-sm text-gray-500 mt-2 ml-7">
-                        Weather will be shown based on your organization's location.
+                        Weather will be shown based on your community's location.
                       </p>
                     )}
                   </div>
@@ -1884,7 +1884,7 @@ export default function OrgAdmin() {
         {showDeleteModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg max-w-md w-full p-6">
-              <h3 className="text-lg font-semibold text-red-600 mb-2">Delete Organization</h3>
+              <h3 className="text-lg font-semibold text-red-600 mb-2">Delete Community</h3>
               <p className="text-gray-600 mb-4">
                 This will permanently delete <strong>{org?.name}</strong> and all its data including:
               </p>
@@ -1901,7 +1901,7 @@ export default function OrgAdmin() {
                 type="text"
                 value={deleteConfirmName}
                 onChange={e => setDeleteConfirmName(e.target.value)}
-                placeholder="Type organization name"
+                placeholder="Type community name"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-red-500 focus:border-transparent"
               />
               <div className="flex gap-3">
@@ -1915,7 +1915,7 @@ export default function OrgAdmin() {
                   Cancel
                 </button>
                 <button
-                  onClick={handleDeleteOrganization}
+                  onClick={handleDeleteCommunity}
                   disabled={deleting || deleteConfirmName !== org?.name}
                   className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >

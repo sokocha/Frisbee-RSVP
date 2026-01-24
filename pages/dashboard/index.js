@@ -336,15 +336,15 @@ export default function Dashboard() {
         </header>
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Organizations */}
+          {/* Communities */}
           <div className="mb-8">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Your Organizations</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Your Communities</h2>
               <div className="flex gap-3 w-full sm:w-auto">
                 {organizations.length > 1 && (
                   <input
                     type="text"
-                    placeholder="Search organizations..."
+                    placeholder="Search communities..."
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     className="flex-1 sm:w-64 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -354,24 +354,24 @@ export default function Dashboard() {
                   onClick={() => setShowCreateForm(true)}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium whitespace-nowrap"
                 >
-                  Create Organization
+                  Create Community
                 </button>
               </div>
             </div>
 
             {organizations.length === 0 ? (
               <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-                <p className="text-gray-500 mb-4">You don't have any organizations yet.</p>
+                <p className="text-gray-500 mb-4">You don't have any communities yet.</p>
                 <button
                   onClick={() => setShowCreateForm(true)}
                   className="text-blue-600 hover:text-blue-700 font-medium"
                 >
-                  Create your first organization
+                  Create your first community
                 </button>
               </div>
             ) : filteredOrgs.length === 0 ? (
               <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-                <p className="text-gray-500">No organizations match "{searchQuery}"</p>
+                <p className="text-gray-500">No communities match "{searchQuery}"</p>
               </div>
             ) : (
               <>
@@ -496,14 +496,14 @@ export default function Dashboard() {
           </div>
         </main>
 
-        {/* Create Organization Modal - Multi-step Wizard */}
+        {/* Create Community Modal - Multi-step Wizard */}
         {showCreateForm && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-xl max-w-md w-full overflow-hidden">
               {/* Header with Progress */}
               <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 text-white">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-lg font-semibold">Create Organization</h3>
+                  <h3 className="text-lg font-semibold">Create Community</h3>
                   <button
                     onClick={() => {
                       setShowCreateForm(false);
@@ -573,11 +573,11 @@ export default function Dashboard() {
                   {/* Step 1: Basics */}
                   {createStep === 1 && (
                     <div className="space-y-4">
-                      <p className="text-gray-500 text-sm mb-4">Let's start with the basics about your organization.</p>
+                      <p className="text-gray-500 text-sm mb-4">Let's start with the basics about your community.</p>
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Organization Name *
+                          Community Name *
                         </label>
                         <input
                           type="text"
@@ -851,7 +851,7 @@ export default function Dashboard() {
                             <span className="animate-spin">⏳</span> Creating...
                           </span>
                         ) : (
-                          'Create Organization'
+                          'Create Community'
                         )}
                       </button>
                     )}

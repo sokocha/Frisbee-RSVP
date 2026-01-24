@@ -318,7 +318,7 @@ export default function Landing() {
               <>
                 <h2 className="text-3xl font-bold mb-4">Create another community?</h2>
                 <p className="text-blue-100 mb-8 max-w-xl mx-auto">
-                  Add a new organization for a different sport or location.
+                  Add a new community for a different sport or location.
                 </p>
                 <Link
                   href="/dashboard"

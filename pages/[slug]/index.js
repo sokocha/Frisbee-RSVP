@@ -351,8 +351,8 @@ export default function OrgRSVP() {
         <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center p-4">
           <div className="text-center">
             <div className="text-6xl mb-4">🔍</div>
-            <h1 className="text-2xl font-bold text-white mb-2">Organization Not Found</h1>
-            <p className="text-gray-400 mb-6">This organization doesn't exist or is not active.</p>
+            <h1 className="text-2xl font-bold text-white mb-2">Community Not Found</h1>
+            <p className="text-gray-400 mb-6">This community doesn't exist or is not active.</p>
             <Link href="/" className="text-blue-400 hover:text-blue-300">Go to PlayDay home</Link>
           </div>
         </div>

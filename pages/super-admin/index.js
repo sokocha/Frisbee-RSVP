@@ -130,7 +130,7 @@ export default function SuperAdmin() {
               <p className="text-2xl font-bold text-green-600">{approvedOrganizers.length}</p>
             </div>
             <div className="bg-white rounded-lg p-4 border border-gray-200">
-              <p className="text-sm text-gray-500">Total Organizations</p>
+              <p className="text-sm text-gray-500">Total Communities</p>
               <p className="text-2xl font-bold text-blue-600">{organizations.length}</p>
             </div>
             <div className="bg-white rounded-lg p-4 border border-gray-200">
@@ -145,7 +145,7 @@ export default function SuperAdmin() {
               {[
                 { id: 'pending', label: 'Pending', count: pendingOrganizers.length },
                 { id: 'approved', label: 'Approved', count: approvedOrganizers.length },
-                { id: 'organizations', label: 'Organizations', count: organizations.length },
+                { id: 'organizations', label: 'Communities', count: organizations.length },
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -242,12 +242,12 @@ export default function SuperAdmin() {
             </div>
           )}
 
-          {/* Organizations */}
+          {/* Communities */}
           {activeTab === 'organizations' && (
             <div className="bg-white rounded-lg border border-gray-200">
               {organizations.length === 0 ? (
                 <div className="p-8 text-center text-gray-500">
-                  No organizations yet
+                  No communities yet
                 </div>
               ) : (
                 <div className="divide-y divide-gray-200">
