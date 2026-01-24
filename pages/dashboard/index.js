@@ -329,6 +329,11 @@ export default function Dashboard() {
                         <div className="flex-1 min-w-0">
                           <h3 className="font-semibold text-gray-900 truncate">{org.name}</h3>
                           <p className="text-sm text-gray-500 capitalize">{org.sport}</p>
+                          {org.location && (
+                            <p className="text-xs text-gray-400 truncate mt-0.5" title={org.location}>
+                              📍 {org.location}
+                            </p>
+                          )}
                         </div>
                         {/* Window status badge */}
                         <span className={`ml-2 px-2 py-1 text-xs rounded-full font-medium whitespace-nowrap ${

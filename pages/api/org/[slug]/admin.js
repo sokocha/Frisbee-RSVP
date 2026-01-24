@@ -1,6 +1,6 @@
 import { verifySession, parseCookies, isSuperAdmin } from '../../../../lib/auth';
-import { getOrganizerById, getOrganizationBySlug, organizerOwnsOrg } from '../../../../lib/organizations';
-import { getOrgData, setOrgData, ORG_KEY_SUFFIXES } from '../../../../lib/kv';
+import { getOrganizerById, getOrganizationBySlug, organizerOwnsOrg, updateOrganization, deleteOrganization } from '../../../../lib/organizations';
+import { getOrgData, setOrgData, ORG_KEY_SUFFIXES, deleteAllOrgData } from '../../../../lib/kv';
 
 /**
  * Sort people by priority
@@ -157,6 +157,7 @@ export default async function handler(req, res) {
           sport: org.sport,
           location: org.location,
           timezone: org.timezone,
+          visibility: org.visibility || 'private',
         },
         mainList: rebalanced.mainList,
         waitlist: rebalanced.waitlist,
@@ -366,7 +367,11 @@ export default async function handler(req, res) {
               ...(currentSettings.gameInfo?.weather || getDefaultSettings().gameInfo.weather),
               ...(settings.gameInfo?.weather || {})
             }
-          } : (currentSettings.gameInfo || getDefaultSettings().gameInfo)
+          } : (currentSettings.gameInfo || getDefaultSettings().gameInfo),
+          whatsapp: {
+            ...(currentSettings.whatsapp || { enabled: false, groupUrl: '' }),
+            ...(settings.whatsapp || {})
+          }
         };
 
         await setOrgData(orgId, ORG_KEY_SUFFIXES.SETTINGS, newSettings);
@@ -391,10 +396,40 @@ export default async function handler(req, res) {
         });
       }
 
+      if (action === 'update-visibility') {
+        const { visibility } = data;
+
+        if (!visibility || !['private', 'public'].includes(visibility)) {
+          return res.status(400).json({ error: 'Invalid visibility value' });
+        }
+
+        await updateOrganization(orgId, { visibility });
+
+        return res.status(200).json({
+          success: true,
+          visibility
+        });
+      }
+
       return res.status(400).json({ error: 'Invalid action' });
     } catch (error) {
       console.error('Admin action failed:', error);
       return res.status(500).json({ error: 'Action failed' });
+    }
+  }
+
+  if (req.method === 'DELETE') {
+    try {
+      // Delete all organization data from KV
+      await deleteAllOrgData(orgId);
+
+      // Delete the organization record
+      await deleteOrganization(orgId);
+
+      return res.status(200).json({ success: true });
+    } catch (error) {
+      console.error('Delete organization failed:', error);
+      return res.status(500).json({ error: 'Failed to delete organization' });
     }
   }
 

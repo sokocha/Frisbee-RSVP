@@ -232,6 +232,12 @@ export default async function handler(req, res) {
         weather: settings.gameInfo.weather?.enabled ? settings.gameInfo.weather : null,
       } : null;
 
+      // Prepare whatsapp info for public display (only if enabled)
+      const whatsapp = settings.whatsapp?.enabled && settings.whatsapp?.groupUrl ? {
+        enabled: true,
+        groupUrl: settings.whatsapp.groupUrl,
+      } : null;
+
       return res.status(200).json({
         organization: {
           slug: org.slug,
@@ -249,7 +255,8 @@ export default async function handler(req, res) {
         },
         snoozedNames,
         whitelist: whitelist.map(w => ({ name: w.name, deviceId: w.deviceId })),
-        gameInfo
+        gameInfo,
+        whatsapp,
       });
     } catch (error) {
       console.error('Failed to get RSVP data:', error);
