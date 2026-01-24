@@ -549,8 +549,8 @@ export default function Dashboard() {
                 <form
                   onSubmit={handleCreateOrg}
                   onKeyDown={e => {
-                    // Prevent Enter key from submitting on non-final steps
-                    if (e.key === 'Enter' && createStep < 3) {
+                    // Prevent Enter key from submitting form - only allow button click
+                    if (e.key === 'Enter') {
                       e.preventDefault();
                     }
                   }}
