@@ -82,17 +82,12 @@ export default function Landing() {
               {checkingAuth ? (
                 <div className="w-20 h-8" /> // Placeholder while checking auth
               ) : user ? (
-                <>
-                  <Link href="/dashboard" className="text-gray-600 hover:text-gray-900">
-                    Dashboard
-                  </Link>
-                  <Link
-                    href="/dashboard"
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    My Organizations
-                  </Link>
-                </>
+                <Link
+                  href="/dashboard"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Dashboard
+                </Link>
               ) : (
                 <>
                   <Link href="/auth/login" className="text-gray-600 hover:text-gray-900">

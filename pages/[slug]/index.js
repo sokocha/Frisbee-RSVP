@@ -383,6 +383,17 @@ export default function OrgRSVP() {
       <Toast message={message} onClose={() => setMessage(null)} />
 
       <div className={`min-h-screen bg-gradient-to-br ${colors.gradient} p-3 md:p-8`}>
+        {/* Top Navigation */}
+        <nav className="max-w-2xl mx-auto mb-4 flex items-center justify-between">
+          <Link href="/browse" className="flex items-center gap-2 text-white/70 hover:text-white transition-colors">
+            <span className="text-xl">🏆</span>
+            <span className="font-semibold">PlayDay</span>
+          </Link>
+          <Link href="/browse" className="text-white/50 hover:text-white text-sm transition-colors">
+            Browse Events →
+          </Link>
+        </nav>
+
         <main className="max-w-2xl mx-auto">
           {/* Header */}
           <div className="text-center mb-6 md:mb-8">
