@@ -117,6 +117,7 @@ export default async function handler(req, res) {
   // Check for authentication - either cron secret or organizer session
   const authHeader = req.headers.authorization;
   const isCronCall = authHeader === `Bearer ${process.env.CRON_SECRET}`;
+  let authenticatedOrganizer = null;
 
   if (!isCronCall) {
     // Require organizer authentication
@@ -137,6 +138,8 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: 'Organizer not found' });
     }
 
+    authenticatedOrganizer = organizer;
+
     const isAdmin = isSuperAdmin(organizer.email);
     if (organizer.status !== 'approved' && !isAdmin) {
       return res.status(403).json({ error: 'Account not approved' });
@@ -151,7 +154,85 @@ export default async function handler(req, res) {
   try {
     const settings = await getOrgData(orgId, ORG_KEY_SUFFIXES.SETTINGS, getDefaultSettings(org.timezone));
     const emailSettings = settings?.email;
+    const isTestEmail = req.body?.test === true;
 
+    // For test emails, we only need an authenticated organizer with an email
+    if (isTestEmail) {
+      if (!authenticatedOrganizer || !authenticatedOrganizer.email) {
+        return res.status(400).json({ error: 'Cannot send test email: organizer email not found' });
+      }
+
+      if (!resend) {
+        return res.status(500).json({ error: 'Email service not configured' });
+      }
+
+      const rsvpData = await getOrgData(orgId, ORG_KEY_SUFFIXES.RSVP_DATA, { mainList: [], waitlist: [] });
+      const timezone = settings?.accessPeriod?.timezone || org.timezone || 'Africa/Lagos';
+      const weekId = getCurrentWeekId(timezone);
+
+      // Generate PDF (main list only)
+      const pdfBuffer = await generatePDF(rsvpData.mainList, weekId, org.name, org.sport);
+
+      // Create list of names for template
+      const namesList = rsvpData.mainList
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((p, i) => `${i + 1}. ${p.name}`)
+        .join('\n');
+
+      // Prepare template variables
+      const templateVars = {
+        week: weekId,
+        org: org.name,
+        sport: org.sport || '',
+        count: rsvpData.mainList.length.toString(),
+        waitlistCount: rsvpData.waitlist.length.toString(),
+        list: namesList,
+        date: new Date().toLocaleDateString('en-US', {
+          timeZone: timezone,
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        })
+      };
+
+      const testSubject = `[TEST] ${replaceTemplateVars(emailSettings?.subject || 'Weekly RSVP List - {{week}}', templateVars)}`;
+      const testBody = `This is a TEST email. The actual email will be sent to your configured recipients.\n\n---\n\n${replaceTemplateVars(emailSettings?.body || 'Please find attached the RSVP list for this week.\n\nTotal participants: {{count}}', templateVars)}`;
+
+      // Build test email options - send only to the organizer
+      const testEmailOptions = {
+        from: `${org.name} <noreply@itsplayday.com>`,
+        to: [authenticatedOrganizer.email],
+        subject: testSubject,
+        text: testBody,
+        attachments: [
+          {
+            filename: `${org.slug}-rsvp-${weekId}.pdf`,
+            content: pdfBuffer.toString('base64'),
+          },
+        ],
+      };
+
+      // Send test email
+      const { data, error } = await resend.emails.send(testEmailOptions);
+
+      if (error) {
+        console.error(`[${org.slug}] Failed to send test email:`, error);
+        return res.status(500).json({ error: 'Failed to send test email', details: error.message });
+      }
+
+      console.log(`[${org.slug}] Test email sent to ${authenticatedOrganizer.email}`);
+
+      return res.status(200).json({
+        success: true,
+        message: `Test email sent to ${authenticatedOrganizer.email}`,
+        emailId: data?.id,
+        weekId,
+        isTest: true
+      });
+    }
+
+    // Regular email sending logic
     if (!emailSettings?.enabled) {
       return res.status(400).json({ error: 'Email sending is not enabled', skipped: true });
     }

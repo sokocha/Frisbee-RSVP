@@ -138,7 +138,7 @@ function formatTime(timestamp) {
 const sportEmojis = {
   frisbee: '🥏', padel: '🎾', tennis: '🎾', volleyball: '🏐',
   basketball: '🏀', football: '⚽', cycling: '🚴', running: '🏃',
-  swimming: '🏊', other: '🏆',
+  swimming: '🏊', yoga: '🧘', pickleball: '🏓', other: '🏆',
 };
 
 const sportColors = {

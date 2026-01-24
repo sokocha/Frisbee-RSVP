@@ -1,7 +1,110 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+
+// Helper: Format time as 12-hour with am/pm
+function formatTime12h(hour, minute) {
+  const h = hour % 12 || 12;
+  const m = minute.toString().padStart(2, '0');
+  const ampm = hour < 12 ? 'am' : 'pm';
+  return `${h}:${m}${ampm}`;
+}
+
+// Helper: Calculate time remaining until close
+function getTimeUntilClose(accessPeriod, timezone) {
+  if (!accessPeriod?.enabled) return null;
+
+  try {
+    const now = new Date();
+    const localTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+    const currentDay = localTime.getDay();
+    const currentHour = localTime.getHours();
+    const currentMinute = localTime.getMinutes();
+
+    const { startDay, startHour, startMinute, endDay, endHour, endMinute } = accessPeriod;
+
+    // Calculate minutes from start of week
+    const currentMins = currentDay * 24 * 60 + currentHour * 60 + currentMinute;
+    const startMins = startDay * 24 * 60 + startHour * 60 + startMinute;
+    const endMins = endDay * 24 * 60 + endHour * 60 + endMinute;
+
+    // Check if currently open
+    let isOpen;
+    if (startMins <= endMins) {
+      isOpen = currentMins >= startMins && currentMins < endMins;
+    } else {
+      isOpen = currentMins >= startMins || currentMins < endMins;
+    }
+
+    if (!isOpen) return null;
+
+    // Calculate minutes until close
+    let minsUntilClose;
+    if (startMins <= endMins) {
+      minsUntilClose = endMins - currentMins;
+    } else {
+      if (currentMins >= startMins) {
+        minsUntilClose = (7 * 24 * 60 - currentMins) + endMins;
+      } else {
+        minsUntilClose = endMins - currentMins;
+      }
+    }
+
+    const hours = Math.floor(minsUntilClose / 60);
+    const mins = minsUntilClose % 60;
+
+    if (hours > 24) {
+      const days = Math.floor(hours / 24);
+      const remainingHours = hours % 24;
+      return `${days}d ${remainingHours}h`;
+    }
+    if (hours > 0) {
+      return `${hours}h ${mins}m`;
+    }
+    return `${mins}m`;
+  } catch {
+    return null;
+  }
+}
+
+// Helper: Get current time in timezone
+function getCurrentTimeInTimezone(timezone) {
+  try {
+    const now = new Date();
+    return now.toLocaleString('en-US', {
+      timeZone: timezone,
+      weekday: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+  } catch {
+    return null;
+  }
+}
+
+// TimePicker component
+function TimePicker({ hour, minute, onChange, label }) {
+  const timeValue = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+
+  const handleChange = (e) => {
+    const [h, m] = e.target.value.split(':').map(Number);
+    onChange(h, m);
+  };
+
+  return (
+    <div>
+      <label className="block text-xs text-gray-500 mb-1">{label}</label>
+      <input
+        type="time"
+        value={timeValue}
+        onChange={handleChange}
+        className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm"
+      />
+    </div>
+  );
+}
 
 export default function OrgAdmin() {
   const router = useRouter();
@@ -20,6 +123,15 @@ export default function OrgAdmin() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
+  // Track unsaved changes
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const initialSettingsRef = useRef(null);
+
+  // Email status
+  const [emailStatus, setEmailStatus] = useState(null);
+  const [lastEmailWeek, setLastEmailWeek] = useState(null);
+  const [sendingTestEmail, setSendingTestEmail] = useState(false);
+
   // Whitelist form
   const [newWhitelistNames, setNewWhitelistNames] = useState('');
 
@@ -30,6 +142,18 @@ export default function OrgAdmin() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmName, setDeleteConfirmName] = useState('');
   const [deleting, setDeleting] = useState(false);
+
+  // Mobile nav
+  const [showMobileNav, setShowMobileNav] = useState(false);
+
+  // Search filter for lists
+  const [listSearchQuery, setListSearchQuery] = useState('');
+
+  // Countdown timer
+  const [countdown, setCountdown] = useState(null);
+
+  // PDF export
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   // Email form - separate state for text inputs to allow typing commas
   const [emailRecipients, setEmailRecipients] = useState('');
@@ -111,26 +235,67 @@ export default function OrgAdmin() {
         setWhitelist(data.whitelist || []);
         setSettings(data.settings);
         setArchive(data.archive || []);
+        setEmailStatus(data.emailStatus || null);
+        setLastEmailWeek(data.lastEmailWeek || null);
 
         if (data.settings) {
-          setSettingsForm({
+          const formData = {
             mainListLimit: data.settings.mainListLimit || 30,
             accessPeriod: data.settings.accessPeriod || settingsForm.accessPeriod,
             email: data.settings.email || settingsForm.email,
             gameInfo: data.settings.gameInfo || settingsForm.gameInfo,
             whatsapp: data.settings.whatsapp || settingsForm.whatsapp,
-          });
+          };
+          setSettingsForm(formData);
+          initialSettingsRef.current = JSON.stringify(formData);
           // Initialize email text fields from arrays
           setEmailRecipients((data.settings.email?.recipients || []).join(', '));
           setEmailCc((data.settings.email?.cc || []).join(', '));
           setEmailBcc((data.settings.email?.bcc || []).join(', '));
         }
+        setHasUnsavedChanges(false);
       }
     } catch (error) {
       console.error('Failed to load admin data:', error);
     }
     setLoading(false);
   }
+
+  // Track changes to settings
+  useEffect(() => {
+    if (initialSettingsRef.current && settings) {
+      const currentSettings = JSON.stringify(settingsForm);
+      setHasUnsavedChanges(currentSettings !== initialSettingsRef.current);
+    }
+  }, [settingsForm, settings]);
+
+  // Warn on navigation with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  // Countdown timer - update every minute
+  useEffect(() => {
+    if (!settingsForm.accessPeriod?.enabled || !org) return;
+
+    const updateCountdown = () => {
+      const timezone = settingsForm.accessPeriod.timezone || org?.timezone || 'Africa/Lagos';
+      const remaining = getTimeUntilClose(settingsForm.accessPeriod, timezone);
+      setCountdown(remaining);
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 60000); // Update every minute
+
+    return () => clearInterval(interval);
+  }, [settingsForm.accessPeriod, org]);
 
   const showMessage = (text, type = 'success') => {
     setMessage({ text, type });
@@ -247,6 +412,8 @@ export default function OrgAdmin() {
         setSettings(data.settings);
         setMainList(data.mainList);
         setWaitlist(data.waitlist);
+        initialSettingsRef.current = JSON.stringify(settingsForm);
+        setHasUnsavedChanges(false);
         showMessage('Settings saved');
       } else {
         showMessage(data.error, 'error');
@@ -332,8 +499,7 @@ export default function OrgAdmin() {
 
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-  // State for email status
-  const [emailStatus, setEmailStatus] = useState(null);
+  // State for sending email
   const [sendingEmail, setSendingEmail] = useState(false);
 
   async function handleSendEmailNow() {
@@ -366,6 +532,130 @@ export default function OrgAdmin() {
     }
     setSendingEmail(false);
   }
+
+  async function handleSendTestEmail() {
+    setSendingTestEmail(true);
+    try {
+      const res = await fetch(`/api/org/${slug}/send-list`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ test: true }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        showMessage('Test email sent to your email address!');
+      } else {
+        showMessage(data.error || 'Failed to send test email', 'error');
+      }
+    } catch (error) {
+      showMessage('Failed to send test email', 'error');
+    }
+    setSendingTestEmail(false);
+  }
+
+  // Format email preview with template variables
+  function getEmailPreview() {
+    const subject = (settingsForm.email?.subject || '')
+      .replace(/\{\{week\}\}/g, '2026-W04')
+      .replace(/\{\{org\}\}/g, org?.name || 'Organization')
+      .replace(/\{\{sport\}\}/g, org?.sport || 'sport');
+
+    const sampleNames = mainList.length > 0
+      ? mainList.slice(0, 3).map(p => p.name).join(', ') + (mainList.length > 3 ? '...' : '')
+      : 'John Doe, Jane Smith, Bob Wilson';
+
+    const body = (settingsForm.email?.body || '')
+      .replace(/\{\{count\}\}/g, mainList.length.toString())
+      .replace(/\{\{list\}\}/g, sampleNames)
+      .replace(/\{\{week\}\}/g, '2026-W04')
+      .replace(/\{\{org\}\}/g, org?.name || 'Organization')
+      .replace(/\{\{sport\}\}/g, org?.sport || 'sport');
+
+    return { subject, body };
+  }
+
+  // Export list to PDF (client-side generation)
+  async function handleExportPdf() {
+    setExportingPdf(true);
+    try {
+      // Sort list alphabetically
+      const sortedList = [...mainList].sort((a, b) => a.name.localeCompare(b.name));
+
+      // Get current week
+      const now = new Date();
+      const year = now.getFullYear();
+      const startOfYear = new Date(year, 0, 1);
+      const days = Math.floor((now - startOfYear) / (24 * 60 * 60 * 1000));
+      const weekNum = Math.ceil((days + startOfYear.getDay() + 1) / 7);
+      const weekId = `${year}-W${weekNum.toString().padStart(2, '0')}`;
+
+      // Create a simple HTML-based printable document
+      const printWindow = window.open('', '_blank');
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>${org?.name || 'RSVP'} List - ${weekId}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 40px; max-width: 600px; margin: 0 auto; }
+            h1 { text-align: center; margin-bottom: 5px; }
+            .subtitle { text-align: center; color: #666; margin-bottom: 20px; }
+            .meta { text-align: center; color: #888; font-size: 14px; margin-bottom: 30px; }
+            .list { margin: 0; padding: 0; list-style: none; }
+            .list li { padding: 8px 0; border-bottom: 1px solid #eee; display: flex; }
+            .list li:last-child { border-bottom: none; }
+            .num { color: #888; min-width: 30px; }
+            .name { flex: 1; }
+            .badge { background: #e3f2fd; color: #1976d2; padding: 2px 6px; border-radius: 4px; font-size: 12px; margin-left: 8px; }
+            .footer { text-align: center; color: #aaa; font-size: 12px; margin-top: 40px; }
+            @media print {
+              body { padding: 20px; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>${org?.name || 'RSVP'} List</h1>
+          ${org?.sport ? `<p class="subtitle">${org.sport.charAt(0).toUpperCase() + org.sport.slice(1)}</p>` : ''}
+          <p class="meta">Week: ${weekId} | Generated: ${now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+          <h3>Participants (${sortedList.length})</h3>
+          <ul class="list">
+            ${sortedList.length === 0 ? '<li>No participants registered.</li>' : sortedList.map((person, i) => `
+              <li>
+                <span class="num">${i + 1}.</span>
+                <span class="name">${person.name}</span>
+                ${person.isWhitelisted ? '<span class="badge">Member</span>' : ''}
+              </li>
+            `).join('')}
+          </ul>
+          <p class="footer">Generated by PlayDay RSVP</p>
+          <div class="no-print" style="text-align: center; margin-top: 20px;">
+            <button onclick="window.print()" style="padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px;">
+              Print / Save as PDF
+            </button>
+          </div>
+        </body>
+        </html>
+      `;
+      printWindow.document.write(html);
+      printWindow.document.close();
+      showMessage('PDF export opened in new tab');
+    } catch (error) {
+      showMessage('Failed to export PDF', 'error');
+      console.error('PDF export error:', error);
+    }
+    setExportingPdf(false);
+  }
+
+  // Filter lists based on search query
+  const filteredMainList = listSearchQuery
+    ? mainList.filter(p => p.name.toLowerCase().includes(listSearchQuery.toLowerCase()))
+    : mainList;
+  const filteredWaitlist = listSearchQuery
+    ? waitlist.filter(p => p.name.toLowerCase().includes(listSearchQuery.toLowerCase()))
+    : waitlist;
 
   if (loading) {
     return (
@@ -441,8 +731,24 @@ export default function OrgAdmin() {
           </div>
         )}
 
-        {/* Tabs */}
-        <div className="bg-white border-b border-gray-200">
+        {/* Unsaved Changes Warning */}
+        {hasUnsavedChanges && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2">
+            <div className="max-w-5xl mx-auto flex items-center justify-between">
+              <span className="text-sm text-amber-800">You have unsaved changes</span>
+              <button
+                onClick={handleSaveSettings}
+                disabled={saving}
+                className="text-sm font-medium text-amber-700 hover:text-amber-900"
+              >
+                Save now
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Tabs - Desktop */}
+        <div className="bg-white border-b border-gray-200 hidden md:block">
           <div className="max-w-5xl mx-auto px-4">
             <nav className="flex gap-6 overflow-x-auto">
               {['lists', 'whitelist', 'settings', 'email', 'gameinfo', 'archive'].map(tab => (
@@ -462,72 +768,159 @@ export default function OrgAdmin() {
           </div>
         </div>
 
-        <main className="max-w-5xl mx-auto px-4 py-6">
+        {/* Tabs - Mobile Bottom Nav */}
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40">
+          <nav className="grid grid-cols-6 gap-1 px-2 py-2">
+            {[
+              { id: 'lists', icon: '📋', label: 'Lists' },
+              { id: 'whitelist', icon: '⭐', label: 'Members' },
+              { id: 'settings', icon: '⚙️', label: 'Settings' },
+              { id: 'email', icon: '📧', label: 'Email' },
+              { id: 'gameinfo', icon: '🎮', label: 'Game' },
+              { id: 'archive', icon: '📁', label: 'Archive' },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex flex-col items-center py-1 rounded-lg text-xs ${
+                  activeTab === tab.id
+                    ? 'bg-blue-50 text-blue-600'
+                    : 'text-gray-500'
+                }`}
+              >
+                <span className="text-lg">{tab.icon}</span>
+                <span className="truncate w-full text-center">{tab.label}</span>
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        <main className="max-w-5xl mx-auto px-4 py-6 pb-24 md:pb-6">
           {/* Lists Tab */}
           {activeTab === 'lists' && (
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* Main List */}
-              <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="font-semibold">Main List ({mainList.length}/{settingsForm.mainListLimit})</h2>
-                  <button
-                    onClick={handleResetSignups}
-                    disabled={saving}
-                    className="text-sm text-red-600 hover:text-red-700"
-                  >
-                    Reset Week
-                  </button>
-                </div>
-                {mainList.length === 0 ? (
-                  <p className="text-gray-400 text-center py-4">No signups yet</p>
-                ) : (
-                  <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {mainList.map((person, i) => (
-                      <div key={person.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                        <div>
-                          <span className="text-gray-400 text-sm mr-2">#{i + 1}</span>
-                          <span className="font-medium">{person.name}</span>
-                          {person.isWhitelisted && (
-                            <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Member</span>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => handleRemovePerson(person.id, false)}
-                          disabled={saving}
-                          className="text-red-500 hover:text-red-600 text-sm"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ))}
+            <div className="space-y-4">
+              {/* Countdown Banner */}
+              {countdown && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-500 text-lg">⏱️</span>
+                    <span className="text-green-800 font-medium">Sign-ups close in {countdown}</span>
                   </div>
-                )}
+                  <span className="text-green-600 text-sm">Window is open</span>
+                </div>
+              )}
+
+              {/* Search and Export Bar */}
+              <div className="bg-white rounded-lg border border-gray-200 p-3 flex flex-col sm:flex-row gap-3">
+                {/* Search */}
+                <div className="flex-1 relative">
+                  <input
+                    type="text"
+                    value={listSearchQuery}
+                    onChange={e => setListSearchQuery(e.target.value)}
+                    placeholder="Search participants..."
+                    className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  {listSearchQuery && (
+                    <button
+                      onClick={() => setListSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                {/* Export PDF */}
+                <button
+                  onClick={handleExportPdf}
+                  disabled={exportingPdf || mainList.length === 0}
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  {exportingPdf ? 'Exporting...' : 'Export PDF'}
+                </button>
               </div>
 
-              {/* Waitlist */}
-              <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <h2 className="font-semibold mb-4">Waitlist ({waitlist.length})</h2>
-                {waitlist.length === 0 ? (
-                  <p className="text-gray-400 text-center py-4">Waitlist empty</p>
-                ) : (
-                  <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {waitlist.map((person, i) => (
-                      <div key={person.id} className="flex items-center justify-between p-2 bg-orange-50 rounded">
-                        <div>
-                          <span className="text-gray-400 text-sm mr-2">#{i + 1}</span>
-                          <span className="font-medium">{person.name}</span>
-                        </div>
-                        <button
-                          onClick={() => handleRemovePerson(person.id, true)}
-                          disabled={saving}
-                          className="text-red-500 hover:text-red-600 text-sm"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ))}
+              {/* Search Results Count */}
+              {listSearchQuery && (
+                <p className="text-sm text-gray-500">
+                  Found {filteredMainList.length} in main list, {filteredWaitlist.length} in waitlist
+                </p>
+              )}
+
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* Main List */}
+                <div className="bg-white rounded-lg border border-gray-200 p-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="font-semibold">Main List ({mainList.length}/{settingsForm.mainListLimit})</h2>
+                    <button
+                      onClick={handleResetSignups}
+                      disabled={saving}
+                      className="text-sm text-red-600 hover:text-red-700"
+                    >
+                      Reset Week
+                    </button>
                   </div>
-                )}
+                  {filteredMainList.length === 0 ? (
+                    <p className="text-gray-400 text-center py-4">
+                      {listSearchQuery ? 'No matches found' : 'No signups yet'}
+                    </p>
+                  ) : (
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {filteredMainList.map((person, i) => (
+                        <div key={person.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                          <div>
+                            <span className="text-gray-400 text-sm mr-2">#{mainList.indexOf(person) + 1}</span>
+                            <span className="font-medium">{person.name}</span>
+                            {person.isWhitelisted && (
+                              <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Member</span>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => handleRemovePerson(person.id, false)}
+                            disabled={saving}
+                            className="text-red-500 hover:text-red-600 text-sm"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Waitlist */}
+                <div className="bg-white rounded-lg border border-gray-200 p-4">
+                  <h2 className="font-semibold mb-4">Waitlist ({waitlist.length})</h2>
+                  {filteredWaitlist.length === 0 ? (
+                    <p className="text-gray-400 text-center py-4">
+                      {listSearchQuery ? 'No matches found' : 'Waitlist empty'}
+                    </p>
+                  ) : (
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {filteredWaitlist.map((person, i) => (
+                        <div key={person.id} className="flex items-center justify-between p-2 bg-orange-50 rounded">
+                          <div>
+                            <span className="text-gray-400 text-sm mr-2">#{waitlist.indexOf(person) + 1}</span>
+                            <span className="font-medium">{person.name}</span>
+                          </div>
+                          <button
+                            onClick={() => handleRemovePerson(person.id, true)}
+                            disabled={saving}
+                            className="text-red-500 hover:text-red-600 text-sm"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -614,8 +1007,31 @@ export default function OrgAdmin() {
                 </div>
 
                 {settingsForm.accessPeriod.enabled && (
-                  <div className="space-y-3 pl-6 border-l-2 border-gray-100">
-                    <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-4 pl-6 border-l-2 border-gray-100">
+                    {/* Schedule Preview */}
+                    <div className="bg-blue-50 rounded-lg p-3">
+                      <p className="text-sm font-medium text-blue-900 mb-1">Schedule Preview</p>
+                      <div className="flex items-center gap-2 text-sm text-blue-700">
+                        <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded">Opens</span>
+                        <span>{days[settingsForm.accessPeriod.startDay]} {formatTime12h(settingsForm.accessPeriod.startHour, settingsForm.accessPeriod.startMinute)}</span>
+                        <span className="text-blue-400">→</span>
+                        <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded">Closes</span>
+                        <span>{days[settingsForm.accessPeriod.endDay]} {formatTime12h(settingsForm.accessPeriod.endHour, settingsForm.accessPeriod.endMinute)}</span>
+                      </div>
+                    </div>
+
+                    {/* Timezone Display */}
+                    <div className="text-xs text-gray-500">
+                      <span className="font-medium">Timezone:</span> {settingsForm.accessPeriod.timezone || org?.timezone || 'Africa/Lagos'}
+                      {getCurrentTimeInTimezone(settingsForm.accessPeriod.timezone || org?.timezone || 'Africa/Lagos') && (
+                        <span className="ml-2 text-gray-400">
+                          (Currently: {getCurrentTimeInTimezone(settingsForm.accessPeriod.timezone || org?.timezone || 'Africa/Lagos')})
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Opens */}
+                    <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">Opens on</label>
                         <select
@@ -624,44 +1040,26 @@ export default function OrgAdmin() {
                             ...settingsForm,
                             accessPeriod: { ...settingsForm.accessPeriod, startDay: parseInt(e.target.value) }
                           })}
-                          className="w-full px-2 py-1 border border-gray-200 rounded text-sm"
+                          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm"
                         >
                           {days.map((day, i) => (
                             <option key={i} value={i}>{day}</option>
                           ))}
                         </select>
                       </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Hour</label>
-                        <input
-                          type="number"
-                          min={0}
-                          max={23}
-                          value={settingsForm.accessPeriod.startHour}
-                          onChange={e => setSettingsForm({
-                            ...settingsForm,
-                            accessPeriod: { ...settingsForm.accessPeriod, startHour: parseInt(e.target.value) || 0 }
-                          })}
-                          className="w-full px-2 py-1 border border-gray-200 rounded text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Minute</label>
-                        <input
-                          type="number"
-                          min={0}
-                          max={59}
-                          value={settingsForm.accessPeriod.startMinute}
-                          onChange={e => setSettingsForm({
-                            ...settingsForm,
-                            accessPeriod: { ...settingsForm.accessPeriod, startMinute: parseInt(e.target.value) || 0 }
-                          })}
-                          className="w-full px-2 py-1 border border-gray-200 rounded text-sm"
-                        />
-                      </div>
+                      <TimePicker
+                        label="Opens at"
+                        hour={settingsForm.accessPeriod.startHour}
+                        minute={settingsForm.accessPeriod.startMinute}
+                        onChange={(h, m) => setSettingsForm({
+                          ...settingsForm,
+                          accessPeriod: { ...settingsForm.accessPeriod, startHour: h, startMinute: m }
+                        })}
+                      />
                     </div>
 
-                    <div className="grid grid-cols-3 gap-3">
+                    {/* Closes */}
+                    <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">Closes on</label>
                         <select
@@ -670,41 +1068,22 @@ export default function OrgAdmin() {
                             ...settingsForm,
                             accessPeriod: { ...settingsForm.accessPeriod, endDay: parseInt(e.target.value) }
                           })}
-                          className="w-full px-2 py-1 border border-gray-200 rounded text-sm"
+                          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm"
                         >
                           {days.map((day, i) => (
                             <option key={i} value={i}>{day}</option>
                           ))}
                         </select>
                       </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Hour</label>
-                        <input
-                          type="number"
-                          min={0}
-                          max={23}
-                          value={settingsForm.accessPeriod.endHour}
-                          onChange={e => setSettingsForm({
-                            ...settingsForm,
-                            accessPeriod: { ...settingsForm.accessPeriod, endHour: parseInt(e.target.value) || 0 }
-                          })}
-                          className="w-full px-2 py-1 border border-gray-200 rounded text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Minute</label>
-                        <input
-                          type="number"
-                          min={0}
-                          max={59}
-                          value={settingsForm.accessPeriod.endMinute}
-                          onChange={e => setSettingsForm({
-                            ...settingsForm,
-                            accessPeriod: { ...settingsForm.accessPeriod, endMinute: parseInt(e.target.value) || 0 }
-                          })}
-                          className="w-full px-2 py-1 border border-gray-200 rounded text-sm"
-                        />
-                      </div>
+                      <TimePicker
+                        label="Closes at"
+                        hour={settingsForm.accessPeriod.endHour}
+                        minute={settingsForm.accessPeriod.endMinute}
+                        onChange={(h, m) => setSettingsForm({
+                          ...settingsForm,
+                          accessPeriod: { ...settingsForm.accessPeriod, endHour: h, endMinute: m }
+                        })}
+                      />
                     </div>
                   </div>
                 )}
@@ -877,6 +1256,22 @@ export default function OrgAdmin() {
                     </div>
                   </div>
 
+                  {/* Email Preview */}
+                  <div className="bg-white rounded-lg border border-gray-200 p-6">
+                    <h3 className="font-semibold mb-4">Email Preview</h3>
+                    <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                      <div>
+                        <span className="text-xs text-gray-500 block mb-1">Subject:</span>
+                        <p className="text-sm font-medium text-gray-800">{getEmailPreview().subject}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-gray-500 block mb-1">Body:</span>
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap">{getEmailPreview().body}</p>
+                      </div>
+                      <p className="text-xs text-gray-400 italic">+ RSVP list will be attached as PDF</p>
+                    </div>
+                  </div>
+
                   {/* Save Button */}
                   <button
                     onClick={handleSaveSettings}
@@ -886,11 +1281,59 @@ export default function OrgAdmin() {
                     {saving ? 'Saving...' : 'Save Email Settings'}
                   </button>
 
-                  {/* Manual Send Section */}
+                  {/* Last Sent Indicator */}
+                  {(emailStatus || lastEmailWeek) && (
+                    <div className="bg-white rounded-lg border border-gray-200 p-6">
+                      <h3 className="font-semibold mb-3">Email Status</h3>
+                      <div className="space-y-2">
+                        {lastEmailWeek && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className={`w-2 h-2 rounded-full ${emailStatus?.success !== false ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                            <span className="text-gray-600">
+                              Last sent: Week {lastEmailWeek}
+                              {emailStatus?.sentAt && (
+                                <span className="text-gray-400 ml-1">
+                                  ({new Date(emailStatus.sentAt).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: 'numeric',
+                                    minute: '2-digit',
+                                  })})
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        )}
+                        {emailStatus?.recipientCount && (
+                          <p className="text-xs text-gray-500">
+                            Sent to {emailStatus.recipientCount} recipient{emailStatus.recipientCount !== 1 ? 's' : ''}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Test & Manual Send Section */}
                   <div className="bg-white rounded-lg border border-gray-200 p-6">
-                    <h3 className="font-semibold mb-2">Manual Send</h3>
-                    <p className="text-sm text-gray-500 mb-4">
-                      Send the RSVP list email immediately, regardless of the schedule.
+                    <h3 className="font-semibold mb-4">Send Email</h3>
+
+                    {/* Test Email */}
+                    <div className="mb-4 pb-4 border-b border-gray-100">
+                      <p className="text-sm text-gray-500 mb-3">
+                        Send a test email to yourself (uses your organizer email)
+                      </p>
+                      <button
+                        onClick={handleSendTestEmail}
+                        disabled={sendingTestEmail}
+                        className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 font-medium text-sm"
+                      >
+                        {sendingTestEmail ? 'Sending...' : 'Send Test Email'}
+                      </button>
+                    </div>
+
+                    {/* Manual Send */}
+                    <p className="text-sm text-gray-500 mb-3">
+                      Send the RSVP list to all recipients now
                     </p>
                     <button
                       onClick={handleSendEmailNow}

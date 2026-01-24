@@ -5,7 +5,7 @@ import Link from 'next/link';
 const sportEmojis = {
   frisbee: '🥏', padel: '🎾', tennis: '🎾', volleyball: '🏐',
   basketball: '🏀', football: '⚽', cycling: '🚴', running: '🏃',
-  swimming: '🏊', pickleball: '🏓', other: '🏆',
+  swimming: '🏊', yoga: '🧘', pickleball: '🏓', other: '🏆',
 };
 
 export default function BrowsePage() {

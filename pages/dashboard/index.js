@@ -102,7 +102,8 @@ export default function Dashboard() {
         throw new Error(data.error || 'Failed to create organization');
       }
 
-      setOrganizations([...organizations, data.organization]);
+      // Re-fetch user data to get updated org list with stats
+      await fetchUserData();
       setShowCreateForm(false);
       setNewOrg({
         name: '',
@@ -498,6 +499,8 @@ export default function Dashboard() {
                       <option value="cycling">Cycling</option>
                       <option value="running">Running</option>
                       <option value="swimming">Swimming</option>
+                      <option value="yoga">Yoga</option>
+                      <option value="pickleball">Pickleball</option>
                       <option value="other">Other</option>
                     </select>
                   </div>

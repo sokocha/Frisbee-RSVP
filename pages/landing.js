@@ -35,6 +35,8 @@ export default function Landing() {
     cycling: '🚴',
     running: '🏃',
     swimming: '🏊',
+    yoga: '🧘',
+    pickleball: '🏓',
     other: '🏆',
   };
 
