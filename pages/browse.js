@@ -107,8 +107,12 @@ export default function BrowsePage() {
     if (selectedTimeOfDay) {
       const timeOption = timeOfDayOptions.find(t => t.value === selectedTimeOfDay);
       if (timeOption && org.startHour !== null) {
-        const [start, end] = timeOption.range;
-        if (org.startHour < start || org.startHour >= end) return false;
+        const [filterStart, filterEnd] = timeOption.range;
+        const eventStart = org.startHour;
+        const eventEnd = org.endHour !== null ? org.endHour : org.startHour + 1; // Default 1 hour if no end time
+        // Check if event duration overlaps with filter time range
+        // Overlap exists if event starts before filter ends AND event ends after filter starts
+        if (eventStart >= filterEnd || eventEnd <= filterStart) return false;
       } else if (org.startHour === null) {
         return false; // Exclude events without a set time when filtering by time
       }

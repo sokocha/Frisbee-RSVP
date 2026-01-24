@@ -56,6 +56,7 @@ export default async function handler(req, res) {
       // Get game day and time info
       const gameDay = settings.gameInfo?.gameDay;
       const startHour = settings.gameInfo?.startHour;
+      const endHour = settings.gameInfo?.endHour;
 
       return {
         slug: org.slug,
@@ -67,6 +68,7 @@ export default async function handler(req, res) {
         isOpen,
         gameDay: gameDay !== undefined ? gameDay : null,
         startHour: startHour !== undefined ? startHour : null,
+        endHour: endHour !== undefined ? endHour : null,
       };
     }));
 
