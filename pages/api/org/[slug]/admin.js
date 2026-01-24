@@ -149,6 +149,16 @@ export default async function handler(req, res) {
       const timezone = settings.accessPeriod?.timezone || org.timezone || 'Africa/Lagos';
       const currentWeekId = getCurrentWeekId(timezone);
 
+      // Prepopulate gameInfo.location with organization's location/streetAddress if not already set
+      if (settings.gameInfo?.location) {
+        if (!settings.gameInfo.location.name && org.location) {
+          settings.gameInfo.location.name = org.location;
+        }
+        if (!settings.gameInfo.location.address && org.streetAddress) {
+          settings.gameInfo.location.address = org.streetAddress;
+        }
+      }
+
       return res.status(200).json({
         organization: {
           id: org.id,
