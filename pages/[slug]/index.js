@@ -809,7 +809,7 @@ export default function OrgRSVP() {
                     )}
                     {(gameInfo.location.googleMapsUrl || gameInfo.location.address) && (
                       <a
-                        href={gameInfo.location.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(gameInfo.location.address)}`}
+                        href={gameInfo.location.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([gameInfo.location.address, gameInfo.location.name].filter(Boolean).join(', '))}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-2 mt-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl transition-colors"
