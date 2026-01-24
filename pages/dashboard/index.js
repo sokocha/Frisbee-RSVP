@@ -34,6 +34,7 @@ export default function Dashboard() {
   });
   const [slugStatus, setSlugStatus] = useState({ checking: false, available: null, error: null });
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+  const [createStep, setCreateStep] = useState(1); // Multi-step wizard: 1=Basics, 2=Schedule, 3=Location
 
   useEffect(() => {
     fetchUserData();
@@ -157,6 +158,7 @@ export default function Dashboard() {
       });
       setSlugManuallyEdited(false);
       setSlugStatus({ checking: false, available: null, error: null });
+      setCreateStep(1);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -280,11 +282,20 @@ export default function Dashboard() {
         {/* Header */}
         <header className="bg-white shadow-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">PlayDay</h1>
-              <p className="text-sm text-gray-500">Welcome, {user?.name}</p>
-            </div>
+            <Link href="/browse" className="flex items-center gap-2 group">
+              <span className="text-2xl">🏆</span>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 group-hover:text-blue-600 transition-colors">PlayDay</h1>
+                <p className="text-sm text-gray-500">Welcome, {user?.name}</p>
+              </div>
+            </Link>
             <div className="flex items-center gap-4">
+              <Link
+                href="/browse"
+                className="text-sm text-gray-600 hover:text-gray-900"
+              >
+                Browse Events
+              </Link>
               {user?.isSuperAdmin && (
                 <Link
                   href="/super-admin"
@@ -464,116 +475,176 @@ export default function Dashboard() {
           </div>
         </main>
 
-        {/* Create Organization Modal */}
+        {/* Create Organization Modal - Multi-step Wizard */}
         {showCreateForm && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg max-w-md w-full p-6">
-              <h3 className="text-lg font-semibold mb-4">Create Organization</h3>
-
-              {error && (
-                <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm">
-                  {error}
+            <div className="bg-white rounded-xl max-w-md w-full overflow-hidden">
+              {/* Header with Progress */}
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 text-white">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-semibold">Create Organization</h3>
+                  <button
+                    onClick={() => {
+                      setShowCreateForm(false);
+                      setError('');
+                      setSlugManuallyEdited(false);
+                      setSlugStatus({ checking: false, available: null, error: null });
+                      setCreateStep(1);
+                    }}
+                    className="text-white/70 hover:text-white"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                 </div>
-              )}
-
-              <form onSubmit={handleCreateOrg}>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Organization Name *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={newOrg.name}
-                      onChange={handleNameChange}
-                      placeholder="e.g., Lagos Padel Club"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      URL Slug *
-                    </label>
-                    <div className="flex items-center">
-                      <span className="text-gray-500 text-sm mr-1">itsplayday.com/</span>
-                      <input
-                        type="text"
-                        required
-                        value={newOrg.slug}
-                        onChange={handleSlugChange}
-                        placeholder="lagos-padel"
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
+                {/* Step Indicators */}
+                <div className="flex items-center gap-2">
+                  {[
+                    { num: 1, label: 'Basics' },
+                    { num: 2, label: 'Schedule' },
+                    { num: 3, label: 'Location' },
+                  ].map((step, i) => (
+                    <div key={step.num} className="flex items-center">
+                      <div className={`flex items-center gap-1.5 ${createStep >= step.num ? 'text-white' : 'text-white/50'}`}>
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                          createStep > step.num
+                            ? 'bg-white text-blue-600'
+                            : createStep === step.num
+                            ? 'bg-white/20 border-2 border-white'
+                            : 'bg-white/10 border border-white/30'
+                        }`}>
+                          {createStep > step.num ? (
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : (
+                            step.num
+                          )}
+                        </div>
+                        <span className="text-xs font-medium hidden sm:inline">{step.label}</span>
+                      </div>
+                      {i < 2 && (
+                        <div className={`w-6 sm:w-8 h-0.5 mx-1 ${createStep > step.num ? 'bg-white' : 'bg-white/20'}`} />
+                      )}
                     </div>
-                    {slugStatus.checking && (
-                      <p className="text-sm text-gray-500 mt-1">Checking availability...</p>
-                    )}
-                    {slugStatus.available === true && (
-                      <p className="text-sm text-green-600 mt-1">This slug is available!</p>
-                    )}
-                    {slugStatus.error && (
-                      <p className="text-sm text-red-600 mt-1">{slugStatus.error}</p>
-                    )}
+                  ))}
+                </div>
+              </div>
+
+              {/* Form Content */}
+              <div className="p-6">
+                {error && (
+                  <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm">
+                    {error}
                   </div>
+                )}
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Sport *
-                    </label>
-                    <select
-                      required
-                      value={newOrg.sport}
-                      onChange={e => setNewOrg({ ...newOrg, sport: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="">Select a sport</option>
-                      <option value="basketball">Basketball</option>
-                      <option value="cycling">Cycling</option>
-                      <option value="football">Football</option>
-                      <option value="frisbee">Frisbee</option>
-                      <option value="padel">Padel</option>
-                      <option value="pickleball">Pickleball</option>
-                      <option value="running">Running</option>
-                      <option value="swimming">Swimming</option>
-                      <option value="tennis">Tennis</option>
-                      <option value="volleyball">Volleyball</option>
-                      <option value="yoga">Yoga</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
+                <form onSubmit={handleCreateOrg}>
+                  {/* Step 1: Basics */}
+                  {createStep === 1 && (
+                    <div className="space-y-4">
+                      <p className="text-gray-500 text-sm mb-4">Let's start with the basics about your organization.</p>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Max Participants *
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      min={1}
-                      max={500}
-                      value={newOrg.maxParticipants}
-                      onChange={e => setNewOrg({ ...newOrg, maxParticipants: parseInt(e.target.value) || 30 })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Maximum number of people who can sign up (others go to waitlist)</p>
-                  </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Organization Name *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={newOrg.name}
+                          onChange={handleNameChange}
+                          placeholder="e.g., Lagos Padel Club"
+                          className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
 
-                  {/* Game Schedule */}
-                  <div className="border-t border-gray-200 pt-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Recurring Game Schedule
-                    </label>
-                    <p className="text-xs text-gray-500 mb-3">When does your game typically take place each week?</p>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          URL Slug *
+                        </label>
+                        <div className="flex items-center">
+                          <span className="text-gray-400 text-sm mr-1">itsplayday.com/</span>
+                          <input
+                            type="text"
+                            required
+                            value={newOrg.slug}
+                            onChange={handleSlugChange}
+                            placeholder="lagos-padel"
+                            className="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                        {slugStatus.checking && (
+                          <p className="text-sm text-gray-500 mt-1 flex items-center gap-1">
+                            <span className="animate-spin">⏳</span> Checking availability...
+                          </p>
+                        )}
+                        {slugStatus.available === true && (
+                          <p className="text-sm text-green-600 mt-1 flex items-center gap-1">
+                            <span>✓</span> This slug is available!
+                          </p>
+                        )}
+                        {slugStatus.error && (
+                          <p className="text-sm text-red-600 mt-1">{slugStatus.error}</p>
+                        )}
+                      </div>
 
-                    <div className="grid grid-cols-3 gap-2 mb-3">
-                      <div className="col-span-3">
-                        <label className="block text-xs text-gray-500 mb-1">Day</label>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Sport *
+                        </label>
+                        <select
+                          required
+                          value={newOrg.sport}
+                          onChange={e => setNewOrg({ ...newOrg, sport: e.target.value })}
+                          className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          <option value="">Select a sport</option>
+                          <option value="basketball">🏀 Basketball</option>
+                          <option value="cycling">🚴 Cycling</option>
+                          <option value="football">⚽ Football</option>
+                          <option value="frisbee">🥏 Frisbee</option>
+                          <option value="padel">🎾 Padel</option>
+                          <option value="pickleball">🏓 Pickleball</option>
+                          <option value="running">🏃 Running</option>
+                          <option value="swimming">🏊 Swimming</option>
+                          <option value="tennis">🎾 Tennis</option>
+                          <option value="volleyball">🏐 Volleyball</option>
+                          <option value="yoga">🧘 Yoga</option>
+                          <option value="other">🏆 Other</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 2: Schedule */}
+                  {createStep === 2 && (
+                    <div className="space-y-4">
+                      <p className="text-gray-500 text-sm mb-4">When does your game typically take place each week?</p>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Max Participants *
+                        </label>
+                        <input
+                          type="number"
+                          required
+                          min={1}
+                          max={500}
+                          value={newOrg.maxParticipants}
+                          onChange={e => setNewOrg({ ...newOrg, maxParticipants: parseInt(e.target.value) || 30 })}
+                          className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Additional people will be placed on the waitlist</p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Game Day</label>
                         <select
                           value={newOrg.gameDay}
                           onChange={e => setNewOrg({ ...newOrg, gameDay: parseInt(e.target.value) })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                          className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         >
                           <option value={0}>Sunday</option>
                           <option value={1}>Monday</option>
@@ -584,137 +655,182 @@ export default function Dashboard() {
                           <option value={6}>Saturday</option>
                         </select>
                       </div>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Start Time</label>
-                        <div className="flex gap-1">
-                          <input
-                            type="number"
-                            min={0}
-                            max={23}
-                            value={newOrg.gameStartHour}
-                            onChange={e => setNewOrg({ ...newOrg, gameStartHour: parseInt(e.target.value) || 0 })}
-                            className="w-16 px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm text-center"
-                            placeholder="HH"
-                          />
-                          <span className="self-center text-gray-400">:</span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={59}
-                            step={5}
-                            value={newOrg.gameStartMinute.toString().padStart(2, '0')}
-                            onChange={e => setNewOrg({ ...newOrg, gameStartMinute: parseInt(e.target.value) || 0 })}
-                            className="w-16 px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm text-center"
-                            placeholder="MM"
-                          />
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min={0}
+                              max={23}
+                              value={newOrg.gameStartHour}
+                              onChange={e => setNewOrg({ ...newOrg, gameStartHour: parseInt(e.target.value) || 0 })}
+                              className="w-14 px-2 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
+                            />
+                            <span className="text-gray-400">:</span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={59}
+                              step={5}
+                              value={newOrg.gameStartMinute.toString().padStart(2, '0')}
+                              onChange={e => setNewOrg({ ...newOrg, gameStartMinute: parseInt(e.target.value) || 0 })}
+                              className="w-14 px-2 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min={0}
+                              max={23}
+                              value={newOrg.gameEndHour}
+                              onChange={e => setNewOrg({ ...newOrg, gameEndHour: parseInt(e.target.value) || 0 })}
+                              className="w-14 px-2 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
+                            />
+                            <span className="text-gray-400">:</span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={59}
+                              step={5}
+                              value={newOrg.gameEndMinute.toString().padStart(2, '0')}
+                              onChange={e => setNewOrg({ ...newOrg, gameEndMinute: parseInt(e.target.value) || 0 })}
+                              className="w-14 px-2 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
+                            />
+                          </div>
                         </div>
                       </div>
+
+                      {/* Schedule Preview */}
+                      <div className="bg-blue-50 rounded-lg p-3 mt-2">
+                        <p className="text-sm text-blue-800">
+                          <span className="font-medium">Preview:</span> Every {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][newOrg.gameDay]}, {newOrg.gameStartHour}:{newOrg.gameStartMinute.toString().padStart(2, '0')} - {newOrg.gameEndHour}:{newOrg.gameEndMinute.toString().padStart(2, '0')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 3: Location */}
+                  {createStep === 3 && (
+                    <div className="space-y-4">
+                      <p className="text-gray-500 text-sm mb-4">Where do you play? This helps people find you.</p>
+
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">End Time</label>
-                        <div className="flex gap-1">
-                          <input
-                            type="number"
-                            min={0}
-                            max={23}
-                            value={newOrg.gameEndHour}
-                            onChange={e => setNewOrg({ ...newOrg, gameEndHour: parseInt(e.target.value) || 0 })}
-                            className="w-16 px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm text-center"
-                            placeholder="HH"
-                          />
-                          <span className="self-center text-gray-400">:</span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={59}
-                            step={5}
-                            value={newOrg.gameEndMinute.toString().padStart(2, '0')}
-                            onChange={e => setNewOrg({ ...newOrg, gameEndMinute: parseInt(e.target.value) || 0 })}
-                            className="w-16 px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm text-center"
-                            placeholder="MM"
-                          />
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Area (Lagos)
+                        </label>
+                        <select
+                          value={newOrg.location}
+                          onChange={e => setNewOrg({ ...newOrg, location: e.target.value })}
+                          className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          <option value="">Select area (optional)</option>
+                          {LAGOS_AREAS.map(area => (
+                            <option key={area} value={formatLocation(area)}>
+                              {area}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Street Address
+                        </label>
+                        <input
+                          type="text"
+                          value={newOrg.streetAddress}
+                          onChange={e => setNewOrg({ ...newOrg, streetAddress: e.target.value })}
+                          placeholder="e.g., 15 Adeola Odeku Street"
+                          className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Specific venue address for players to find you</p>
+                      </div>
+
+                      {/* Summary Preview */}
+                      <div className="bg-gray-50 rounded-lg p-4 mt-2">
+                        <p className="text-sm font-medium text-gray-700 mb-2">Summary</p>
+                        <div className="space-y-1 text-sm text-gray-600">
+                          <p><span className="text-gray-400">Name:</span> {newOrg.name || '—'}</p>
+                          <p><span className="text-gray-400">Sport:</span> {newOrg.sport ? newOrg.sport.charAt(0).toUpperCase() + newOrg.sport.slice(1) : '—'}</p>
+                          <p><span className="text-gray-400">Capacity:</span> {newOrg.maxParticipants} players</p>
+                          {newOrg.location && <p><span className="text-gray-400">Location:</span> {newOrg.location}</p>}
                         </div>
                       </div>
                     </div>
-                  </div>
+                  )}
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Area (Lagos)
-                    </label>
-                    <select
-                      value={newOrg.location}
-                      onChange={e => setNewOrg({ ...newOrg, location: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="">Select area...</option>
-                      {LAGOS_AREAS.map(area => (
-                        <option key={area} value={formatLocation(area)}>
-                          {area}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {/* Navigation Buttons */}
+                  <div className="flex gap-3 mt-6">
+                    {createStep > 1 ? (
+                      <button
+                        type="button"
+                        onClick={() => setCreateStep(createStep - 1)}
+                        className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
+                      >
+                        Back
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCreateForm(false);
+                          setError('');
+                          setSlugManuallyEdited(false);
+                          setSlugStatus({ checking: false, available: null, error: null });
+                          setCreateStep(1);
+                        }}
+                        className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
+                      >
+                        Cancel
+                      </button>
+                    )}
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Street Address
-                    </label>
-                    <input
-                      type="text"
-                      value={newOrg.streetAddress}
-                      onChange={e => setNewOrg({ ...newOrg, streetAddress: e.target.value })}
-                      placeholder="e.g., 15 Adeola Odeku Street"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Specific venue address for players to find you</p>
+                    {createStep < 3 ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Validate current step before proceeding
+                          if (createStep === 1) {
+                            if (!newOrg.name || !newOrg.slug || !newOrg.sport) {
+                              setError('Please fill in all required fields');
+                              return;
+                            }
+                            if (slugStatus.available === false) {
+                              setError('Please choose an available URL slug');
+                              return;
+                            }
+                          }
+                          setError('');
+                          setCreateStep(createStep + 1);
+                        }}
+                        disabled={createStep === 1 && slugStatus.checking}
+                        className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
+                      >
+                        Continue
+                      </button>
+                    ) : (
+                      <button
+                        type="submit"
+                        disabled={creating}
+                        className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
+                      >
+                        {creating ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <span className="animate-spin">⏳</span> Creating...
+                          </span>
+                        ) : (
+                          'Create Organization'
+                        )}
+                      </button>
+                    )}
                   </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Timezone
-                    </label>
-                    <select
-                      value={newOrg.timezone}
-                      onChange={e => setNewOrg({ ...newOrg, timezone: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="Africa/Lagos">Africa/Lagos (WAT)</option>
-                      <option value="Africa/Nairobi">Africa/Nairobi (EAT)</option>
-                      <option value="Africa/Johannesburg">Africa/Johannesburg (SAST)</option>
-                      <option value="Europe/London">Europe/London (GMT/BST)</option>
-                      <option value="Europe/Paris">Europe/Paris (CET)</option>
-                      <option value="America/New_York">America/New_York (EST)</option>
-                      <option value="America/Los_Angeles">America/Los_Angeles (PST)</option>
-                      <option value="Asia/Dubai">Asia/Dubai (GST)</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex gap-3 mt-6">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCreateForm(false);
-                      setError('');
-                      setSlugManuallyEdited(false);
-                      setSlugStatus({ checking: false, available: null, error: null });
-                    }}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={creating || slugStatus.available === false}
-                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {creating ? 'Creating...' : 'Create'}
-                  </button>
-                </div>
-              </form>
+                </form>
+              </div>
             </div>
           </div>
         )}

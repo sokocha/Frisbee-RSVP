@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { LAGOS_AREAS, formatLocation, parseArea } from '../../lib/locations';
 
 // Helper: Format time as 12-hour with am/pm
 function formatTime12h(hour, minute) {
@@ -119,7 +120,7 @@ export default function OrgAdmin() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [unauthorized, setUnauthorized] = useState(false);
-  const [activeTab, setActiveTab] = useState('lists');
+  const [activeTab, setActiveTab] = useState('people');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -159,6 +160,10 @@ export default function OrgAdmin() {
   const [emailRecipients, setEmailRecipients] = useState('');
   const [emailCc, setEmailCc] = useState('');
   const [emailBcc, setEmailBcc] = useState('');
+
+  // Location form
+  const [locationForm, setLocationForm] = useState({ location: '', streetAddress: '' });
+  const [savingLocation, setSavingLocation] = useState(false);
 
   // Settings form
   const [settingsForm, setSettingsForm] = useState({
@@ -253,6 +258,11 @@ export default function OrgAdmin() {
           setEmailCc((data.settings.email?.cc || []).join(', '));
           setEmailBcc((data.settings.email?.bcc || []).join(', '));
         }
+        // Initialize location form
+        setLocationForm({
+          location: data.organization.location || '',
+          streetAddress: data.organization.streetAddress || '',
+        });
         setHasUnsavedChanges(false);
       }
     } catch (error) {
@@ -445,6 +455,36 @@ export default function OrgAdmin() {
       showMessage('Failed to update visibility', 'error');
     }
     setSaving(false);
+  }
+
+  async function handleUpdateLocation(e) {
+    e.preventDefault();
+    setSavingLocation(true);
+    try {
+      const res = await fetch(`/api/org/${slug}/admin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update-location',
+          data: {
+            location: locationForm.location,
+            streetAddress: locationForm.streetAddress,
+          }
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setOrg(data.organization);
+        showMessage('Location updated successfully');
+      } else {
+        showMessage(data.error, 'error');
+      }
+    } catch (error) {
+      showMessage('Failed to update location', 'error');
+    }
+    setSavingLocation(false);
   }
 
   async function handleDeleteOrganization() {
@@ -762,17 +802,23 @@ export default function OrgAdmin() {
         <div className="bg-white border-b border-gray-200 hidden md:block">
           <div className="max-w-5xl mx-auto px-4">
             <nav className="flex gap-6 overflow-x-auto">
-              {['lists', 'whitelist', 'settings', 'email', 'gameinfo', 'archive'].map(tab => (
+              {[
+                { id: 'people', label: 'People' },
+                { id: 'settings', label: 'Settings' },
+                { id: 'communication', label: 'Communication' },
+                { id: 'event', label: 'Event Details' },
+                { id: 'history', label: 'History' },
+              ].map(tab => (
                 <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
                   className={`py-3 border-b-2 font-medium text-sm whitespace-nowrap ${
-                    activeTab === tab
+                    activeTab === tab.id
                       ? 'border-blue-600 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700'
                   }`}
                 >
-                  {tab === 'gameinfo' ? 'Game Info' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  {tab.label}
                 </button>
               ))}
             </nav>
@@ -781,14 +827,13 @@ export default function OrgAdmin() {
 
         {/* Tabs - Mobile Bottom Nav */}
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40">
-          <nav className="grid grid-cols-6 gap-1 px-2 py-2">
+          <nav className="grid grid-cols-5 gap-1 px-2 py-2">
             {[
-              { id: 'lists', icon: '📋', label: 'Lists' },
-              { id: 'whitelist', icon: '⭐', label: 'Members' },
+              { id: 'people', icon: '👥', label: 'People' },
               { id: 'settings', icon: '⚙️', label: 'Settings' },
-              { id: 'email', icon: '📧', label: 'Email' },
-              { id: 'gameinfo', icon: '🎮', label: 'Game' },
-              { id: 'archive', icon: '📁', label: 'Archive' },
+              { id: 'communication', icon: '💬', label: 'Comms' },
+              { id: 'event', icon: '📅', label: 'Event' },
+              { id: 'history', icon: '📁', label: 'History' },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -807,9 +852,9 @@ export default function OrgAdmin() {
         </div>
 
         <main className="max-w-5xl mx-auto px-4 py-6 pb-24 md:pb-6">
-          {/* Lists Tab */}
-          {activeTab === 'lists' && (
-            <div className="space-y-4">
+          {/* People Tab - Combined Lists and Members */}
+          {activeTab === 'people' && (
+            <div className="space-y-6">
               {/* Countdown Banner */}
               {countdown && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center justify-between">
@@ -821,173 +866,193 @@ export default function OrgAdmin() {
                 </div>
               )}
 
-              {/* Search and Export Bar */}
-              <div className="bg-white rounded-lg border border-gray-200 p-3 flex flex-col sm:flex-row gap-3">
-                {/* Search */}
-                <div className="flex-1 relative">
-                  <input
-                    type="text"
-                    value={listSearchQuery}
-                    onChange={e => setListSearchQuery(e.target.value)}
-                    placeholder="Search participants..."
-                    className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  {listSearchQuery && (
-                    <button
-                      onClick={() => setListSearchQuery('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-                {/* Export PDF */}
-                <button
-                  onClick={handleExportPdf}
-                  disabled={exportingPdf || mainList.length === 0}
-                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  {exportingPdf ? 'Exporting...' : 'Export PDF'}
-                </button>
-              </div>
+              {/* This Week's Signups Section */}
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <span>📋</span> This Week's Signups
+                </h2>
 
-              {/* Search Results Count */}
-              {listSearchQuery && (
-                <p className="text-sm text-gray-500">
-                  Found {filteredMainList.length} in main list, {filteredWaitlist.length} in waitlist
-                </p>
-              )}
-
-              <div className="grid md:grid-cols-2 gap-6">
-                {/* Main List */}
-                <div className="bg-white rounded-lg border border-gray-200 p-4">
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="font-semibold">Main List ({mainList.length}/{settingsForm.mainListLimit})</h2>
-                    <button
-                      onClick={handleResetSignups}
-                      disabled={saving}
-                      className="text-sm text-red-600 hover:text-red-700"
-                    >
-                      Reset Week
-                    </button>
+                {/* Search and Export Bar */}
+                <div className="bg-white rounded-lg border border-gray-200 p-3 flex flex-col sm:flex-row gap-3 mb-4">
+                  {/* Search */}
+                  <div className="flex-1 relative">
+                    <input
+                      type="text"
+                      value={listSearchQuery}
+                      onChange={e => setListSearchQuery(e.target.value)}
+                      placeholder="Search participants..."
+                      className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    {listSearchQuery && (
+                      <button
+                        onClick={() => setListSearchQuery('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        ×
+                      </button>
+                    )}
                   </div>
-                  {filteredMainList.length === 0 ? (
-                    <p className="text-gray-400 text-center py-4">
-                      {listSearchQuery ? 'No matches found' : 'No signups yet'}
-                    </p>
-                  ) : (
-                    <div className="space-y-2 max-h-96 overflow-y-auto">
-                      {filteredMainList.map((person, i) => (
-                        <div key={person.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                          <div>
-                            <span className="text-gray-400 text-sm mr-2">#{mainList.indexOf(person) + 1}</span>
-                            <span className="font-medium">{person.name}</span>
-                            {person.isWhitelisted && (
-                              <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Member</span>
-                            )}
-                          </div>
-                          <button
-                            onClick={() => handleRemovePerson(person.id, false)}
-                            disabled={saving}
-                            className="text-red-500 hover:text-red-600 text-sm"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Waitlist */}
-                <div className="bg-white rounded-lg border border-gray-200 p-4">
-                  <h2 className="font-semibold mb-4">Waitlist ({waitlist.length})</h2>
-                  {filteredWaitlist.length === 0 ? (
-                    <p className="text-gray-400 text-center py-4">
-                      {listSearchQuery ? 'No matches found' : 'Waitlist empty'}
-                    </p>
-                  ) : (
-                    <div className="space-y-2 max-h-96 overflow-y-auto">
-                      {filteredWaitlist.map((person, i) => (
-                        <div key={person.id} className="flex items-center justify-between p-2 bg-orange-50 rounded">
-                          <div>
-                            <span className="text-gray-400 text-sm mr-2">#{waitlist.indexOf(person) + 1}</span>
-                            <span className="font-medium">{person.name}</span>
-                          </div>
-                          <button
-                            onClick={() => handleRemovePerson(person.id, true)}
-                            disabled={saving}
-                            className="text-red-500 hover:text-red-600 text-sm"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Whitelist Tab */}
-          {activeTab === 'whitelist' && (
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <h2 className="font-semibold mb-4">Add Members</h2>
-                <form onSubmit={handleAddWhitelist}>
-                  <textarea
-                    value={newWhitelistNames}
-                    onChange={e => setNewWhitelistNames(e.target.value)}
-                    placeholder="Enter names (one per line)"
-                    rows={5}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-3"
-                  />
+                  {/* Export PDF */}
                   <button
-                    type="submit"
-                    disabled={saving || !newWhitelistNames.trim()}
-                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                    onClick={handleExportPdf}
+                    disabled={exportingPdf || mainList.length === 0}
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
                   >
-                    {saving ? 'Adding...' : 'Add Members'}
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    {exportingPdf ? 'Exporting...' : 'Export PDF'}
                   </button>
-                </form>
+                </div>
+
+                {/* Search Results Count */}
+                {listSearchQuery && (
+                  <p className="text-sm text-gray-500 mb-4">
+                    Found {filteredMainList.length} in main list, {filteredWaitlist.length} in waitlist
+                  </p>
+                )}
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  {/* Main List */}
+                  <div className="bg-white rounded-lg border border-gray-200 p-4">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="font-medium text-gray-900">Main List ({mainList.length}/{settingsForm.mainListLimit})</h3>
+                      <button
+                        onClick={handleResetSignups}
+                        disabled={saving}
+                        className="text-sm text-red-600 hover:text-red-700"
+                      >
+                        Reset Week
+                      </button>
+                    </div>
+                    {filteredMainList.length === 0 ? (
+                      <p className="text-gray-400 text-center py-4">
+                        {listSearchQuery ? 'No matches found' : 'No signups yet'}
+                      </p>
+                    ) : (
+                      <div className="space-y-2 max-h-80 overflow-y-auto">
+                        {filteredMainList.map((person, i) => (
+                          <div key={person.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                            <div>
+                              <span className="text-gray-400 text-sm mr-2">#{mainList.indexOf(person) + 1}</span>
+                              <span className="font-medium">{person.name}</span>
+                              {person.isWhitelisted && (
+                                <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Member</span>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => handleRemovePerson(person.id, false)}
+                              disabled={saving}
+                              className="text-red-500 hover:text-red-600 text-sm"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Waitlist */}
+                  <div className="bg-white rounded-lg border border-gray-200 p-4">
+                    <h3 className="font-medium text-gray-900 mb-4">Waitlist ({waitlist.length})</h3>
+                    {filteredWaitlist.length === 0 ? (
+                      <p className="text-gray-400 text-center py-4">
+                        {listSearchQuery ? 'No matches found' : 'Waitlist empty'}
+                      </p>
+                    ) : (
+                      <div className="space-y-2 max-h-80 overflow-y-auto">
+                        {filteredWaitlist.map((person, i) => (
+                          <div key={person.id} className="flex items-center justify-between p-2 bg-orange-50 rounded">
+                            <div>
+                              <span className="text-gray-400 text-sm mr-2">#{waitlist.indexOf(person) + 1}</span>
+                              <span className="font-medium">{person.name}</span>
+                            </div>
+                            <button
+                              onClick={() => handleRemovePerson(person.id, true)}
+                              disabled={saving}
+                              className="text-red-500 hover:text-red-600 text-sm"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <h2 className="font-semibold mb-4">Current Members ({whitelist.length})</h2>
-                {whitelist.length === 0 ? (
-                  <p className="text-gray-400 text-center py-4">No whitelisted members</p>
-                ) : (
-                  <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {whitelist.map((member, i) => (
-                      <div key={i} className="flex items-center justify-between p-2 bg-blue-50 rounded">
-                        <span className="font-medium">{member.name}</span>
-                        <button
-                          onClick={() => handleRemoveWhitelist(member.name)}
-                          disabled={saving}
-                          className="text-red-500 hover:text-red-600 text-sm"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ))}
+              {/* Permanent Members Section */}
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <span>⭐</span> Permanent Members
+                </h2>
+                <p className="text-sm text-gray-500 mb-4">
+                  Members are automatically signed up each week and get priority positioning.
+                </p>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="bg-white rounded-lg border border-gray-200 p-4">
+                    <h3 className="font-medium text-gray-900 mb-4">Add Members</h3>
+                    <form onSubmit={handleAddWhitelist}>
+                      <textarea
+                        value={newWhitelistNames}
+                        onChange={e => setNewWhitelistNames(e.target.value)}
+                        placeholder="Enter names (one per line)"
+                        rows={4}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-3"
+                      />
+                      <button
+                        type="submit"
+                        disabled={saving || !newWhitelistNames.trim()}
+                        className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {saving ? 'Adding...' : 'Add Members'}
+                      </button>
+                    </form>
                   </div>
-                )}
+
+                  <div className="bg-white rounded-lg border border-gray-200 p-4">
+                    <h3 className="font-medium text-gray-900 mb-4">Current Members ({whitelist.length})</h3>
+                    {whitelist.length === 0 ? (
+                      <p className="text-gray-400 text-center py-4">No permanent members</p>
+                    ) : (
+                      <div className="space-y-2 max-h-60 overflow-y-auto">
+                        {whitelist.map((member, i) => (
+                          <div key={i} className="flex items-center justify-between p-2 bg-blue-50 rounded">
+                            <span className="font-medium">{member.name}</span>
+                            <button
+                              onClick={() => handleRemoveWhitelist(member.name)}
+                              disabled={saving}
+                              className="text-red-500 hover:text-red-600 text-sm"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
-          {/* Settings Tab */}
+          {/* Settings Tab - Reorganized into sections */}
           {activeTab === 'settings' && (
-            <div className="bg-white rounded-lg border border-gray-200 p-6 max-w-lg">
-              <h2 className="font-semibold mb-4">Organization Settings</h2>
-              <form onSubmit={handleSaveSettings} className="space-y-4">
+            <div className="space-y-6 max-w-2xl">
+              {/* Capacity Section */}
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                  <span>👥</span> Capacity
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Set the maximum number of participants for your event.
+                </p>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Max Participants
@@ -1000,29 +1065,38 @@ export default function OrgAdmin() {
                     onChange={e => setSettingsForm({ ...settingsForm, mainListLimit: parseInt(e.target.value) || 30 })}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg"
                   />
+                  <p className="text-xs text-gray-400 mt-1">Additional signups will be placed on the waitlist</p>
                 </div>
+              </div>
 
-                <div>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={settingsForm.accessPeriod.enabled}
-                      onChange={e => setSettingsForm({
-                        ...settingsForm,
-                        accessPeriod: { ...settingsForm.accessPeriod, enabled: e.target.checked }
-                      })}
-                      className="rounded"
-                    />
-                    <span className="text-sm font-medium text-gray-700">Enable scheduled RSVP window</span>
-                  </label>
-                </div>
+              {/* RSVP Window Section */}
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                  <span>🗓️</span> RSVP Window
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Control when people can sign up for your event.
+                </p>
+
+                <label className="flex items-center gap-2 mb-4">
+                  <input
+                    type="checkbox"
+                    checked={settingsForm.accessPeriod.enabled}
+                    onChange={e => setSettingsForm({
+                      ...settingsForm,
+                      accessPeriod: { ...settingsForm.accessPeriod, enabled: e.target.checked }
+                    })}
+                    className="rounded"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Enable scheduled RSVP window</span>
+                </label>
 
                 {settingsForm.accessPeriod.enabled && (
-                  <div className="space-y-4 pl-6 border-l-2 border-gray-100">
+                  <div className="space-y-4 pl-4 border-l-2 border-blue-100">
                     {/* Schedule Preview */}
                     <div className="bg-blue-50 rounded-lg p-3">
                       <p className="text-sm font-medium text-blue-900 mb-1">Schedule Preview</p>
-                      <div className="flex items-center gap-2 text-sm text-blue-700">
+                      <div className="flex flex-wrap items-center gap-2 text-sm text-blue-700">
                         <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded">Opens</span>
                         <span>{days[settingsForm.accessPeriod.startDay]} {formatTime12h(settingsForm.accessPeriod.startHour, settingsForm.accessPeriod.startMinute)}</span>
                         <span className="text-blue-400">→</span>
@@ -1098,20 +1172,59 @@ export default function OrgAdmin() {
                     </div>
                   </div>
                 )}
+              </div>
 
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {saving ? 'Saving...' : 'Save Settings'}
-                </button>
-              </form>
+              {/* Location Section */}
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                  <span>📍</span> Location
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Where your organization plays.
+                </p>
+                <form onSubmit={handleUpdateLocation} className="space-y-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Area (Lagos)</label>
+                    <select
+                      value={locationForm.location}
+                      onChange={e => setLocationForm({ ...locationForm, location: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                    >
+                      <option value="">Select area...</option>
+                      {LAGOS_AREAS.map(area => (
+                        <option key={area} value={formatLocation(area)}>
+                          {area}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Street Address</label>
+                    <input
+                      type="text"
+                      value={locationForm.streetAddress}
+                      onChange={e => setLocationForm({ ...locationForm, streetAddress: e.target.value })}
+                      placeholder="e.g., 15 Adeola Odeku Street"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Specific venue address for players to find you</p>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={savingLocation}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {savingLocation ? 'Saving...' : 'Update Location'}
+                  </button>
+                </form>
+              </div>
 
               {/* Visibility Section */}
-              <div className="mt-6 pt-6 border-t border-gray-200">
-                <h3 className="font-medium text-gray-900 mb-2">Visibility</h3>
-                <p className="text-sm text-gray-500 mb-3">
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                  <span>👁️</span> Visibility
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">
                   Control whether your organization appears in the public browse page.
                 </p>
                 <div className="flex gap-3">
@@ -1147,10 +1260,21 @@ export default function OrgAdmin() {
                 </p>
               </div>
 
+              {/* Save Settings Button */}
+              <button
+                onClick={handleSaveSettings}
+                disabled={saving}
+                className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
+              >
+                {saving ? 'Saving...' : 'Save All Settings'}
+              </button>
+
               {/* Danger Zone */}
-              <div className="mt-6 pt-6 border-t border-red-200">
-                <h3 className="font-medium text-red-600 mb-2">Danger Zone</h3>
-                <p className="text-sm text-gray-500 mb-3">
+              <div className="bg-white rounded-lg border border-red-200 p-6">
+                <h3 className="font-semibold text-red-600 mb-1 flex items-center gap-2">
+                  <span>⚠️</span> Danger Zone
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">
                   Permanently delete this organization and all its data.
                 </p>
                 <button
@@ -1164,11 +1288,60 @@ export default function OrgAdmin() {
             </div>
           )}
 
-          {/* Email Tab */}
-          {activeTab === 'email' && (
+          {/* Communication Tab - Email + WhatsApp */}
+          {activeTab === 'communication' && (
             <div className="space-y-6 max-w-2xl">
-              {/* Master Toggle */}
+              {/* WhatsApp Group Section */}
               <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                  <span>💬</span> WhatsApp Group
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Add a link so participants can join your WhatsApp group for updates.
+                </p>
+
+                <label className="flex items-center gap-3 mb-4">
+                  <input
+                    type="checkbox"
+                    checked={settingsForm.whatsapp?.enabled || false}
+                    onChange={e => setSettingsForm({
+                      ...settingsForm,
+                      whatsapp: { ...settingsForm.whatsapp, enabled: e.target.checked }
+                    })}
+                    className="w-4 h-4 rounded"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Show WhatsApp Group Link on public page</span>
+                </label>
+
+                {settingsForm.whatsapp?.enabled && (
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">WhatsApp Group Invite Link</label>
+                    <input
+                      type="url"
+                      value={settingsForm.whatsapp?.groupUrl || ''}
+                      onChange={e => setSettingsForm({
+                        ...settingsForm,
+                        whatsapp: { ...settingsForm.whatsapp, groupUrl: e.target.value }
+                      })}
+                      placeholder="https://chat.whatsapp.com/..."
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                      Go to your WhatsApp group → Settings → Invite via link → Copy link
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Email Section */}
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                  <span>📧</span> Auto-send RSVP List
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Automatically email the RSVP list when sign-ups close each week.
+                </p>
+
                 <label className="flex items-center gap-3">
                   <input
                     type="checkbox"
@@ -1177,12 +1350,9 @@ export default function OrgAdmin() {
                       ...settingsForm,
                       email: { ...settingsForm.email, enabled: e.target.checked }
                     })}
-                    className="w-5 h-5 rounded"
+                    className="w-4 h-4 rounded"
                   />
-                  <div>
-                    <span className="font-medium text-gray-900">Auto-send RSVP List</span>
-                    <p className="text-sm text-gray-500">Automatically email the RSVP list when sign-ups close</p>
-                  </div>
+                  <span className="text-sm font-medium text-gray-700">Enable automatic email</span>
                 </label>
               </div>
 
@@ -1283,15 +1453,6 @@ export default function OrgAdmin() {
                     </div>
                   </div>
 
-                  {/* Save Button */}
-                  <button
-                    onClick={handleSaveSettings}
-                    disabled={saving}
-                    className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
-                  >
-                    {saving ? 'Saving...' : 'Save Email Settings'}
-                  </button>
-
                   {/* Last Sent Indicator */}
                   {(emailStatus || lastEmailWeek) && (
                     <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -1359,11 +1520,20 @@ export default function OrgAdmin() {
                   </div>
                 </>
               )}
+
+              {/* Save Button */}
+              <button
+                onClick={handleSaveSettings}
+                disabled={saving}
+                className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
+              >
+                {saving ? 'Saving...' : 'Save Communication Settings'}
+              </button>
             </div>
           )}
 
-          {/* Game Info Tab */}
-          {activeTab === 'gameinfo' && (
+          {/* Event Details Tab (formerly Game Info) */}
+          {activeTab === 'event' && (
             <div className="space-y-6 max-w-2xl">
               {/* Master Toggle */}
               <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -1378,18 +1548,20 @@ export default function OrgAdmin() {
                     className="w-5 h-5 rounded"
                   />
                   <div>
-                    <span className="font-medium text-gray-900">Show Game Day Info</span>
-                    <p className="text-sm text-gray-500">Display weather, location, and rules on the public RSVP page</p>
+                    <span className="font-medium text-gray-900">Show Event Details</span>
+                    <p className="text-sm text-gray-500">Display schedule, weather, location, and rules on the public RSVP page</p>
                   </div>
                 </label>
               </div>
 
               {settingsForm.gameInfo?.enabled && (
                 <>
-                  {/* Game Schedule */}
+                  {/* Schedule Section */}
                   <div className="bg-white rounded-lg border border-gray-200 p-6">
-                    <h3 className="font-semibold mb-4">Game Schedule</h3>
-                    <p className="text-sm text-gray-500 mb-4">Set when your game typically takes place (used for weather forecast)</p>
+                    <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                      <span>🕐</span> Schedule
+                    </h3>
+                    <p className="text-sm text-gray-500 mb-4">Set when your event typically takes place (also used for weather forecast)</p>
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                       <div className="col-span-2 md:col-span-1">
                         <label className="block text-xs text-gray-500 mb-1">Day</label>
@@ -1465,9 +1637,12 @@ export default function OrgAdmin() {
                     </div>
                   </div>
 
-                  {/* Weather */}
+                  {/* Weather Section */}
                   <div className="bg-white rounded-lg border border-gray-200 p-6">
-                    <label className="flex items-center gap-3 mb-4">
+                    <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <span>🌤️</span> Weather
+                    </h3>
+                    <label className="flex items-center gap-3">
                       <input
                         type="checkbox"
                         checked={settingsForm.gameInfo?.weather?.enabled || false}
@@ -1480,17 +1655,20 @@ export default function OrgAdmin() {
                         })}
                         className="w-4 h-4 rounded"
                       />
-                      <span className="font-medium">Show Weather Forecast</span>
+                      <span className="text-sm font-medium text-gray-700">Show Weather Forecast</span>
                     </label>
                     {settingsForm.gameInfo?.weather?.enabled && (
-                      <p className="text-sm text-gray-500 ml-7">
-                        Weather will be shown based on the location configured below.
+                      <p className="text-sm text-gray-500 mt-2 ml-7">
+                        Weather will be shown based on your organization's location.
                       </p>
                     )}
                   </div>
 
-                  {/* Location */}
+                  {/* Location Section (for public page display) */}
                   <div className="bg-white rounded-lg border border-gray-200 p-6">
+                    <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <span>📍</span> Venue Details
+                    </h3>
                     <label className="flex items-center gap-3 mb-4">
                       <input
                         type="checkbox"
@@ -1504,12 +1682,12 @@ export default function OrgAdmin() {
                         })}
                         className="w-4 h-4 rounded"
                       />
-                      <span className="font-medium">Show Location & Directions</span>
+                      <span className="text-sm font-medium text-gray-700">Show Location & Directions on public page</span>
                     </label>
                     {settingsForm.gameInfo?.location?.enabled && (
                       <div className="space-y-3 ml-7">
                         <div>
-                          <label className="block text-xs text-gray-500 mb-1">Location Name</label>
+                          <label className="block text-xs text-gray-500 mb-1">Venue Name</label>
                           <input
                             type="text"
                             value={settingsForm.gameInfo?.location?.name || ''}
@@ -1560,8 +1738,11 @@ export default function OrgAdmin() {
                     )}
                   </div>
 
-                  {/* Field Rules */}
+                  {/* Rules Section */}
                   <div className="bg-white rounded-lg border border-gray-200 p-6">
+                    <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <span>📋</span> Rules
+                    </h3>
                     <label className="flex items-center gap-3 mb-4">
                       <input
                         type="checkbox"
@@ -1575,7 +1756,7 @@ export default function OrgAdmin() {
                         })}
                         className="w-4 h-4 rounded"
                       />
-                      <span className="font-medium">Show Field Rules</span>
+                      <span className="text-sm font-medium text-gray-700">Show Field Rules</span>
                     </label>
                     {settingsForm.gameInfo?.rules?.enabled && (
                       <div className="ml-7 space-y-3">
@@ -1659,58 +1840,21 @@ export default function OrgAdmin() {
                     )}
                   </div>
 
-                  {/* WhatsApp Group Link */}
-                  <div className="bg-white rounded-lg border border-gray-200 p-6">
-                    <label className="flex items-center gap-3 mb-4">
-                      <input
-                        type="checkbox"
-                        checked={settingsForm.whatsapp?.enabled || false}
-                        onChange={e => setSettingsForm({
-                          ...settingsForm,
-                          whatsapp: { ...settingsForm.whatsapp, enabled: e.target.checked }
-                        })}
-                        className="w-4 h-4 rounded"
-                      />
-                      <span className="font-medium">Show WhatsApp Group Link</span>
-                    </label>
-                    <p className="text-sm text-gray-500 mb-3 ml-7">
-                      Add a link so participants can join your WhatsApp group for updates and communication.
-                    </p>
-                    {settingsForm.whatsapp?.enabled && (
-                      <div className="ml-7">
-                        <label className="block text-xs text-gray-500 mb-1">WhatsApp Group Invite Link</label>
-                        <input
-                          type="url"
-                          value={settingsForm.whatsapp?.groupUrl || ''}
-                          onChange={e => setSettingsForm({
-                            ...settingsForm,
-                            whatsapp: { ...settingsForm.whatsapp, groupUrl: e.target.value }
-                          })}
-                          placeholder="https://chat.whatsapp.com/..."
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                        />
-                        <p className="text-xs text-gray-400 mt-1">
-                          Go to your WhatsApp group → Settings → Invite via link → Copy link
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
                   {/* Save Button */}
                   <button
                     onClick={handleSaveSettings}
                     disabled={saving}
                     className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
                   >
-                    {saving ? 'Saving...' : 'Save Game Info Settings'}
+                    {saving ? 'Saving...' : 'Save Event Details'}
                   </button>
                 </>
               )}
             </div>
           )}
 
-          {/* Archive Tab */}
-          {activeTab === 'archive' && (
+          {/* History Tab */}
+          {activeTab === 'history' && (
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <h2 className="font-semibold mb-4">Past Weeks</h2>
               {archive.length === 0 ? (

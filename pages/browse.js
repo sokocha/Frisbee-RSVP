@@ -38,6 +38,7 @@ export default function BrowsePage() {
   const [selectedLocation, setSelectedLocation] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   // Handle URL query parameters for sport filter
   useEffect(() => {
@@ -48,6 +49,7 @@ export default function BrowsePage() {
 
   useEffect(() => {
     fetchOrganizations();
+    checkAuthStatus();
 
     // Back to top button visibility
     const handleScroll = () => {
@@ -56,6 +58,18 @@ export default function BrowsePage() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  async function checkAuthStatus() {
+    try {
+      const res = await fetch('/api/auth/me');
+      if (res.ok) {
+        const data = await res.json();
+        setIsLoggedIn(!!data.organizer);
+      }
+    } catch (error) {
+      // Not logged in, that's fine
+    }
+  }
 
   async function fetchOrganizations() {
     try {
@@ -108,12 +122,14 @@ export default function BrowsePage() {
                 <span className="text-2xl">🏆</span>
                 <span className="text-xl font-bold text-gray-900">PlayDay</span>
               </Link>
-              <Link
-                href="/"
-                className="text-gray-600 hover:text-gray-900 text-sm"
-              >
-                Home
-              </Link>
+              {isLoggedIn && (
+                <Link
+                  href="/dashboard"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+                >
+                  Dashboard
+                </Link>
+              )}
             </div>
           </div>
         </header>
@@ -256,7 +272,7 @@ export default function BrowsePage() {
                   </button>
                 )}
                 <Link
-                  href="/auth/login"
+                  href={isLoggedIn ? "/dashboard" : "/auth/login"}
                   className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-medium"
                 >
                   Create Your Own Event

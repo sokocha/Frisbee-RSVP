@@ -1,5 +1,7 @@
-import { getOrganizationBySlug } from '../../../../lib/organizations';
+import { getOrganizationBySlug, organizerOwnsOrg } from '../../../../lib/organizations';
 import { getOrgData, setOrgData, ORG_KEY_SUFFIXES } from '../../../../lib/kv';
+import { verifySession, parseCookies, isSuperAdmin } from '../../../../lib/auth';
+import { getOrganizerById } from '../../../../lib/organizations';
 
 const DEFAULT_MAIN_LIST_LIMIT = 30;
 
@@ -238,6 +240,21 @@ export default async function handler(req, res) {
         groupUrl: settings.whatsapp.groupUrl,
       } : null;
 
+      // Check if current user is an organizer for this organization
+      let isOrganizer = false;
+      const cookies = parseCookies(req);
+      const sessionToken = cookies.session;
+      if (sessionToken) {
+        const organizerId = await verifySession(sessionToken);
+        if (organizerId) {
+          const organizer = await getOrganizerById(organizerId);
+          if (organizer) {
+            const isAdmin = isSuperAdmin(organizer.email);
+            isOrganizer = isAdmin || await organizerOwnsOrg(organizerId, orgId);
+          }
+        }
+      }
+
       return res.status(200).json({
         organization: {
           slug: org.slug,
@@ -257,6 +274,7 @@ export default async function handler(req, res) {
         whitelist: whitelist.map(w => ({ name: w.name, deviceId: w.deviceId })),
         gameInfo,
         whatsapp,
+        isOrganizer,
       });
     } catch (error) {
       console.error('Failed to get RSVP data:', error);
