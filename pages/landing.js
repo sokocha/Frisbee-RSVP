@@ -10,6 +10,7 @@ export default function Landing() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     fetchOrganizations();
@@ -45,9 +46,18 @@ export default function Landing() {
     }
   }
 
+  // Filter organizations by search query
+  const filteredOrgs = searchQuery
+    ? organizations.filter(org =>
+        org.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        org.sport?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        org.location?.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : organizations;
+
   // Limit displayed organizations - prioritize by signup count (most active)
-  const displayedOrgs = organizations.slice(0, MAX_COMMUNITIES_DISPLAY);
-  const hasMoreOrgs = organizations.length > MAX_COMMUNITIES_DISPLAY;
+  const displayedOrgs = filteredOrgs.slice(0, MAX_COMMUNITIES_DISPLAY);
+  const hasMoreOrgs = filteredOrgs.length > MAX_COMMUNITIES_DISPLAY;
 
   const sportEmojis = {
     frisbee: '🥏',
@@ -176,13 +186,59 @@ export default function Landing() {
 
           {/* Active Communities */}
           <div id="communities" className="mb-20">
-            <h2 className="text-3xl font-bold text-gray-900 text-center mb-8">
+            <h2 className="text-3xl font-bold text-gray-900 text-center mb-4">
               Active Communities
             </h2>
 
+            {/* Search Bar */}
+            <div className="max-w-md mx-auto mb-8">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search by name, sport, or location..."
+                  className="w-full px-4 py-3 pl-11 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+                />
+                <svg
+                  className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              {searchQuery && (
+                <p className="text-sm text-gray-500 mt-2 text-center">
+                  Found {filteredOrgs.length} {filteredOrgs.length === 1 ? 'community' : 'communities'}
+                </p>
+              )}
+            </div>
+
             {loading ? (
-              <div className="flex justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className="bg-white p-6 rounded-xl border border-gray-100 animate-pulse">
+                    <div className="flex items-start gap-4">
+                      <div className="w-10 h-10 bg-gray-200 rounded-lg"></div>
+                      <div className="flex-1">
+                        <div className="h-5 bg-gray-200 rounded w-3/4 mb-2"></div>
+                        <div className="h-4 bg-gray-100 rounded w-1/2"></div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : displayedOrgs.length > 0 ? (
               <>
@@ -223,10 +279,28 @@ export default function Landing() {
                 )}
               </>
             ) : (
-              <div className="text-center py-12 text-gray-500">
-                <p>No active communities yet.</p>
-                <Link href="/auth/login" className="text-blue-600 hover:text-blue-700 mt-2 inline-block">
-                  Be the first to create one!
+              <div className="text-center py-16">
+                <div className="w-24 h-24 mx-auto mb-6 bg-blue-50 rounded-full flex items-center justify-center">
+                  <svg className="w-12 h-12 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                  {searchQuery ? 'No matching communities' : 'No active communities yet'}
+                </h3>
+                <p className="text-gray-500 mb-6 max-w-sm mx-auto">
+                  {searchQuery
+                    ? 'Try adjusting your search or be the first to create a community for this sport!'
+                    : 'Be the first to create a sports community and start organizing games.'}
+                </p>
+                <Link
+                  href="/auth/login"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium"
+                >
+                  Create Your Community
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
                 </Link>
               </div>
             )}

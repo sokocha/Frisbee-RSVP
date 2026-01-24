@@ -8,6 +8,26 @@ const sportEmojis = {
   swimming: '🏊', yoga: '🧘', pickleball: '🏓', other: '🏆',
 };
 
+// Loading skeleton component
+function CardSkeleton() {
+  return (
+    <div className="bg-white border border-gray-100 rounded-2xl p-5 animate-pulse">
+      <div className="flex items-start gap-3 mb-3">
+        <div className="w-10 h-10 bg-gray-200 rounded-lg"></div>
+        <div className="flex-1">
+          <div className="h-5 bg-gray-200 rounded w-3/4 mb-2"></div>
+          <div className="h-4 bg-gray-100 rounded w-1/2"></div>
+        </div>
+      </div>
+      <div className="h-4 bg-gray-100 rounded w-2/3 mb-3"></div>
+      <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+        <div className="h-6 bg-gray-100 rounded-full w-16"></div>
+        <div className="h-4 bg-gray-100 rounded w-20"></div>
+      </div>
+    </div>
+  );
+}
+
 export default function BrowsePage() {
   const [organizations, setOrganizations] = useState([]);
   const [filters, setFilters] = useState({ sports: [], locations: [] });
@@ -15,9 +35,17 @@ export default function BrowsePage() {
   const [selectedSport, setSelectedSport] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showBackToTop, setShowBackToTop] = useState(false);
 
   useEffect(() => {
     fetchOrganizations();
+
+    // Back to top button visibility
+    const handleScroll = () => {
+      setShowBackToTop(window.scrollY > 400);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   async function fetchOrganizations() {
@@ -34,6 +62,10 @@ export default function BrowsePage() {
     setLoading(false);
   }
 
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   // Filter organizations
   const filteredOrgs = organizations.filter(org => {
     if (selectedSport && org.sport !== selectedSport) return false;
@@ -48,14 +80,6 @@ export default function BrowsePage() {
     }
     return true;
   });
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
 
   return (
     <>
@@ -184,16 +208,51 @@ export default function BrowsePage() {
           </div>
 
           {/* Results count */}
-          <p className="text-gray-500 text-sm mb-4">
-            {filteredOrgs.length} event{filteredOrgs.length !== 1 ? 's' : ''} found
-          </p>
+          {!loading && (
+            <p className="text-gray-500 text-sm mb-4">
+              {filteredOrgs.length} event{filteredOrgs.length !== 1 ? 's' : ''} found
+            </p>
+          )}
 
-          {/* Organization Cards */}
-          {filteredOrgs.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="text-5xl mb-4">🔍</div>
-              <p className="text-gray-700 text-lg mb-2">No events found</p>
-              <p className="text-gray-500 text-sm">Try adjusting your filters or search query</p>
+          {/* Loading Skeletons */}
+          {loading ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {[...Array(6)].map((_, i) => (
+                <CardSkeleton key={i} />
+              ))}
+            </div>
+          ) : filteredOrgs.length === 0 ? (
+            /* Empty State */
+            <div className="text-center py-16">
+              <div className="w-24 h-24 mx-auto mb-6 bg-gray-100 rounded-full flex items-center justify-center">
+                <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold text-gray-800 mb-2">No events found</h3>
+              <p className="text-gray-500 mb-6 max-w-sm mx-auto">
+                We couldn't find any events matching your criteria. Try adjusting your filters or search query.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                {(selectedSport || selectedLocation || searchQuery) && (
+                  <button
+                    onClick={() => {
+                      setSelectedSport('');
+                      setSelectedLocation('');
+                      setSearchQuery('');
+                    }}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium"
+                  >
+                    Clear All Filters
+                  </button>
+                )}
+                <Link
+                  href="/auth/login"
+                  className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-medium"
+                >
+                  Create Your Own Event
+                </Link>
+              </div>
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -250,6 +309,19 @@ export default function BrowsePage() {
         <footer className="border-t border-gray-200 mt-12 py-6 text-center text-gray-400 text-sm">
           <p>Powered by <Link href="/" className="text-gray-600 hover:text-gray-900">PlayDay</Link></p>
         </footer>
+
+        {/* Back to Top Button */}
+        {showBackToTop && (
+          <button
+            onClick={scrollToTop}
+            className="fixed bottom-6 right-6 p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 transition-all hover:scale-105 z-50"
+            aria-label="Back to top"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+            </svg>
+          </button>
+        )}
       </div>
     </>
   );

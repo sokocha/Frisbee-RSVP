@@ -179,6 +179,7 @@ export default function OrgRSVP() {
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [weatherMessage, setWeatherMessage] = useState(null);
   const [whatsapp, setWhatsapp] = useState(null);
+  const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
 
   const checkMySignup = useCallback((mainList, waitlist, currentDeviceId) => {
     const allSignups = [...mainList, ...waitlist];
@@ -288,6 +289,9 @@ export default function OrgRSVP() {
         setSavedName(slug, trimmedName);
         setStoredName(trimmedName);
         setShowNameEdit(false);
+        // Show success animation
+        setShowSuccessAnimation(true);
+        setTimeout(() => setShowSuccessAnimation(false), 2500);
       } else {
         showToast(data.error, 'error');
       }
@@ -378,20 +382,70 @@ export default function OrgRSVP() {
           background: rgba(255, 255, 255, 0.95);
           backdrop-filter: blur(20px);
         }
+        @keyframes success-pop {
+          0% { transform: scale(0); opacity: 0; }
+          50% { transform: scale(1.2); }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes confetti {
+          0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+          100% { transform: translateY(-100px) rotate(720deg); opacity: 0; }
+        }
+        .animate-success-pop { animation: success-pop 0.5s ease-out forwards; }
+        .animate-confetti { animation: confetti 1s ease-out forwards; }
       `}</style>
 
       <Toast message={message} onClose={() => setMessage(null)} />
 
+      {/* Success Animation Overlay */}
+      {showSuccessAnimation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+          <div className="animate-success-pop">
+            <div className="w-32 h-32 bg-green-500 rounded-full flex items-center justify-center shadow-2xl">
+              <svg className="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+          </div>
+          {/* Confetti particles */}
+          <div className="absolute">
+            {[...Array(8)].map((_, i) => (
+              <div
+                key={i}
+                className="absolute animate-confetti"
+                style={{
+                  left: `${50 + Math.cos(i * 45 * Math.PI / 180) * 60}%`,
+                  top: `${50 + Math.sin(i * 45 * Math.PI / 180) * 60}%`,
+                  animationDelay: `${i * 0.1}s`,
+                }}
+              >
+                <span className="text-2xl">{['🎉', '⭐', '✨', '🎊'][i % 4]}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className={`min-h-screen bg-gradient-to-br ${colors.gradient} p-3 md:p-8`}>
-        {/* Top Navigation */}
-        <nav className="max-w-2xl mx-auto mb-4 flex items-center justify-between">
-          <Link href="/browse" className="flex items-center gap-2 text-white/70 hover:text-white transition-colors">
-            <span className="text-xl">🏆</span>
-            <span className="font-semibold">PlayDay</span>
-          </Link>
-          <Link href="/browse" className="text-white/50 hover:text-white text-sm transition-colors">
-            Browse Events →
-          </Link>
+        {/* Top Navigation with Breadcrumbs */}
+        <nav className="max-w-2xl mx-auto mb-4">
+          <div className="flex items-center justify-between">
+            <Link href="/browse" className="flex items-center gap-2 text-white/70 hover:text-white transition-colors">
+              <span className="text-xl">🏆</span>
+              <span className="font-semibold">PlayDay</span>
+            </Link>
+            <Link href="/browse" className="text-white/50 hover:text-white text-sm transition-colors">
+              Browse Events →
+            </Link>
+          </div>
+          {/* Breadcrumb */}
+          <div className="flex items-center gap-2 mt-2 text-sm text-white/50">
+            <Link href="/browse" className="hover:text-white/70 transition-colors">Events</Link>
+            <span>›</span>
+            <span className="capitalize">{org?.sport}</span>
+            <span>›</span>
+            <span className="text-white/70">{org?.name}</span>
+          </div>
         </nav>
 
         <main className="max-w-2xl mx-auto">
@@ -425,7 +479,7 @@ export default function OrgRSVP() {
             </div>
           )}
 
-          {/* Already Signed Up Notice */}
+          {/* Already Signed Up Notice with Waitlist Position */}
           {hasSignedUp && mySignup && (
             <div className="mb-4 glass-card rounded-2xl p-4 text-center border-blue-400/30">
               <div className="flex items-center justify-center gap-2 text-blue-300">
@@ -434,8 +488,51 @@ export default function OrgRSVP() {
                 </svg>
                 <span className="font-medium">You're signed up as: {mySignup.name}</span>
               </div>
+              {/* Waitlist Position Indicator */}
+              {waitlist.find(p => p.deviceId === deviceId) && (
+                <div className="mt-2 text-orange-300 text-sm">
+                  <span className="font-medium">Waitlist Position: #{waitlist.findIndex(p => p.deviceId === deviceId) + 1}</span>
+                  <p className="text-white/50 text-xs mt-1">You'll be notified when a spot opens up</p>
+                </div>
+              )}
             </div>
           )}
+
+          {/* Share Event */}
+          <div className="mb-4 glass-card rounded-2xl p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-white/70 text-sm">Share this event</span>
+              <div className="flex gap-2">
+                {/* WhatsApp Share */}
+                <a
+                  href={`https://wa.me/?text=${encodeURIComponent(`Join me for ${org?.sport} at ${org?.name}! RSVP here: ${typeof window !== 'undefined' ? window.location.href : ''}`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-2 bg-green-500/20 hover:bg-green-500/30 rounded-lg transition-colors"
+                  title="Share on WhatsApp"
+                >
+                  <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                  </svg>
+                </a>
+                {/* Copy Link */}
+                <button
+                  onClick={() => {
+                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                      navigator.clipboard.writeText(window.location.href);
+                      showToast('Link copied to clipboard!', 'success');
+                    }
+                  }}
+                  className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+                  title="Copy link"
+                >
+                  <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
 
           {/* RSVP Form */}
           <div className="glass-card-solid rounded-3xl shadow-2xl p-4 md:p-6 mb-4 md:mb-6">
