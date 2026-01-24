@@ -23,6 +23,7 @@ export default function Dashboard() {
     slug: '',
     sport: '',
     location: '',
+    streetAddress: '',
     timezone: 'Africa/Lagos',
     maxParticipants: 30,
     gameDay: 0, // Sunday
@@ -145,6 +146,7 @@ export default function Dashboard() {
         slug: '',
         sport: '',
         location: '',
+        streetAddress: '',
         timezone: 'Africa/Lagos',
         maxParticipants: 30,
         gameDay: 0,
@@ -640,7 +642,7 @@ export default function Dashboard() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Location (Lagos)
+                      Area (Lagos)
                     </label>
                     <select
                       value={newOrg.location}
@@ -654,6 +656,20 @@ export default function Dashboard() {
                         </option>
                       ))}
                     </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Street Address
+                    </label>
+                    <input
+                      type="text"
+                      value={newOrg.streetAddress}
+                      onChange={e => setNewOrg({ ...newOrg, streetAddress: e.target.value })}
+                      placeholder="e.g., 15 Adeola Odeku Street"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Specific venue address for players to find you</p>
                   </div>
 
                   <div>
