@@ -449,9 +449,6 @@ export default function OrgRSVP() {
                   Manage
                 </Link>
               )}
-              <Link href="/browse" className="text-white/50 hover:text-white text-sm transition-colors">
-                Browse Events →
-              </Link>
             </div>
           </div>
           {/* Breadcrumb */}
