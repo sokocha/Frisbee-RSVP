@@ -31,6 +31,7 @@ export default function Dashboard() {
     gameEndMinute: 0,
   });
   const [slugStatus, setSlugStatus] = useState({ checking: false, available: null, error: null });
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
 
   useEffect(() => {
     fetchUserData();
@@ -75,9 +76,42 @@ export default function Dashboard() {
     }
   }
 
+  // Generate slug from name
+  function generateSlugFromName(name) {
+    return name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, '') // Remove special chars
+      .replace(/\s+/g, '-')          // Replace spaces with hyphens
+      .replace(/-+/g, '-')           // Replace multiple hyphens with single
+      .replace(/^-|-$/g, '');        // Remove leading/trailing hyphens
+  }
+
+  function handleNameChange(e) {
+    const name = e.target.value;
+    const updates = { ...newOrg, name };
+
+    // Auto-generate slug if not manually edited
+    if (!slugManuallyEdited) {
+      const generatedSlug = generateSlugFromName(name);
+      updates.slug = generatedSlug;
+
+      // Debounce slug check for auto-generated slug
+      clearTimeout(window.slugCheckTimeout);
+      if (generatedSlug.length >= 3) {
+        window.slugCheckTimeout = setTimeout(() => checkSlug(generatedSlug), 300);
+      } else {
+        setSlugStatus({ checking: false, available: null, error: null });
+      }
+    }
+
+    setNewOrg(updates);
+  }
+
   function handleSlugChange(e) {
     const value = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
     setNewOrg({ ...newOrg, slug: value });
+    setSlugManuallyEdited(true); // Mark as manually edited
 
     // Debounce slug check
     clearTimeout(window.slugCheckTimeout);
@@ -118,6 +152,8 @@ export default function Dashboard() {
         gameEndHour: 19,
         gameEndMinute: 0,
       });
+      setSlugManuallyEdited(false);
+      setSlugStatus({ checking: false, available: null, error: null });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -447,7 +483,7 @@ export default function Dashboard() {
                       type="text"
                       required
                       value={newOrg.name}
-                      onChange={e => setNewOrg({ ...newOrg, name: e.target.value })}
+                      onChange={handleNameChange}
                       placeholder="e.g., Lagos Padel Club"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
@@ -641,6 +677,8 @@ export default function Dashboard() {
                     onClick={() => {
                       setShowCreateForm(false);
                       setError('');
+                      setSlugManuallyEdited(false);
+                      setSlugStatus({ checking: false, available: null, error: null });
                     }}
                     className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
                   >
