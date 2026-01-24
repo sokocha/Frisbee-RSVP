@@ -627,17 +627,22 @@ export default function Dashboard() {
                           className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         >
                           <option value="">Select a sport</option>
+                          <option value="american-football">🏈 American Football</option>
+                          <option value="badminton">🏸 Badminton</option>
                           <option value="basketball">🏀 Basketball</option>
-                          <option value="cycling">🚴 Cycling</option>
+                          <option value="crossfit">🏋🏾 CrossFit</option>
+                          <option value="cycling">🚴🏾 Cycling</option>
                           <option value="football">⚽ Football</option>
                           <option value="frisbee">🥏 Frisbee</option>
+                          <option value="golf">⛳ Golf</option>
+                          <option value="hiking">🥾 Hiking</option>
                           <option value="padel">🎾 Padel</option>
                           <option value="pickleball">🏓 Pickleball</option>
-                          <option value="running">🏃 Running</option>
-                          <option value="swimming">🏊 Swimming</option>
+                          <option value="running">🏃🏾 Running</option>
+                          <option value="swimming">🏊🏾 Swimming</option>
                           <option value="tennis">🎾 Tennis</option>
                           <option value="volleyball">🏐 Volleyball</option>
-                          <option value="yoga">🧘 Yoga</option>
+                          <option value="yoga">🧘🏾 Yoga</option>
                           <option value="other">🏆 Other</option>
                         </select>
                       </div>

@@ -136,21 +136,30 @@ function formatTime(timestamp) {
 }
 
 const sportEmojis = {
-  frisbee: '🥏', padel: '🎾', tennis: '🎾', volleyball: '🏐',
-  basketball: '🏀', football: '⚽', cycling: '🚴', running: '🏃',
-  swimming: '🏊', yoga: '🧘', pickleball: '🏓', other: '🏆',
+  'american-football': '🏈', badminton: '🏸', basketball: '🏀',
+  crossfit: '🏋🏾', cycling: '🚴🏾', football: '⚽', frisbee: '🥏',
+  golf: '⛳', hiking: '🥾', padel: '🎾', pickleball: '🏓',
+  running: '🏃🏾', swimming: '🏊🏾', tennis: '🎾', volleyball: '🏐',
+  yoga: '🧘🏾', other: '🏆',
 };
 
 const sportColors = {
-  frisbee: { gradient: 'from-emerald-900 via-green-800 to-teal-900', accent: 'emerald' },
-  padel: { gradient: 'from-blue-900 via-indigo-800 to-purple-900', accent: 'blue' },
-  tennis: { gradient: 'from-lime-900 via-green-800 to-emerald-900', accent: 'lime' },
-  volleyball: { gradient: 'from-orange-900 via-amber-800 to-yellow-900', accent: 'orange' },
+  'american-football': { gradient: 'from-amber-900 via-yellow-800 to-orange-900', accent: 'amber' },
+  badminton: { gradient: 'from-lime-900 via-green-800 to-teal-900', accent: 'lime' },
   basketball: { gradient: 'from-orange-900 via-red-800 to-rose-900', accent: 'orange' },
-  football: { gradient: 'from-green-900 via-emerald-800 to-teal-900', accent: 'green' },
+  crossfit: { gradient: 'from-red-900 via-rose-800 to-pink-900', accent: 'red' },
   cycling: { gradient: 'from-sky-900 via-blue-800 to-indigo-900', accent: 'sky' },
+  football: { gradient: 'from-green-900 via-emerald-800 to-teal-900', accent: 'green' },
+  frisbee: { gradient: 'from-emerald-900 via-green-800 to-teal-900', accent: 'emerald' },
+  golf: { gradient: 'from-green-900 via-lime-800 to-emerald-900', accent: 'green' },
+  hiking: { gradient: 'from-stone-900 via-amber-800 to-yellow-900', accent: 'stone' },
+  padel: { gradient: 'from-blue-900 via-indigo-800 to-purple-900', accent: 'blue' },
+  pickleball: { gradient: 'from-yellow-900 via-lime-800 to-green-900', accent: 'yellow' },
   running: { gradient: 'from-purple-900 via-violet-800 to-indigo-900', accent: 'purple' },
   swimming: { gradient: 'from-cyan-900 via-blue-800 to-sky-900', accent: 'cyan' },
+  tennis: { gradient: 'from-lime-900 via-green-800 to-emerald-900', accent: 'lime' },
+  volleyball: { gradient: 'from-orange-900 via-amber-800 to-yellow-900', accent: 'orange' },
+  yoga: { gradient: 'from-pink-900 via-purple-800 to-violet-900', accent: 'pink' },
   other: { gradient: 'from-gray-900 via-slate-800 to-zinc-900', accent: 'gray' },
 };
 
@@ -603,7 +612,7 @@ export default function OrgRSVP() {
           {/* Main List */}
           <div className="glass-card-solid rounded-3xl shadow-2xl p-4 md:p-6 mb-4">
             <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <span>🏃</span> Playing ({mainList.length})
+              <span>🏃🏾</span> Playing ({mainList.length})
             </h2>
             {mainList.length === 0 ? (
               <div className="text-center py-8">

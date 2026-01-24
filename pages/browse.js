@@ -4,9 +4,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 
 const sportEmojis = {
-  frisbee: '🥏', padel: '🎾', tennis: '🎾', volleyball: '🏐',
-  basketball: '🏀', football: '⚽', cycling: '🚴', running: '🏃',
-  swimming: '🏊', yoga: '🧘', pickleball: '🏓', other: '🏆',
+  'american-football': '🏈', badminton: '🏸', basketball: '🏀',
+  crossfit: '🏋🏾', cycling: '🚴🏾', football: '⚽', frisbee: '🥏',
+  golf: '⛳', hiking: '🥾', padel: '🎾', pickleball: '🏓',
+  running: '🏃🏾', swimming: '🏊🏾', tennis: '🎾', volleyball: '🏐',
+  yoga: '🧘🏾', other: '🏆',
 };
 
 const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];

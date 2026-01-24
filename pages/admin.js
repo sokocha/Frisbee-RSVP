@@ -1160,7 +1160,7 @@ export default function AdminDashboard() {
           </AdminSection>
 
           {/* Main List */}
-          <AdminSection title="Main List" icon="🏃" badge={`${mainList.length}/${currentLimit}`} defaultOpen={true}>
+          <AdminSection title="Main List" icon="🏃🏾" badge={`${mainList.length}/${currentLimit}`} defaultOpen={true}>
 
             {mainList.length === 0 ? (
               <p className="text-gray-500 text-center py-4">No signups yet</p>

@@ -60,17 +60,22 @@ export default function Landing() {
   const hasMoreOrgs = filteredOrgs.length > MAX_COMMUNITIES_DISPLAY;
 
   const sportEmojis = {
+    'american-football': '🏈',
+    badminton: '🏸',
+    basketball: '🏀',
+    crossfit: '🏋🏾',
+    cycling: '🚴🏾',
+    football: '⚽',
     frisbee: '🥏',
+    golf: '⛳',
+    hiking: '🥾',
     padel: '🎾',
+    pickleball: '🏓',
+    running: '🏃🏾',
+    swimming: '🏊🏾',
     tennis: '🎾',
     volleyball: '🏐',
-    basketball: '🏀',
-    football: '⚽',
-    cycling: '🚴',
-    running: '🏃',
-    swimming: '🏊',
-    yoga: '🧘',
-    pickleball: '🏓',
+    yoga: '🧘🏾',
     other: '🏆',
   };
 
