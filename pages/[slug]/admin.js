@@ -703,19 +703,23 @@ export default function OrgAdmin() {
                 <h1 className="text-xl font-bold text-gray-900">{org?.name}</h1>
                 <p className="text-sm text-gray-500">/{slug} Admin</p>
               </div>
-              <div className="flex gap-3">
+              <div className="flex items-center gap-3">
                 <a
                   href={`/${slug}`}
                   target="_blank"
-                  className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
                   View Public Page
                 </a>
                 <Link
                   href="/dashboard"
-                  className="px-3 py-2 text-sm text-blue-600 hover:text-blue-700"
+                  className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900"
                 >
-                  Dashboard
+                  ← Dashboard
                 </Link>
               </div>
             </div>
