@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { LAGOS_AREAS, formatLocation } from '../../lib/locations';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -639,15 +640,20 @@ export default function Dashboard() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Location
+                      Location (Lagos)
                     </label>
-                    <input
-                      type="text"
+                    <select
                       value={newOrg.location}
                       onChange={e => setNewOrg({ ...newOrg, location: e.target.value })}
-                      placeholder="e.g., Victoria Island, Lagos"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
+                    >
+                      <option value="">Select area...</option>
+                      {LAGOS_AREAS.map(area => (
+                        <option key={area} value={formatLocation(area)}>
+                          {area}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div>
