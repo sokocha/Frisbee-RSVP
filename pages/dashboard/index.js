@@ -17,6 +17,13 @@ export default function Dashboard() {
   const [draggedOrg, setDraggedOrg] = useState(null);
   const [dragOverOrg, setDragOverOrg] = useState(null);
 
+  // Bulk delete state
+  const [bulkSelectMode, setBulkSelectMode] = useState(false);
+  const [selectedOrgs, setSelectedOrgs] = useState(new Set());
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState('');
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
   // New org form state
   const [newOrg, setNewOrg] = useState({
     name: '',
@@ -285,6 +292,57 @@ export default function Dashboard() {
     }
   }
 
+  // Bulk delete handlers
+  function toggleBulkSelectMode() {
+    setBulkSelectMode(!bulkSelectMode);
+    setSelectedOrgs(new Set());
+  }
+
+  function toggleOrgSelection(orgId) {
+    const newSelected = new Set(selectedOrgs);
+    if (newSelected.has(orgId)) {
+      newSelected.delete(orgId);
+    } else {
+      newSelected.add(orgId);
+    }
+    setSelectedOrgs(newSelected);
+  }
+
+  async function handleBulkDelete() {
+    if (bulkDeleteConfirm !== 'DELETE') return;
+
+    setBulkDeleting(true);
+    try {
+      const res = await fetch('/api/organizations/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selectedOrgs) }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        // Re-fetch to update the list
+        await fetchUserData();
+        setShowBulkDeleteModal(false);
+        setBulkDeleteConfirm('');
+        setBulkSelectMode(false);
+        setSelectedOrgs(new Set());
+      } else {
+        console.error('Bulk delete failed:', data.error);
+      }
+    } catch (err) {
+      console.error('Bulk delete failed:', err);
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
+  // Get selected org names for the confirmation modal
+  const selectedOrgNames = organizations
+    .filter(org => selectedOrgs.has(org.id))
+    .map(org => org.name);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -342,7 +400,7 @@ export default function Dashboard() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
               <h2 className="text-lg font-semibold text-gray-900">Your Communities</h2>
               <div className="flex gap-3 w-full sm:w-auto">
-                {organizations.length > 1 && (
+                {organizations.length > 1 && !bulkSelectMode && (
                   <input
                     type="text"
                     placeholder="Search communities..."
@@ -351,12 +409,40 @@ export default function Dashboard() {
                     className="flex-1 sm:w-64 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 )}
-                <button
-                  onClick={() => setShowCreateForm(true)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium whitespace-nowrap"
-                >
-                  Create Community
-                </button>
+                {bulkSelectMode ? (
+                  <>
+                    <button
+                      onClick={toggleBulkSelectMode}
+                      className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium whitespace-nowrap"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => setShowBulkDeleteModal(true)}
+                      disabled={selectedOrgs.size === 0}
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium whitespace-nowrap"
+                    >
+                      Delete Selected ({selectedOrgs.size})
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {organizations.length > 1 && (
+                      <button
+                        onClick={toggleBulkSelectMode}
+                        className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium whitespace-nowrap"
+                      >
+                        Select
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setShowCreateForm(true)}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium whitespace-nowrap"
+                    >
+                      Create Community
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
@@ -376,29 +462,47 @@ export default function Dashboard() {
               </div>
             ) : (
               <>
-                {organizations.length > 1 && (
+                {organizations.length > 1 && !bulkSelectMode && (
                   <p className="text-xs text-gray-400 mb-3">Drag cards to reorder</p>
+                )}
+                {bulkSelectMode && (
+                  <p className="text-xs text-red-500 mb-3">Click communities to select them for deletion</p>
                 )}
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {filteredOrgs.map(org => (
                     <div
                       key={org.id}
-                      draggable
-                      onDragStart={e => handleDragStart(e, org)}
-                      onDragOver={e => handleDragOver(e, org)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={e => handleDrop(e, org)}
-                      onDragEnd={handleDragEnd}
-                      className={`bg-white rounded-lg border p-5 transition-all cursor-move ${
-                        draggedOrg?.id === org.id
-                          ? 'opacity-50 border-blue-300'
-                          : dragOverOrg?.id === org.id
-                          ? 'border-blue-500 shadow-lg'
-                          : 'border-gray-200 hover:shadow-md'
+                      draggable={!bulkSelectMode}
+                      onDragStart={e => !bulkSelectMode && handleDragStart(e, org)}
+                      onDragOver={e => !bulkSelectMode && handleDragOver(e, org)}
+                      onDragLeave={!bulkSelectMode ? handleDragLeave : undefined}
+                      onDrop={e => !bulkSelectMode && handleDrop(e, org)}
+                      onDragEnd={!bulkSelectMode ? handleDragEnd : undefined}
+                      onClick={bulkSelectMode ? () => toggleOrgSelection(org.id) : undefined}
+                      className={`bg-white rounded-lg border p-5 transition-all ${
+                        bulkSelectMode
+                          ? `cursor-pointer ${selectedOrgs.has(org.id) ? 'border-red-500 bg-red-50 ring-2 ring-red-200' : 'border-gray-200 hover:border-gray-300'}`
+                          : `cursor-move ${
+                              draggedOrg?.id === org.id
+                                ? 'opacity-50 border-blue-300'
+                                : dragOverOrg?.id === org.id
+                                ? 'border-blue-500 shadow-lg'
+                                : 'border-gray-200 hover:shadow-md'
+                            }`
                       }`}
                     >
                       {/* Header row */}
                       <div className="flex items-start justify-between mb-3">
+                        {bulkSelectMode && (
+                          <div className="mr-3 flex-shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={selectedOrgs.has(org.id)}
+                              onChange={() => toggleOrgSelection(org.id)}
+                              className="w-5 h-5 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                            />
+                          </div>
+                        )}
                         <div className="flex-1 min-w-0">
                           <h3 className="font-semibold text-gray-900 truncate">{org.name}</h3>
                           <p className="text-sm text-gray-500 capitalize">{org.sport}</p>
@@ -863,6 +967,56 @@ export default function Dashboard() {
                     )}
                   </div>
                 </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Bulk Delete Confirmation Modal */}
+        {showBulkDeleteModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-md w-full p-6">
+              <h3 className="text-lg font-semibold text-red-600 mb-2">Delete {selectedOrgs.size} Communities</h3>
+              <p className="text-gray-600 mb-3">
+                You are about to permanently delete the following communities:
+              </p>
+              <ul className="text-sm text-gray-700 mb-4 bg-gray-50 rounded-lg p-3 max-h-32 overflow-y-auto">
+                {selectedOrgNames.map((name, i) => (
+                  <li key={i} className="py-1 border-b border-gray-200 last:border-0">
+                    • {name}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-sm text-gray-500 mb-4">
+                This will permanently delete all RSVP signups, whitelist members, settings, and archive history for each community.
+              </p>
+              <p className="text-sm text-gray-700 mb-3">
+                Type <strong className="text-red-600">DELETE</strong> to confirm:
+              </p>
+              <input
+                type="text"
+                value={bulkDeleteConfirm}
+                onChange={e => setBulkDeleteConfirm(e.target.value)}
+                placeholder="Type DELETE"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              />
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowBulkDeleteModal(false);
+                    setBulkDeleteConfirm('');
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleting || bulkDeleteConfirm !== 'DELETE'}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {bulkDeleting ? 'Deleting...' : 'Delete Forever'}
+                </button>
               </div>
             </div>
           </div>
