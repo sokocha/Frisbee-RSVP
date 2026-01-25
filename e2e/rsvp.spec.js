@@ -244,7 +244,7 @@ test.describe('Organization RSVP Page', () => {
 
     await page.goto('/non-existent');
 
-    await expect(page.locator('text=Organization Not Found')).toBeVisible();
+    await expect(page.locator('text=Community Not Found')).toBeVisible();
   });
 });
 

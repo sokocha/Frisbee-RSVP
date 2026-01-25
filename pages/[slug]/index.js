@@ -102,6 +102,88 @@ function Spinner() {
   );
 }
 
+function WeatherCard({ weather, weatherLoading, weatherMessage }) {
+  const [isExpanded, setIsExpanded] = useState(true);
+
+  return (
+    <div className="glass-card-solid rounded-3xl shadow-2xl overflow-hidden">
+      {/* Header - always visible */}
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full p-4 md:p-6 flex items-center justify-between text-left"
+      >
+        <div>
+          <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+            <span>🌤️</span> Game Day Weather
+          </h2>
+          {weather && (
+            <p className="text-sm text-gray-500 mt-1">
+              {weather.gameDateFormatted || weather.gameDay} • {weather.gameTimeRange || `${weather.hourly?.[0]?.hour || ''}:00 - ${weather.hourly?.[weather.hourly?.length - 1]?.hour || ''}:00`}
+            </p>
+          )}
+        </div>
+        <svg
+          className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {/* Expandable content */}
+      {isExpanded && (
+        <div className="px-4 md:px-6 pb-4 md:pb-6">
+          {weatherLoading ? (
+            <div className="flex items-center justify-center gap-2 text-gray-500 py-4">
+              <Spinner /> <span className="text-sm">Loading weather...</span>
+            </div>
+          ) : weather ? (
+            <div className="space-y-4">
+              {/* Main weather summary */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <span className="text-6xl">{weather.summary.icon}</span>
+                  <div>
+                    <p className="text-4xl font-bold text-gray-800">{weather.summary.temperature}°C</p>
+                    <p className="text-gray-600">{weather.summary.description}</p>
+                  </div>
+                </div>
+                <div className="text-right text-sm space-y-1">
+                  <p className="text-gray-600 flex items-center justify-end gap-1">
+                    <span>💨</span> {weather.summary.windSpeed || 0} km/h
+                  </p>
+                  <p className="text-gray-600 flex items-center justify-end gap-1">
+                    <span>🌧️</span> {weather.summary.precipitationProbability}% chance
+                  </p>
+                </div>
+              </div>
+
+              {/* Hourly forecast */}
+              {weather.hourly && weather.hourly.length > 0 && (
+                <div className="grid grid-cols-3 gap-3 pt-4">
+                  {weather.hourly.map((hour, i) => (
+                    <div key={i} className="text-center py-4 bg-gray-50/80 rounded-2xl border border-gray-100">
+                      <p className="text-sm font-medium text-gray-500 mb-2">
+                        {hour.hour % 12 || 12} {hour.hour < 12 ? 'AM' : 'PM'}
+                      </p>
+                      <p className="text-2xl mb-2">{hour.icon}</p>
+                      <p className="text-xl font-semibold text-gray-800">{hour.temperature}°</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-gray-500 text-sm text-center py-4">{weatherMessage || 'Weather forecast will be available closer to game day.'}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function getInitials(name) {
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
@@ -746,58 +828,11 @@ export default function OrgRSVP() {
 
               {/* Weather Card */}
               {gameInfo.weather && (
-                <div className="glass-card-solid rounded-3xl shadow-2xl p-4 md:p-6">
-                  <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                    <span>🌤️</span> Game Day Weather
-                  </h2>
-                  {weatherLoading ? (
-                    <div className="flex items-center justify-center gap-2 text-gray-500 py-4">
-                      <Spinner /> <span className="text-sm">Loading weather...</span>
-                    </div>
-                  ) : weather ? (
-                    <div className="space-y-4">
-                      {/* Main weather summary */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <span className="text-5xl">{weather.summary.icon}</span>
-                          <div>
-                            <p className="text-3xl font-bold text-gray-800">{weather.summary.temperature}°C</p>
-                            <p className="text-gray-600">{weather.summary.description}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-medium text-gray-700">{weather.gameDay}</p>
-                          <p className="text-xs text-gray-500">{weather.gameDate}</p>
-                          {weather.summary.precipitationProbability > 20 && (
-                            <p className="text-sm text-blue-600 mt-1">
-                              💧 {weather.summary.precipitationProbability}%
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Hourly forecast */}
-                      {weather.hourly && weather.hourly.length > 0 && (
-                        <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-100">
-                          {weather.hourly.map((hour, i) => (
-                            <div key={i} className="text-center py-3 bg-gradient-to-b from-gray-50 to-gray-100/50 rounded-xl">
-                              <p className="text-xs font-medium text-gray-500 mb-1">
-                                {hour.hour % 12 || 12}:00 {hour.hour < 12 ? 'AM' : 'PM'}
-                              </p>
-                              <p className="text-2xl mb-1">{hour.icon}</p>
-                              <p className="text-lg font-semibold text-gray-800">{hour.temperature}°</p>
-                              {hour.precipitationProbability > 20 && (
-                                <p className="text-xs text-blue-500 mt-1">💧 {hour.precipitationProbability}%</p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-gray-500 text-sm text-center py-4">{weatherMessage || 'Weather forecast will be available closer to game day.'}</p>
-                  )}
-                </div>
+                <WeatherCard
+                  weather={weather}
+                  weatherLoading={weatherLoading}
+                  weatherMessage={weatherMessage}
+                />
               )}
 
               {/* Location Card */}

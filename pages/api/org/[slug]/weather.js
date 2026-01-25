@@ -141,7 +141,7 @@ async function geocodeAddress(address, orgLocation, timezone) {
 async function getWeatherForecast(lat, lng, timezone) {
   try {
     const response = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&hourly=temperature_2m,weathercode,precipitation_probability&timezone=${encodeURIComponent(timezone)}&forecast_days=7`
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&hourly=temperature_2m,weathercode,precipitation_probability,windspeed_10m&timezone=${encodeURIComponent(timezone)}&forecast_days=7`
     );
 
     if (!response.ok) return null;
@@ -258,7 +258,7 @@ export default async function handler(req, res) {
 
   // Find hourly data for game hours
   const gameWeather = [];
-  const { time, temperature_2m, weathercode, precipitation_probability } = forecast.hourly;
+  const { time, temperature_2m, weathercode, precipitation_probability, windspeed_10m } = forecast.hourly;
 
   for (let i = 0; i < time.length; i++) {
     const forecastTime = new Date(time[i]);
@@ -275,7 +275,8 @@ export default async function handler(req, res) {
         weatherCode: weathercode[i],
         description: weatherInfo.description,
         icon: weatherInfo.icon,
-        precipitationProbability: precipitation_probability[i]
+        precipitationProbability: precipitation_probability[i],
+        windSpeed: Math.round(windspeed_10m[i])
       });
     }
   }
@@ -292,6 +293,7 @@ export default async function handler(req, res) {
   // Calculate summary (average/most common conditions during game)
   const avgTemp = Math.round(gameWeather.reduce((sum, w) => sum + w.temperature, 0) / gameWeather.length);
   const maxPrecip = Math.max(...gameWeather.map(w => w.precipitationProbability));
+  const avgWindSpeed = Math.round(gameWeather.reduce((sum, w) => sum + w.windSpeed, 0) / gameWeather.length);
 
   // Get most severe weather code
   const mostSevereWeather = gameWeather.reduce((prev, curr) =>
@@ -299,16 +301,27 @@ export default async function handler(req, res) {
   );
 
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  // Format game time range
+  const formatHour = (h) => {
+    const period = h >= 12 ? 'PM' : 'AM';
+    const hour12 = h % 12 || 12;
+    return `${hour12}:00 ${period}`;
+  };
 
   return res.status(200).json({
     weather: {
       gameDate: gameDateStr,
       gameDay: days[gameDay],
+      gameDateFormatted: `${days[gameDay]}, ${months[nextGameDate.getMonth()]} ${nextGameDate.getDate()}`,
+      gameTimeRange: `${formatHour(startHour)} - ${formatHour(endHour)}`,
       summary: {
         temperature: avgTemp,
         description: mostSevereWeather.description,
         icon: mostSevereWeather.icon,
-        precipitationProbability: maxPrecip
+        precipitationProbability: maxPrecip,
+        windSpeed: avgWindSpeed
       },
       hourly: gameWeather
     }
