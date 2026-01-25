@@ -203,8 +203,8 @@ export default async function handler(req, res) {
 
       // Prepopulate gameInfo.location with organization's location/streetAddress if not already set
       if (settings.gameInfo?.location) {
-        if (!settings.gameInfo.location.name && org.location) {
-          settings.gameInfo.location.name = org.location;
+        if (!settings.gameInfo.location.area && org.location) {
+          settings.gameInfo.location.area = org.location;
         }
         if (!settings.gameInfo.location.address && org.streetAddress) {
           settings.gameInfo.location.address = org.streetAddress;
