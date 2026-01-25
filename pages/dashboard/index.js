@@ -307,17 +307,25 @@ export default function Dashboard() {
   }
 
   async function handleBulkDelete() {
-    if (bulkDeleteConfirm !== 'DELETE') return;
+    console.log('handleBulkDelete called', { bulkDeleteConfirm, selectedOrgs });
+
+    if (bulkDeleteConfirm !== 'DELETE') {
+      console.log('Confirmation text does not match DELETE');
+      return;
+    }
 
     setBulkDeleting(true);
     try {
+      console.log('Sending bulk delete request with ids:', selectedOrgs);
       const res = await fetch('/api/organizations/bulk-delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: selectedOrgs }),
       });
 
+      console.log('Response status:', res.status);
       const data = await res.json();
+      console.log('Response data:', data);
 
       if (res.ok) {
         // Re-fetch to update the list
@@ -328,9 +336,11 @@ export default function Dashboard() {
         setSelectedOrgs([]);
       } else {
         console.error('Bulk delete failed:', data.error);
+        alert('Delete failed: ' + (data.error || 'Unknown error'));
       }
     } catch (err) {
       console.error('Bulk delete failed:', err);
+      alert('Delete failed: ' + err.message);
     } finally {
       setBulkDeleting(false);
     }
