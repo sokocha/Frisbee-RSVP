@@ -38,10 +38,11 @@ export default function Dashboard() {
     gameStartMinute: 0,
     gameEndHour: 19,
     gameEndMinute: 0,
+    rsvpWindowPreset: '6-hours', // 'always-open', '6-hours', '12-hours', '24-hours', 'custom'
   });
   const [slugStatus, setSlugStatus] = useState({ checking: false, available: null, error: null });
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
-  const [createStep, setCreateStep] = useState(1); // Multi-step wizard: 1=Basics, 2=Schedule, 3=Location
+  const [createStep, setCreateStep] = useState(1); // Multi-step wizard: 1=Basics, 2=Schedule, 3=RSVP Window, 4=Location
 
   useEffect(() => {
     fetchUserData();
@@ -141,11 +142,11 @@ export default function Dashboard() {
     e.preventDefault();
 
     // Only submit on the final step
-    if (createStep < 3) {
+    if (createStep < 4) {
       return;
     }
 
-    // Validate step 3 fields
+    // Validate step 4 fields
     if (!newOrg.location || !newOrg.streetAddress) {
       setError('Please fill in all required fields');
       return;
@@ -183,6 +184,7 @@ export default function Dashboard() {
         gameStartMinute: 0,
         gameEndHour: 19,
         gameEndMinute: 0,
+        rsvpWindowPreset: '6-hours',
       });
       setSlugManuallyEdited(false);
       setSlugStatus({ checking: false, available: null, error: null });
@@ -633,15 +635,16 @@ export default function Dashboard() {
                   </button>
                 </div>
                 {/* Step Indicators */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                   {[
                     { num: 1, label: 'Basics' },
                     { num: 2, label: 'Schedule' },
-                    { num: 3, label: 'Location' },
+                    { num: 3, label: 'RSVP' },
+                    { num: 4, label: 'Location' },
                   ].map((step, i) => (
                     <div key={step.num} className="flex items-center">
-                      <div className={`flex items-center gap-1.5 ${createStep >= step.num ? 'text-white' : 'text-white/50'}`}>
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                      <div className={`flex items-center gap-1 ${createStep >= step.num ? 'text-white' : 'text-white/50'}`}>
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-medium ${
                           createStep > step.num
                             ? 'bg-white text-blue-600'
                             : createStep === step.num
@@ -649,7 +652,7 @@ export default function Dashboard() {
                             : 'bg-white/10 border border-white/30'
                         }`}>
                           {createStep > step.num ? (
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                             </svg>
                           ) : (
@@ -658,8 +661,8 @@ export default function Dashboard() {
                         </div>
                         <span className="text-xs font-medium hidden sm:inline">{step.label}</span>
                       </div>
-                      {i < 2 && (
-                        <div className={`w-6 sm:w-8 h-0.5 mx-1 ${createStep > step.num ? 'bg-white' : 'bg-white/20'}`} />
+                      {i < 3 && (
+                        <div className={`w-4 sm:w-6 h-0.5 mx-0.5 ${createStep > step.num ? 'bg-white' : 'bg-white/20'}`} />
                       )}
                     </div>
                   ))}
@@ -857,8 +860,59 @@ export default function Dashboard() {
                     </div>
                   )}
 
-                  {/* Step 3: Location */}
+                  {/* Step 3: RSVP Window */}
                   {createStep === 3 && (
+                    <div className="space-y-4">
+                      <p className="text-gray-500 text-sm mb-4">When should RSVPs close? This controls when people can sign up for your weekly game.</p>
+
+                      <div className="space-y-2">
+                        {[
+                          { value: 'always-open', label: 'Always open', desc: 'People can sign up anytime' },
+                          { value: '6-hours', label: 'Close 6 hours before', desc: 'Most common - gives you time to plan' },
+                          { value: '12-hours', label: 'Close 12 hours before', desc: 'Close the night before morning games' },
+                          { value: '24-hours', label: 'Close 24 hours before', desc: 'Close a full day ahead' },
+                        ].map(option => (
+                          <label
+                            key={option.value}
+                            className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                              newOrg.rsvpWindowPreset === option.value
+                                ? 'border-blue-500 bg-blue-50'
+                                : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="rsvpWindowPreset"
+                              value={option.value}
+                              checked={newOrg.rsvpWindowPreset === option.value}
+                              onChange={e => setNewOrg({ ...newOrg, rsvpWindowPreset: e.target.value })}
+                              className="mt-1"
+                            />
+                            <div>
+                              <span className="font-medium text-gray-900">{option.label}</span>
+                              <p className="text-sm text-gray-500">{option.desc}</p>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+
+                      {/* Preview */}
+                      {newOrg.rsvpWindowPreset !== 'always-open' && (
+                        <div className="bg-blue-50 rounded-lg p-3 mt-2">
+                          <p className="text-sm text-blue-800">
+                            <span className="font-medium">Preview:</span> RSVPs will close{' '}
+                            {newOrg.rsvpWindowPreset === '6-hours' && '6 hours'}
+                            {newOrg.rsvpWindowPreset === '12-hours' && '12 hours'}
+                            {newOrg.rsvpWindowPreset === '24-hours' && '24 hours'}
+                            {' '}before your {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][newOrg.gameDay]} {newOrg.gameStartHour}:{newOrg.gameStartMinute.toString().padStart(2, '0')} game
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Step 4: Location */}
+                  {createStep === 4 && (
                     <div className="space-y-4">
                       <p className="text-gray-500 text-sm mb-4">Where do you play? This helps people find you.</p>
 
@@ -935,7 +989,7 @@ export default function Dashboard() {
                       </button>
                     )}
 
-                    {createStep < 3 ? (
+                    {createStep < 4 ? (
                       <button
                         type="button"
                         onClick={() => {

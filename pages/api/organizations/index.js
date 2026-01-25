@@ -62,6 +62,7 @@ export default async function handler(req, res) {
       gameStartMinute,
       gameEndHour,
       gameEndMinute,
+      rsvpWindowPreset,
     } = req.body;
 
     // Validate required fields
@@ -104,6 +105,7 @@ export default async function handler(req, res) {
         maxParticipants: participantLimit,
         gameSchedule,
         organizerEmail: organizer.email, // Pass organizer email for CC preset
+        rsvpWindowPreset: rsvpWindowPreset || '6-hours',
       });
 
       return res.status(201).json({ organization });
