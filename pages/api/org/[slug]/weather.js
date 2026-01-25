@@ -186,18 +186,20 @@ function getWeatherInfo(code) {
 }
 
 // Find the next game day date
-function getNextGameDate(gameDay, timezone) {
+function getNextGameDate(gameDay, endHour, timezone) {
   const now = new Date();
   const localTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
   const currentDay = localTime.getDay();
+  const currentHour = localTime.getHours();
 
   let daysUntil = gameDay - currentDay;
   if (daysUntil < 0) {
     daysUntil += 7;
   }
-  // If it's game day but past the game time, show next week
-  if (daysUntil === 0) {
-    // We'll include today's weather if available
+
+  // If it's game day but past the game end time, show next week's weather
+  if (daysUntil === 0 && currentHour > endHour) {
+    daysUntil = 7;
   }
 
   const gameDate = new Date(localTime);
@@ -253,7 +255,7 @@ export default async function handler(req, res) {
   const startHour = settings.gameInfo?.startHour ?? 17;
   const endHour = settings.gameInfo?.endHour ?? 19;
 
-  const nextGameDate = getNextGameDate(gameDay, timezone);
+  const nextGameDate = getNextGameDate(gameDay, endHour, timezone);
   const gameDateStr = nextGameDate.toISOString().split('T')[0];
 
   // Find hourly data for game hours
