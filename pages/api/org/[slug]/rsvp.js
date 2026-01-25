@@ -432,16 +432,26 @@ export default async function handler(req, res) {
 
   if (req.method === 'PATCH') {
     // Snooze/unsnooze for whitelisted members
-    const { action, personId, personName, password } = req.body;
+    const { action, personId, personName, snoozeCode, password } = req.body;
 
-    if (!password) {
-      return res.status(400).json({ error: 'Password is required' });
-    }
+    // Authenticate via snooze code (new method) or password (legacy)
+    const whitelist = await getOrgData(orgId, ORG_KEY_SUFFIXES.WHITELIST, []);
+    let authenticatedMember = null;
 
-    // Use org-specific password or fall back to global
-    const MEMBER_PASSWORD = process.env.AIS_PASSWORD || process.env.ADMIN_PASSWORD || 'frisbee-admin-2024';
-    if (password !== MEMBER_PASSWORD) {
-      return res.status(401).json({ error: 'Invalid password' });
+    if (snoozeCode) {
+      // Find member by snooze code
+      authenticatedMember = whitelist.find(w => w.snoozeCode === snoozeCode.toUpperCase());
+      if (!authenticatedMember) {
+        return res.status(401).json({ error: 'Invalid snooze code' });
+      }
+    } else if (password) {
+      // Legacy password authentication
+      const MEMBER_PASSWORD = process.env.AIS_PASSWORD || process.env.ADMIN_PASSWORD || 'frisbee-admin-2024';
+      if (password !== MEMBER_PASSWORD) {
+        return res.status(401).json({ error: 'Invalid password' });
+      }
+    } else {
+      return res.status(400).json({ error: 'Snooze code is required' });
     }
 
     try {
@@ -451,17 +461,23 @@ export default async function handler(req, res) {
       const mainListLimit = settings.mainListLimit || DEFAULT_MAIN_LIST_LIMIT;
 
       if (action === 'snooze') {
-        const person = mainList.find(p => p.id === personId);
+        // If authenticated via snooze code, find the person by their whitelist name
+        let person;
+        if (authenticatedMember) {
+          person = mainList.find(p => p.name.toLowerCase() === authenticatedMember.name.toLowerCase());
+        } else {
+          person = mainList.find(p => p.id === personId);
+        }
 
         if (!person) {
-          return res.status(404).json({ error: 'Person not found on main list' });
+          return res.status(404).json({ error: 'You are not currently on the main list' });
         }
 
         if (!person.isWhitelisted) {
-          return res.status(400).json({ error: 'Only whitelisted members can snooze' });
+          return res.status(400).json({ error: 'Only members can snooze' });
         }
 
-        mainList = mainList.filter(p => p.id !== personId);
+        mainList = mainList.filter(p => p.id !== person.id);
 
         const timezone = settings.accessPeriod?.timezone || org.timezone || 'Africa/Lagos';
         const currentWeekId = getCurrentWeekId(timezone);
@@ -514,14 +530,17 @@ export default async function handler(req, res) {
         const currentWeekId = getCurrentWeekId(timezone);
         const snoozedData = await getOrgData(orgId, ORG_KEY_SUFFIXES.SNOOZED, { weekId: currentWeekId, names: [] });
 
-        const nameLC = personName?.toLowerCase();
+        // Use authenticated member's name if available, otherwise use personName
+        const nameLC = authenticatedMember
+          ? authenticatedMember.name.toLowerCase()
+          : personName?.toLowerCase();
 
         const idx = snoozedData.names.findIndex(entry =>
           (typeof entry === 'string' ? entry : entry.nameLC) === nameLC
         );
 
         if (idx === -1) {
-          return res.status(400).json({ error: 'This person is not currently snoozed' });
+          return res.status(400).json({ error: 'You are not currently snoozed' });
         }
 
         const accessStatus = isFormOpen(settings);
@@ -535,7 +554,6 @@ export default async function handler(req, res) {
         if (typeof entry === 'object' && entry.snapshot) {
           restored = { ...entry.snapshot };
         } else {
-          const whitelist = await getOrgData(orgId, ORG_KEY_SUFFIXES.WHITELIST, []);
           const whitelistPerson = whitelist.find(w => w.name.toLowerCase() === nameLC);
           if (!whitelistPerson) {
             return res.status(400).json({ error: 'Could not find whitelist entry' });

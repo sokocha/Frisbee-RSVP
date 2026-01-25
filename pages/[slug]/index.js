@@ -272,6 +272,9 @@ export default function OrgRSVP() {
   const [whatsapp, setWhatsapp] = useState(null);
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
   const [isOrganizer, setIsOrganizer] = useState(false);
+  const [snoozeModal, setSnoozeModal] = useState({ show: false, personName: null });
+  const [snoozeCode, setSnoozeCode] = useState('');
+  const [snoozing, setSnoozing] = useState(false);
 
   const checkMySignup = useCallback((mainList, waitlist, currentDeviceId) => {
     const allSignups = [...mainList, ...waitlist];
@@ -416,6 +419,42 @@ export default function OrgRSVP() {
       showToast('Failed to remove RSVP. Please try again.', 'error');
     }
     setSubmitting(false);
+  };
+
+  const handleSnooze = async () => {
+    if (!snoozeCode.trim()) {
+      showToast('Please enter your snooze code', 'error');
+      return;
+    }
+    setSnoozing(true);
+    try {
+      const response = await fetch(`/api/org/${slug}/rsvp`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'snooze',
+          snoozeCode: snoozeCode.trim().toUpperCase()
+        })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setMainList(data.mainList);
+        setWaitlist(data.waitlist);
+        setSnoozeModal({ show: false, personName: null });
+        setSnoozeCode('');
+        showToast(data.message, 'success');
+        // If the snoozed person was me, update my signup status
+        if (mySignup && data.snoozedNames?.includes(mySignup.name)) {
+          setHasSignedUp(false);
+          setMySignup(null);
+        }
+      } else {
+        showToast(data.error, 'error');
+      }
+    } catch (error) {
+      showToast('Failed to snooze. Please try again.', 'error');
+    }
+    setSnoozing(false);
   };
 
   const isMySignup = (person) => person.deviceId === deviceId;
@@ -749,6 +788,14 @@ export default function OrgRSVP() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-400">#{index + 1}</span>
+                      {person.isWhitelisted && (
+                        <button
+                          onClick={() => setSnoozeModal({ show: true, personName: person.name })}
+                          className="text-amber-600 hover:bg-amber-50 px-2 py-1 rounded-lg text-xs font-medium"
+                        >
+                          Skip week?
+                        </button>
+                      )}
                       {isMySignup(person) && !person.isWhitelisted && (
                         <button
                           onClick={() => setConfirmModal({ show: true, personId: person.id, isWaitlist: false })}
@@ -964,6 +1011,56 @@ export default function OrgRSVP() {
                   className="flex-1 px-4 py-3 bg-red-500 hover:bg-red-600 text-white font-medium rounded-xl flex items-center justify-center"
                 >
                   {submitting ? <Spinner /> : 'Yes, cancel'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Snooze Modal */}
+        {snoozeModal.show && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="glass-card-solid rounded-3xl shadow-2xl p-6 max-w-md w-full">
+              <h3 className="text-xl font-bold text-gray-800 mb-2">
+                Skip This Week?
+              </h3>
+              <p className="text-gray-600 mb-4">
+                Enter your member snooze code to skip this week. You'll automatically be back on the list next week.
+              </p>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Your Snooze Code
+                </label>
+                <input
+                  type="text"
+                  value={snoozeCode}
+                  onChange={(e) => setSnoozeCode(e.target.value.toUpperCase())}
+                  onKeyDown={(e) => e.key === 'Enter' && !snoozing && handleSnooze()}
+                  placeholder="Enter 6-character code"
+                  maxLength={6}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-amber-500 focus:outline-none text-center text-xl font-mono tracking-widest uppercase"
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 mt-2">
+                  Check your email for your personal snooze code from when you were added as a member.
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setSnoozeModal({ show: false, personName: null });
+                    setSnoozeCode('');
+                  }}
+                  className="flex-1 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSnooze}
+                  disabled={snoozing || snoozeCode.length < 6}
+                  className="flex-1 px-4 py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-300 text-white font-medium rounded-xl flex items-center justify-center"
+                >
+                  {snoozing ? <Spinner /> : 'Skip This Week'}
                 </button>
               </div>
             </div>

@@ -1,6 +1,58 @@
 import { verifySession, parseCookies, isSuperAdmin } from '../../../../lib/auth';
 import { getOrganizerById, getOrganizationBySlug, organizerOwnsOrg, updateOrganization, deleteOrganization } from '../../../../lib/organizations';
 import { getOrgData, setOrgData, ORG_KEY_SUFFIXES, deleteAllOrgData } from '../../../../lib/kv';
+import { Resend } from 'resend';
+
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+
+/**
+ * Generate a unique snooze code (6 characters, no confusing chars)
+ */
+function generateSnoozeCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+/**
+ * Send welcome email with snooze code to new whitelist member
+ */
+async function sendWhitelistWelcomeEmail(email, name, snoozeCode, orgName, slug) {
+  if (!resend) {
+    console.log('Resend not configured, skipping email for:', email);
+    return false;
+  }
+
+  try {
+    await resend.emails.send({
+      from: `${orgName} <noreply@itsplayday.com>`,
+      to: email,
+      subject: `Welcome to ${orgName} - Your Member Code`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto;">
+          <h2>Hi ${name}!</h2>
+          <p>You've been added as a VIP member of <strong>${orgName}</strong>.</p>
+          <p>Your personal snooze code is:</p>
+          <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; text-align: center; margin: 16px 0;">
+            <span style="font-size: 28px; font-weight: bold; letter-spacing: 4px; font-family: monospace;">${snoozeCode}</span>
+          </div>
+          <p>Use this code on the RSVP page if you need to skip a week. You'll automatically return to the list the following week.</p>
+          <a href="https://itsplayday.com/${slug}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 16px 0;">
+            View RSVP Page
+          </a>
+          <p style="color: #666; font-size: 14px;">Keep this code safe - you'll need it whenever you want to skip a week.</p>
+        </div>
+      `,
+    });
+    return true;
+  } catch (error) {
+    console.error('Failed to send whitelist welcome email:', error);
+    return false;
+  }
+}
 
 /**
  * Sort people by priority
@@ -190,10 +242,12 @@ export default async function handler(req, res) {
 
     try {
       if (action === 'add-whitelist') {
-        const { names } = data;
+        // Support both old format (names: string[]) and new format (members: {name, email}[])
+        const { names, members } = data;
+        const inputMembers = members || (names ? names.map(n => typeof n === 'string' ? { name: n } : n) : []);
 
-        if (!names || !Array.isArray(names) || names.length === 0) {
-          return res.status(400).json({ error: 'Names array is required' });
+        if (!inputMembers || !Array.isArray(inputMembers) || inputMembers.length === 0) {
+          return res.status(400).json({ error: 'Members array is required' });
         }
 
         const rsvpData = await getOrgData(orgId, ORG_KEY_SUFFIXES.RSVP_DATA, { mainList: [], waitlist: [] });
@@ -204,8 +258,9 @@ export default async function handler(req, res) {
         const added = [];
         const skipped = [];
 
-        for (const name of names) {
-          const trimmedName = name.trim();
+        for (const member of inputMembers) {
+          const trimmedName = (member.name || '').trim();
+          const email = (member.email || '').trim().toLowerCase();
           if (!trimmedName) continue;
 
           if (whitelist.some(w => w.name.toLowerCase() === trimmedName.toLowerCase())) {
@@ -219,6 +274,9 @@ export default async function handler(req, res) {
             continue;
           }
 
+          // Generate unique snooze code
+          const snoozeCode = generateSnoozeCode();
+
           const newPerson = {
             id: Date.now() + Math.random(),
             name: trimmedName,
@@ -227,10 +285,18 @@ export default async function handler(req, res) {
             isWhitelisted: true
           };
 
-          whitelist.push({
+          const whitelistEntry = {
             name: trimmedName,
+            snoozeCode,
             addedAt: new Date().toISOString()
-          });
+          };
+
+          // Only add email if provided
+          if (email) {
+            whitelistEntry.email = email;
+          }
+
+          whitelist.push(whitelistEntry);
 
           const rebalanced = rebalanceLists(
             [...rsvpData.mainList, newPerson],
@@ -240,7 +306,18 @@ export default async function handler(req, res) {
           rsvpData.mainList = rebalanced.mainList;
           rsvpData.waitlist = rebalanced.waitlist;
 
-          added.push(trimmedName);
+          // Send welcome email if email provided
+          let emailSent = false;
+          if (email) {
+            emailSent = await sendWhitelistWelcomeEmail(email, trimmedName, snoozeCode, org.name, org.slug);
+          }
+
+          added.push({
+            name: trimmedName,
+            email: email || null,
+            snoozeCode,
+            emailSent
+          });
         }
 
         await setOrgData(orgId, ORG_KEY_SUFFIXES.RSVP_DATA, rsvpData);
@@ -285,6 +362,44 @@ export default async function handler(req, res) {
           mainList: rsvpData.mainList,
           waitlist: rsvpData.waitlist,
           whitelist
+        });
+      }
+
+      if (action === 'resend-snooze-code') {
+        const { memberName, name } = data;
+        const targetName = memberName || name;
+
+        if (!targetName) {
+          return res.status(400).json({ error: 'Member name is required' });
+        }
+
+        const whitelist = await getOrgData(orgId, ORG_KEY_SUFFIXES.WHITELIST, []);
+        const member = whitelist.find(w => w.name.toLowerCase() === targetName.toLowerCase());
+
+        if (!member) {
+          return res.status(404).json({ error: 'Member not found in whitelist' });
+        }
+
+        if (!member.email) {
+          return res.status(400).json({ error: 'Member does not have an email address' });
+        }
+
+        if (!member.snoozeCode) {
+          return res.status(400).json({ error: 'Member does not have a snooze code' });
+        }
+
+        const emailSent = await sendWhitelistWelcomeEmail(
+          member.email,
+          member.name,
+          member.snoozeCode,
+          org.name,
+          org.slug
+        );
+
+        return res.status(200).json({
+          success: true,
+          emailSent,
+          message: emailSent ? 'Snooze code email sent' : 'Failed to send email'
         });
       }
 

@@ -135,6 +135,9 @@ export default function OrgAdmin() {
 
   // Whitelist form
   const [newWhitelistNames, setNewWhitelistNames] = useState('');
+  const [newMemberName, setNewMemberName] = useState('');
+  const [newMemberEmail, setNewMemberEmail] = useState('');
+  const [resendingCode, setResendingCode] = useState(null);
 
   // Game info form
   const [newRule, setNewRule] = useState('');
@@ -994,26 +997,77 @@ export default function OrgAdmin() {
                 </h2>
                 <p className="text-sm text-gray-500 mb-4">
                   Members are automatically signed up each week and get priority positioning.
+                  Members with email addresses receive a snooze code to skip a week when needed.
                 </p>
 
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="bg-white rounded-lg border border-gray-200 p-4">
-                    <h3 className="font-medium text-gray-900 mb-4">Add Members</h3>
-                    <form onSubmit={handleAddWhitelist}>
-                      <textarea
-                        value={newWhitelistNames}
-                        onChange={e => setNewWhitelistNames(e.target.value)}
-                        placeholder="Enter names (one per line)"
-                        rows={4}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-3"
-                      />
-                      <button
-                        type="submit"
-                        disabled={saving || !newWhitelistNames.trim()}
-                        className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                      >
-                        {saving ? 'Adding...' : 'Add Members'}
-                      </button>
+                    <h3 className="font-medium text-gray-900 mb-4">Add Member</h3>
+                    <form onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (!newMemberName.trim()) return;
+
+                      setSaving(true);
+                      try {
+                        const res = await fetch(`/api/org/${slug}/admin`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            action: 'add-whitelist',
+                            data: {
+                              members: [{ name: newMemberName.trim(), email: newMemberEmail.trim() || null }]
+                            }
+                          }),
+                        });
+
+                        const data = await res.json();
+
+                        if (res.ok) {
+                          setMainList(data.mainList);
+                          setWaitlist(data.waitlist);
+                          setWhitelist(data.whitelist);
+                          setNewMemberName('');
+                          setNewMemberEmail('');
+                          const emailSent = data.added?.some(m => m.emailSent);
+                          showMessage(`Added ${data.added?.length || 0} member${emailSent ? ' - welcome email sent!' : ''}`);
+                        } else {
+                          showMessage(data.error, 'error');
+                        }
+                      } catch (error) {
+                        showMessage('Failed to add member', 'error');
+                      }
+                      setSaving(false);
+                    }}>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Name *</label>
+                          <input
+                            type="text"
+                            value={newMemberName}
+                            onChange={e => setNewMemberName(e.target.value)}
+                            placeholder="John Doe"
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Email (optional)</label>
+                          <input
+                            type="email"
+                            value={newMemberEmail}
+                            onChange={e => setNewMemberEmail(e.target.value)}
+                            placeholder="john@example.com"
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                          <p className="text-xs text-gray-400 mt-1">If provided, they'll receive a snooze code via email</p>
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={saving || !newMemberName.trim()}
+                          className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                        >
+                          {saving ? 'Adding...' : 'Add Member'}
+                        </button>
+                      </div>
                     </form>
                   </div>
 
@@ -1025,14 +1079,53 @@ export default function OrgAdmin() {
                       <div className="space-y-2 max-h-60 overflow-y-auto">
                         {whitelist.map((member, i) => (
                           <div key={i} className="flex items-center justify-between p-2 bg-blue-50 rounded">
-                            <span className="font-medium">{member.name}</span>
-                            <button
-                              onClick={() => handleRemoveWhitelist(member.name)}
-                              disabled={saving}
-                              className="text-red-500 hover:text-red-600 text-sm"
-                            >
-                              Remove
-                            </button>
+                            <div className="flex-1 min-w-0">
+                              <span className="font-medium block truncate">{member.name}</span>
+                              {member.email && (
+                                <span className="text-xs text-gray-500">
+                                  {member.email.replace(/^(.{2}).*(@.*)$/, '$1***$2')}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 ml-2">
+                              {member.email && member.snoozeCode && (
+                                <button
+                                  onClick={async () => {
+                                    setResendingCode(member.name);
+                                    try {
+                                      const res = await fetch(`/api/org/${slug}/admin`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                          action: 'resend-snooze-code',
+                                          data: { memberName: member.name }
+                                        }),
+                                      });
+                                      const data = await res.json();
+                                      if (res.ok) {
+                                        showMessage('Snooze code sent!');
+                                      } else {
+                                        showMessage(data.error, 'error');
+                                      }
+                                    } catch (error) {
+                                      showMessage('Failed to resend code', 'error');
+                                    }
+                                    setResendingCode(null);
+                                  }}
+                                  disabled={resendingCode === member.name}
+                                  className="text-blue-600 hover:text-blue-700 text-xs whitespace-nowrap"
+                                >
+                                  {resendingCode === member.name ? 'Sending...' : 'Resend Code'}
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleRemoveWhitelist(member.name)}
+                                disabled={saving}
+                                className="text-red-500 hover:text-red-600 text-sm"
+                              >
+                                Remove
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
