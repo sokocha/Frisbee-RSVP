@@ -1150,7 +1150,7 @@ export default function OrgAdmin() {
                   <div className="space-y-4 pl-4 border-l-2 border-blue-100">
                     {/* Schedule Preview */}
                     <div className="bg-blue-50 rounded-lg p-3">
-                      <p className="text-sm font-medium text-blue-900 mb-1">Schedule Preview</p>
+                      <p className="text-sm font-medium text-blue-900 mb-1">Weekly Schedule</p>
                       <div className="flex flex-wrap items-center gap-2 text-sm text-blue-700">
                         <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded">Opens</span>
                         <span>{days[settingsForm.accessPeriod.startDay]} {formatTime12h(settingsForm.accessPeriod.startHour, settingsForm.accessPeriod.startMinute)}</span>
@@ -1158,6 +1158,12 @@ export default function OrgAdmin() {
                         <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded">Closes</span>
                         <span>{days[settingsForm.accessPeriod.endDay]} {formatTime12h(settingsForm.accessPeriod.endHour, settingsForm.accessPeriod.endMinute)}</span>
                       </div>
+                      <p className="text-xs text-blue-600 mt-2">
+                        {settingsForm.accessPeriod.startDay === settingsForm.accessPeriod.endDay
+                          ? `RSVPs are open for ~1 week (from ${days[settingsForm.accessPeriod.startDay]} to the following ${days[settingsForm.accessPeriod.endDay]})`
+                          : `RSVPs are open from ${days[settingsForm.accessPeriod.startDay]} to ${days[settingsForm.accessPeriod.endDay]} each week`
+                        }
+                      </p>
                     </div>
 
                     {/* Timezone Display */}
