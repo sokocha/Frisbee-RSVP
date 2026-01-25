@@ -537,46 +537,6 @@ export default async function handler(req, res) {
         });
       }
 
-      if (action === 'update-location') {
-        const { location, streetAddress } = data;
-
-        // Update organization location and streetAddress
-        const updates = {};
-        if (location !== undefined) {
-          updates.location = location;
-        }
-        if (streetAddress !== undefined) {
-          updates.streetAddress = streetAddress;
-        }
-
-        await updateOrganization(orgId, updates);
-
-        // Also update gameInfo.location if it exists in settings
-        const settings = await getOrgData(orgId, ORG_KEY_SUFFIXES.SETTINGS, getDefaultSettings(org.timezone));
-        if (settings.gameInfo?.location) {
-          settings.gameInfo.location.name = location || settings.gameInfo.location.name;
-          settings.gameInfo.location.address = streetAddress || settings.gameInfo.location.address;
-          await setOrgData(orgId, ORG_KEY_SUFFIXES.SETTINGS, settings);
-        }
-
-        // Get updated org data
-        const updatedOrg = await getOrganizationBySlug(slug);
-
-        return res.status(200).json({
-          success: true,
-          organization: {
-            id: updatedOrg.id,
-            slug: updatedOrg.slug,
-            name: updatedOrg.name,
-            sport: updatedOrg.sport,
-            location: updatedOrg.location,
-            streetAddress: updatedOrg.streetAddress,
-            timezone: updatedOrg.timezone,
-            visibility: updatedOrg.visibility || 'private',
-          }
-        });
-      }
-
       return res.status(400).json({ error: 'Invalid action' });
     } catch (error) {
       console.error('Admin action failed:', error);

@@ -164,10 +164,6 @@ export default function OrgAdmin() {
   const [emailCc, setEmailCc] = useState('');
   const [emailBcc, setEmailBcc] = useState('');
 
-  // Location form
-  const [locationForm, setLocationForm] = useState({ location: '', streetAddress: '' });
-  const [savingLocation, setSavingLocation] = useState(false);
-
   // Settings form
   const [settingsForm, setSettingsForm] = useState({
     mainListLimit: 30,
@@ -261,11 +257,6 @@ export default function OrgAdmin() {
           setEmailCc((data.settings.email?.cc || []).join(', '));
           setEmailBcc((data.settings.email?.bcc || []).join(', '));
         }
-        // Initialize location form
-        setLocationForm({
-          location: data.organization.location || '',
-          streetAddress: data.organization.streetAddress || '',
-        });
         setHasUnsavedChanges(false);
       }
     } catch (error) {
@@ -458,36 +449,6 @@ export default function OrgAdmin() {
       showMessage('Failed to update visibility', 'error');
     }
     setSaving(false);
-  }
-
-  async function handleUpdateLocation(e) {
-    e.preventDefault();
-    setSavingLocation(true);
-    try {
-      const res = await fetch(`/api/org/${slug}/admin`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'update-location',
-          data: {
-            location: locationForm.location,
-            streetAddress: locationForm.streetAddress,
-          }
-        }),
-      });
-
-      const data = await res.json();
-
-      if (res.ok) {
-        setOrg(data.organization);
-        showMessage('Location updated successfully');
-      } else {
-        showMessage(data.error, 'error');
-      }
-    } catch (error) {
-      showMessage('Failed to update location', 'error');
-    }
-    setSavingLocation(false);
   }
 
   async function handleDeleteCommunity() {
@@ -1268,51 +1229,6 @@ export default function OrgAdmin() {
                 )}
               </div>
 
-              {/* Location Section */}
-              <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
-                  <span>📍</span> Location
-                </h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  Where your community plays.
-                </p>
-                <form onSubmit={handleUpdateLocation} className="space-y-3">
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Area (Lagos)</label>
-                    <select
-                      value={locationForm.location}
-                      onChange={e => setLocationForm({ ...locationForm, location: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                    >
-                      <option value="">Select area...</option>
-                      {LAGOS_AREAS.map(area => (
-                        <option key={area} value={formatLocation(area)}>
-                          {area}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Street Address</label>
-                    <input
-                      type="text"
-                      value={locationForm.streetAddress}
-                      onChange={e => setLocationForm({ ...locationForm, streetAddress: e.target.value })}
-                      placeholder="e.g., 15 Adeola Odeku Street"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                    />
-                    <p className="text-xs text-gray-400 mt-1">Specific venue address for players to find you</p>
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={savingLocation}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {savingLocation ? 'Saving...' : 'Update Location'}
-                  </button>
-                </form>
-              </div>
-
               {/* Visibility Section */}
               <div className="bg-white rounded-lg border border-gray-200 p-6">
                 <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
@@ -1780,6 +1696,27 @@ export default function OrgAdmin() {
                     </label>
                     {settingsForm.gameInfo?.location?.enabled && (
                       <div className="space-y-3 ml-7">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Area (Lagos)</label>
+                          <select
+                            value={settingsForm.gameInfo?.location?.area || ''}
+                            onChange={e => setSettingsForm({
+                              ...settingsForm,
+                              gameInfo: {
+                                ...settingsForm.gameInfo,
+                                location: { ...settingsForm.gameInfo?.location, area: e.target.value }
+                              }
+                            })}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                          >
+                            <option value="">Select area...</option>
+                            {LAGOS_AREAS.map(area => (
+                              <option key={area} value={formatLocation(area)}>
+                                {area}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                         <div>
                           <label className="block text-xs text-gray-500 mb-1">Venue Name</label>
                           <input
