@@ -63,6 +63,13 @@ export default async function handler(req, res) {
       gameEndHour,
       gameEndMinute,
       rsvpWindowPreset,
+      // Custom RSVP timing (optional)
+      rsvpOpenDay,
+      rsvpOpenHour,
+      rsvpOpenMinute,
+      rsvpCloseDay,
+      rsvpCloseHour,
+      rsvpCloseMinute,
     } = req.body;
 
     // Validate required fields
@@ -79,7 +86,7 @@ export default async function handler(req, res) {
     // Validate max participants
     const participantLimit = Math.min(Math.max(parseInt(maxParticipants) || 30, 1), 500);
 
-    // Build game schedule
+    // Build game schedule with optional custom RSVP timing
     const gameSchedule = {
       gameDay: parseInt(gameDay) || 0,
       startHour: Math.min(Math.max(parseInt(gameStartHour) || 17, 0), 23),
@@ -87,6 +94,16 @@ export default async function handler(req, res) {
       endHour: Math.min(Math.max(parseInt(gameEndHour) || 19, 0), 23),
       endMinute: Math.min(Math.max(parseInt(gameEndMinute) || 0, 0), 59),
     };
+
+    // Add custom RSVP timing if provided (for 'custom' preset)
+    if (rsvpWindowPreset === 'custom' && rsvpOpenDay !== undefined && rsvpCloseDay !== undefined) {
+      gameSchedule.rsvpOpenDay = parseInt(rsvpOpenDay);
+      gameSchedule.rsvpOpenHour = Math.min(Math.max(parseInt(rsvpOpenHour) || 0, 0), 23);
+      gameSchedule.rsvpOpenMinute = Math.min(Math.max(parseInt(rsvpOpenMinute) || 0, 0), 59);
+      gameSchedule.rsvpCloseDay = parseInt(rsvpCloseDay);
+      gameSchedule.rsvpCloseHour = Math.min(Math.max(parseInt(rsvpCloseHour) || 0, 0), 23);
+      gameSchedule.rsvpCloseMinute = Math.min(Math.max(parseInt(rsvpCloseMinute) || 0, 0), 59);
+    }
 
     try {
       // Check if slug is available

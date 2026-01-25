@@ -4,6 +4,104 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { LAGOS_AREAS, formatLocation } from '../../lib/locations';
 
+// Visual timeline component showing the weekly recurring schedule
+function WeeklyTimeline({ gameDay, gameStartHour, gameStartMinute, gameEndHour, gameEndMinute, rsvpWindowPreset, rsvpOpenDay, rsvpOpenHour, rsvpOpenMinute, rsvpCloseDay, rsvpCloseHour, rsvpCloseMinute }) {
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const fullDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  // Calculate times based on preset or custom
+  let openDay, openHour, openMin, closeDay, closeHour, closeMin;
+
+  if (rsvpWindowPreset === 'custom') {
+    openDay = rsvpOpenDay;
+    openHour = rsvpOpenHour;
+    openMin = rsvpOpenMinute;
+    closeDay = rsvpCloseDay;
+    closeHour = rsvpCloseHour;
+    closeMin = rsvpCloseMinute;
+  } else {
+    // Calculate from preset
+    const hoursBefore = { '6-hours': 6, '12-hours': 12, '24-hours': 24 }[rsvpWindowPreset] || 6;
+
+    // Close time
+    closeHour = gameStartHour - hoursBefore;
+    closeDay = gameDay;
+    closeMin = gameStartMinute;
+    while (closeHour < 0) { closeHour += 24; closeDay--; }
+    if (closeDay < 0) closeDay += 7;
+
+    // Open time (1 min after game ends)
+    openMin = gameEndMinute + 1;
+    openHour = gameEndHour;
+    openDay = gameDay;
+    if (openMin >= 60) { openMin = 0; openHour++; }
+    if (openHour >= 24) { openHour = 0; openDay = (openDay + 1) % 7; }
+  }
+
+  const formatTime = (h, m) => `${h}:${m.toString().padStart(2, '0')}`;
+
+  // Build ordered timeline events starting from RSVP open
+  // Timeline: RSVP Opens -> RSVP Closes -> Game Starts -> Game Ends -> (repeat)
+  const events = [
+    { type: 'open', day: openDay, hour: openHour, minute: openMin, label: 'RSVP Opens', color: 'text-green-600', bg: 'bg-green-100', icon: '📬' },
+    { type: 'close', day: closeDay, hour: closeHour, minute: closeMin, label: 'RSVP Closes', color: 'text-orange-600', bg: 'bg-orange-100', icon: '🔒' },
+    { type: 'game-start', day: gameDay, hour: gameStartHour, minute: gameStartMinute, label: 'Game Starts', color: 'text-blue-600', bg: 'bg-blue-100', icon: '🏆' },
+    { type: 'game-end', day: gameDay, hour: gameEndHour, minute: gameEndMinute, label: 'Game Ends', color: 'text-purple-600', bg: 'bg-purple-100', icon: '🏁' },
+  ];
+
+  // Sort events by day and time, starting from the RSVP open day
+  const getMinutesInWeek = (day, hour, minute, startDay) => {
+    let adjustedDay = (day - startDay + 7) % 7;
+    return adjustedDay * 24 * 60 + hour * 60 + minute;
+  };
+
+  const sortedEvents = [...events].sort((a, b) => {
+    return getMinutesInWeek(a.day, a.hour, a.minute, openDay) - getMinutesInWeek(b.day, b.hour, b.minute, openDay);
+  });
+
+  return (
+    <div className="relative">
+      {/* Timeline line */}
+      <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gradient-to-b from-green-300 via-blue-300 to-purple-300"></div>
+
+      {/* Events */}
+      <div className="space-y-3">
+        {sortedEvents.map((event, index) => (
+          <div key={event.type} className="flex items-start gap-3 relative">
+            {/* Dot on timeline */}
+            <div className={`w-8 h-8 rounded-full ${event.bg} flex items-center justify-center text-sm z-10 flex-shrink-0`}>
+              {event.icon}
+            </div>
+            {/* Event details */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className={`text-sm font-medium ${event.color}`}>{event.label}</span>
+              </div>
+              <p className="text-xs text-gray-500">
+                {fullDays[event.day]} at {formatTime(event.hour, event.minute)}
+              </p>
+            </div>
+            {/* Connector to next */}
+            {index < sortedEvents.length - 1 && (
+              <div className="absolute left-4 top-8 w-0.5 h-3 bg-gray-200"></div>
+            )}
+          </div>
+        ))}
+
+        {/* Repeat indicator */}
+        <div className="flex items-start gap-3 relative opacity-60">
+          <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-sm z-10 flex-shrink-0">
+            🔄
+          </div>
+          <div className="flex-1">
+            <span className="text-xs text-gray-500 italic">Cycle repeats weekly</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const [user, setUser] = useState(null);
@@ -39,10 +137,21 @@ export default function Dashboard() {
     gameEndHour: 19,
     gameEndMinute: 0,
     rsvpWindowPreset: '6-hours', // 'always-open', '6-hours', '12-hours', '24-hours', 'custom'
+    // Custom RSVP timing (used when rsvpWindowPreset === 'custom')
+    rsvpOpenDay: 0,
+    rsvpOpenHour: 19,
+    rsvpOpenMinute: 1,
+    rsvpCloseDay: 0,
+    rsvpCloseHour: 11,
+    rsvpCloseMinute: 0,
+    // List reset (defaults to same as RSVP close for now)
+    listResetDay: 0,
+    listResetHour: 0,
+    listResetMinute: 0,
   });
   const [slugStatus, setSlugStatus] = useState({ checking: false, available: null, error: null });
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
-  const [createStep, setCreateStep] = useState(1); // Multi-step wizard: 1=Basics, 2=Schedule, 3=RSVP Window, 4=Location
+  const [createStep, setCreateStep] = useState(1); // Multi-step wizard: 1=Basics, 2=Game Schedule, 3=RSVP Window, 4=Location
 
   useEffect(() => {
     fetchUserData();
@@ -185,6 +294,15 @@ export default function Dashboard() {
         gameEndHour: 19,
         gameEndMinute: 0,
         rsvpWindowPreset: '6-hours',
+        rsvpOpenDay: 0,
+        rsvpOpenHour: 19,
+        rsvpOpenMinute: 1,
+        rsvpCloseDay: 0,
+        rsvpCloseHour: 11,
+        rsvpCloseMinute: 0,
+        listResetDay: 0,
+        listResetHour: 0,
+        listResetMinute: 0,
       });
       setSlugManuallyEdited(false);
       setSlugStatus({ checking: false, available: null, error: null });
@@ -871,6 +989,7 @@ export default function Dashboard() {
                           { value: '6-hours', label: 'Close 6 hours before', desc: 'Most common - gives you time to plan' },
                           { value: '12-hours', label: 'Close 12 hours before', desc: 'Close the night before morning games' },
                           { value: '24-hours', label: 'Close 24 hours before', desc: 'Close a full day ahead' },
+                          { value: 'custom', label: 'Custom schedule', desc: 'Set exact open & close times' },
                         ].map(option => (
                           <label
                             key={option.value}
@@ -885,7 +1004,32 @@ export default function Dashboard() {
                               name="rsvpWindowPreset"
                               value={option.value}
                               checked={newOrg.rsvpWindowPreset === option.value}
-                              onChange={e => setNewOrg({ ...newOrg, rsvpWindowPreset: e.target.value })}
+                              onChange={e => {
+                                const preset = e.target.value;
+                                const updates = { ...newOrg, rsvpWindowPreset: preset };
+                                // When switching to custom, initialize with calculated values
+                                if (preset === 'custom') {
+                                  // Default: open 1 min after game ends, close 6 hours before game
+                                  let openMin = newOrg.gameEndMinute + 1;
+                                  let openHour = newOrg.gameEndHour;
+                                  let openDay = newOrg.gameDay;
+                                  if (openMin >= 60) { openMin = 0; openHour++; }
+                                  if (openHour >= 24) { openHour = 0; openDay = (openDay + 1) % 7; }
+
+                                  let closeHour = newOrg.gameStartHour - 6;
+                                  let closeDay = newOrg.gameDay;
+                                  while (closeHour < 0) { closeHour += 24; closeDay--; }
+                                  if (closeDay < 0) closeDay += 7;
+
+                                  updates.rsvpOpenDay = openDay;
+                                  updates.rsvpOpenHour = openHour;
+                                  updates.rsvpOpenMinute = openMin;
+                                  updates.rsvpCloseDay = closeDay;
+                                  updates.rsvpCloseHour = closeHour;
+                                  updates.rsvpCloseMinute = newOrg.gameStartMinute;
+                                }
+                                setNewOrg(updates);
+                              }}
                               className="mt-1"
                             />
                             <div>
@@ -896,16 +1040,96 @@ export default function Dashboard() {
                         ))}
                       </div>
 
-                      {/* Preview */}
+                      {/* Custom timing inputs */}
+                      {newOrg.rsvpWindowPreset === 'custom' && (
+                        <div className="bg-gray-50 rounded-lg p-4 space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">RSVP Opens</label>
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={newOrg.rsvpOpenDay}
+                                onChange={e => setNewOrg({ ...newOrg, rsvpOpenDay: parseInt(e.target.value) })}
+                                className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                              >
+                                {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day, i) => (
+                                  <option key={i} value={i}>{day}</option>
+                                ))}
+                              </select>
+                              <span className="text-gray-400">at</span>
+                              <input
+                                type="number"
+                                min={0}
+                                max={23}
+                                value={newOrg.rsvpOpenHour}
+                                onChange={e => setNewOrg({ ...newOrg, rsvpOpenHour: parseInt(e.target.value) || 0 })}
+                                className="w-14 px-2 py-2 border border-gray-300 rounded-lg text-center text-sm"
+                              />
+                              <span className="text-gray-400">:</span>
+                              <input
+                                type="number"
+                                min={0}
+                                max={59}
+                                step={5}
+                                value={newOrg.rsvpOpenMinute.toString().padStart(2, '0')}
+                                onChange={e => setNewOrg({ ...newOrg, rsvpOpenMinute: parseInt(e.target.value) || 0 })}
+                                className="w-14 px-2 py-2 border border-gray-300 rounded-lg text-center text-sm"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">RSVP Closes</label>
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={newOrg.rsvpCloseDay}
+                                onChange={e => setNewOrg({ ...newOrg, rsvpCloseDay: parseInt(e.target.value) })}
+                                className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                              >
+                                {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day, i) => (
+                                  <option key={i} value={i}>{day}</option>
+                                ))}
+                              </select>
+                              <span className="text-gray-400">at</span>
+                              <input
+                                type="number"
+                                min={0}
+                                max={23}
+                                value={newOrg.rsvpCloseHour}
+                                onChange={e => setNewOrg({ ...newOrg, rsvpCloseHour: parseInt(e.target.value) || 0 })}
+                                className="w-14 px-2 py-2 border border-gray-300 rounded-lg text-center text-sm"
+                              />
+                              <span className="text-gray-400">:</span>
+                              <input
+                                type="number"
+                                min={0}
+                                max={59}
+                                step={5}
+                                value={newOrg.rsvpCloseMinute.toString().padStart(2, '0')}
+                                onChange={e => setNewOrg({ ...newOrg, rsvpCloseMinute: parseInt(e.target.value) || 0 })}
+                                className="w-14 px-2 py-2 border border-gray-300 rounded-lg text-center text-sm"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Visual Timeline */}
                       {newOrg.rsvpWindowPreset !== 'always-open' && (
-                        <div className="bg-blue-50 rounded-lg p-3 mt-2">
-                          <p className="text-sm text-blue-800">
-                            <span className="font-medium">Preview:</span> RSVPs will close{' '}
-                            {newOrg.rsvpWindowPreset === '6-hours' && '6 hours'}
-                            {newOrg.rsvpWindowPreset === '12-hours' && '12 hours'}
-                            {newOrg.rsvpWindowPreset === '24-hours' && '24 hours'}
-                            {' '}before your {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][newOrg.gameDay]} {newOrg.gameStartHour}:{newOrg.gameStartMinute.toString().padStart(2, '0')} game
-                          </p>
+                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 mt-3">
+                          <p className="text-xs font-medium text-gray-600 mb-3">Weekly Schedule Timeline</p>
+                          <WeeklyTimeline
+                            gameDay={newOrg.gameDay}
+                            gameStartHour={newOrg.gameStartHour}
+                            gameStartMinute={newOrg.gameStartMinute}
+                            gameEndHour={newOrg.gameEndHour}
+                            gameEndMinute={newOrg.gameEndMinute}
+                            rsvpWindowPreset={newOrg.rsvpWindowPreset}
+                            rsvpOpenDay={newOrg.rsvpOpenDay}
+                            rsvpOpenHour={newOrg.rsvpOpenHour}
+                            rsvpOpenMinute={newOrg.rsvpOpenMinute}
+                            rsvpCloseDay={newOrg.rsvpCloseDay}
+                            rsvpCloseHour={newOrg.rsvpCloseHour}
+                            rsvpCloseMinute={newOrg.rsvpCloseMinute}
+                          />
                         </div>
                       )}
                     </div>
