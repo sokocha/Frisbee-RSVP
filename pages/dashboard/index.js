@@ -19,7 +19,7 @@ export default function Dashboard() {
 
   // Bulk delete state
   const [bulkSelectMode, setBulkSelectMode] = useState(false);
-  const [selectedOrgs, setSelectedOrgs] = useState(new Set());
+  const [selectedOrgs, setSelectedOrgs] = useState([]);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState('');
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -295,17 +295,15 @@ export default function Dashboard() {
   // Bulk delete handlers
   function toggleBulkSelectMode() {
     setBulkSelectMode(!bulkSelectMode);
-    setSelectedOrgs(new Set());
+    setSelectedOrgs([]);
   }
 
   function toggleOrgSelection(orgId) {
-    const newSelected = new Set(selectedOrgs);
-    if (newSelected.has(orgId)) {
-      newSelected.delete(orgId);
+    if (selectedOrgs.includes(orgId)) {
+      setSelectedOrgs(selectedOrgs.filter(id => id !== orgId));
     } else {
-      newSelected.add(orgId);
+      setSelectedOrgs([...selectedOrgs, orgId]);
     }
-    setSelectedOrgs(newSelected);
   }
 
   async function handleBulkDelete() {
@@ -316,7 +314,7 @@ export default function Dashboard() {
       const res = await fetch('/api/organizations/bulk-delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: Array.from(selectedOrgs) }),
+        body: JSON.stringify({ ids: selectedOrgs }),
       });
 
       const data = await res.json();
@@ -327,7 +325,7 @@ export default function Dashboard() {
         setShowBulkDeleteModal(false);
         setBulkDeleteConfirm('');
         setBulkSelectMode(false);
-        setSelectedOrgs(new Set());
+        setSelectedOrgs([]);
       } else {
         console.error('Bulk delete failed:', data.error);
       }
@@ -340,7 +338,7 @@ export default function Dashboard() {
 
   // Get selected org names for the confirmation modal
   const selectedOrgNames = organizations
-    .filter(org => selectedOrgs.has(org.id))
+    .filter(org => selectedOrgs.includes(org.id))
     .map(org => org.name);
 
   if (loading) {
@@ -419,10 +417,10 @@ export default function Dashboard() {
                     </button>
                     <button
                       onClick={() => setShowBulkDeleteModal(true)}
-                      disabled={selectedOrgs.size === 0}
+                      disabled={selectedOrgs.length === 0}
                       className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium whitespace-nowrap"
                     >
-                      Delete Selected ({selectedOrgs.size})
+                      Delete Selected ({selectedOrgs.length})
                     </button>
                   </>
                 ) : (
@@ -481,7 +479,7 @@ export default function Dashboard() {
                       onClick={bulkSelectMode ? () => toggleOrgSelection(org.id) : undefined}
                       className={`bg-white rounded-lg border p-5 transition-all ${
                         bulkSelectMode
-                          ? `cursor-pointer ${selectedOrgs.has(org.id) ? 'border-red-500 bg-red-50 ring-2 ring-red-200' : 'border-gray-200 hover:border-gray-300'}`
+                          ? `cursor-pointer ${selectedOrgs.includes(org.id) ? 'border-red-500 bg-red-50 ring-2 ring-red-200' : 'border-gray-200 hover:border-gray-300'}`
                           : `cursor-move ${
                               draggedOrg?.id === org.id
                                 ? 'opacity-50 border-blue-300'
@@ -497,7 +495,7 @@ export default function Dashboard() {
                           <div className="mr-3 flex-shrink-0">
                             <input
                               type="checkbox"
-                              checked={selectedOrgs.has(org.id)}
+                              checked={selectedOrgs.includes(org.id)}
                               onChange={() => toggleOrgSelection(org.id)}
                               className="w-5 h-5 rounded border-gray-300 text-red-600 focus:ring-red-500"
                             />
@@ -976,7 +974,7 @@ export default function Dashboard() {
         {showBulkDeleteModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg max-w-md w-full p-6">
-              <h3 className="text-lg font-semibold text-red-600 mb-2">Delete {selectedOrgs.size} Communities</h3>
+              <h3 className="text-lg font-semibold text-red-600 mb-2">Delete {selectedOrgs.length} Communities</h3>
               <p className="text-gray-600 mb-3">
                 You are about to permanently delete the following communities:
               </p>
