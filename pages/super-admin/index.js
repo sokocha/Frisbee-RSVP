@@ -94,6 +94,7 @@ export default function SuperAdmin() {
     <>
       <Head>
         <title>Super Admin - PlayDay</title>
+        <meta name="robots" content="noindex, nofollow" />
       </Head>
 
       <div className="min-h-screen bg-gray-50">

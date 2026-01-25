@@ -455,9 +455,26 @@ export default function OrgRSVP() {
     <>
       <Head>
         <title>{org?.name || 'RSVP'} - PlayDay</title>
-        <meta name="description" content={`RSVP for ${org?.name} ${org?.sport} sessions`} />
+        <meta name="description" content={`RSVP for ${org?.name} ${org?.sport} sessions. Join the community and secure your spot for the next game.`} />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+
+        {/* Canonical URL */}
+        {slug && <link rel="canonical" href={`https://itsplayday.com/${slug}`} />}
+
+        {/* Open Graph */}
+        <meta property="og:type" content="website" />
+        {slug && <meta property="og:url" content={`https://itsplayday.com/${slug}`} />}
+        <meta property="og:title" content={`${org?.name || 'RSVP'} - PlayDay`} />
+        <meta property="og:description" content={`RSVP for ${org?.name} ${org?.sport} sessions. Join the community and secure your spot for the next game.`} />
+        <meta property="og:image" content="https://itsplayday.com/og-image.png" />
+        <meta property="og:site_name" content="PlayDay" />
+
+        {/* Twitter Card */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={`${org?.name || 'RSVP'} - PlayDay`} />
+        <meta name="twitter:description" content={`RSVP for ${org?.name} ${org?.sport} sessions. Join the community and secure your spot for the next game.`} />
+        <meta name="twitter:image" content="https://itsplayday.com/og-image.png" />
       </Head>
 
       <style jsx global>{`

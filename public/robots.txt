@@ -1,0 +1,14 @@
+# PlayDay Robots.txt
+User-agent: *
+Allow: /
+Allow: /browse
+Allow: /auth/login
+
+# Disallow private/authenticated pages
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /super-admin
+Disallow: /api/
+
+# Sitemap
+Sitemap: https://itsplayday.com/sitemap.xml

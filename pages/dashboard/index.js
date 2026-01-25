@@ -297,6 +297,7 @@ export default function Dashboard() {
     <>
       <Head>
         <title>Dashboard - PlayDay</title>
+        <meta name="robots" content="noindex, nofollow" />
       </Head>
 
       <div className="min-h-screen bg-gray-50">

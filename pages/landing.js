@@ -86,6 +86,23 @@ export default function Landing() {
         <meta name="description" content="The easiest way to organize weekly sports sessions. RSVP, manage waitlists, and coordinate with your group." />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+
+        {/* Canonical URL */}
+        <link rel="canonical" href="https://itsplayday.com/" />
+
+        {/* Open Graph */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://itsplayday.com/" />
+        <meta property="og:title" content="PlayDay - Sports RSVP Made Simple" />
+        <meta property="og:description" content="The easiest way to organize weekly sports sessions. RSVP, manage waitlists, and coordinate with your group." />
+        <meta property="og:image" content="https://itsplayday.com/og-image.png" />
+        <meta property="og:site_name" content="PlayDay" />
+
+        {/* Twitter Card */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="PlayDay - Sports RSVP Made Simple" />
+        <meta name="twitter:description" content="The easiest way to organize weekly sports sessions. RSVP, manage waitlists, and coordinate with your group." />
+        <meta name="twitter:image" content="https://itsplayday.com/og-image.png" />
       </Head>
 
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">

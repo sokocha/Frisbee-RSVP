@@ -134,9 +134,26 @@ export default function BrowsePage() {
     <>
       <Head>
         <title>Browse Communities - PlayDay</title>
-        <meta name="description" content="Find and join sports communities near you" />
+        <meta name="description" content="Find and join sports communities near you. Browse pickup games for frisbee, football, basketball, tennis, and more." />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+
+        {/* Canonical URL */}
+        <link rel="canonical" href="https://itsplayday.com/browse" />
+
+        {/* Open Graph */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://itsplayday.com/browse" />
+        <meta property="og:title" content="Browse Communities - PlayDay" />
+        <meta property="og:description" content="Find and join sports communities near you. Browse pickup games for frisbee, football, basketball, tennis, and more." />
+        <meta property="og:image" content="https://itsplayday.com/og-image.png" />
+        <meta property="og:site_name" content="PlayDay" />
+
+        {/* Twitter Card */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Browse Communities - PlayDay" />
+        <meta name="twitter:description" content="Find and join sports communities near you. Browse pickup games for frisbee, football, basketball, tennis, and more." />
+        <meta name="twitter:image" content="https://itsplayday.com/og-image.png" />
       </Head>
 
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
