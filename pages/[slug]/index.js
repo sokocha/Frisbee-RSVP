@@ -272,9 +272,10 @@ export default function OrgRSVP() {
   const [whatsapp, setWhatsapp] = useState(null);
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
   const [isOrganizer, setIsOrganizer] = useState(false);
-  const [snoozeModal, setSnoozeModal] = useState({ show: false, personName: null });
+  const [snoozeModal, setSnoozeModal] = useState({ show: false, personName: null, isUnsnooze: false });
   const [snoozeCode, setSnoozeCode] = useState('');
   const [snoozing, setSnoozing] = useState(false);
+  const [snoozedNames, setSnoozedNames] = useState([]);
 
   const checkMySignup = useCallback((mainList, waitlist, currentDeviceId) => {
     const allSignups = [...mainList, ...waitlist];
@@ -307,6 +308,7 @@ export default function OrgRSVP() {
         setGameInfo(data.gameInfo || null);
         setWhatsapp(data.whatsapp || null);
         setIsOrganizer(data.isOrganizer || false);
+        setSnoozedNames(data.snoozedNames || []);
         checkMySignup(data.mainList || [], data.waitlist || [], currentDeviceId);
 
         // Fetch weather if enabled
@@ -421,7 +423,7 @@ export default function OrgRSVP() {
     setSubmitting(false);
   };
 
-  const handleSnooze = async () => {
+  const handleSnooze = async (isUnsnooze = false) => {
     if (!snoozeCode.trim()) {
       showToast('Please enter your snooze code', 'error');
       return;
@@ -432,7 +434,7 @@ export default function OrgRSVP() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'snooze',
+          action: isUnsnooze ? 'unsnooze' : 'snooze',
           snoozeCode: snoozeCode.trim().toUpperCase()
         })
       });
@@ -440,11 +442,15 @@ export default function OrgRSVP() {
       if (response.ok) {
         setMainList(data.mainList);
         setWaitlist(data.waitlist);
-        setSnoozeModal({ show: false, personName: null });
+        setSnoozedNames(data.snoozedNames || []);
+        setSnoozeModal({ show: false, personName: null, isUnsnooze: false });
         setSnoozeCode('');
         showToast(data.message, 'success');
-        // If the snoozed person was me, update my signup status
-        if (mySignup && data.snoozedNames?.includes(mySignup.name)) {
+        // Update signup status based on action
+        if (isUnsnooze && data.person) {
+          // Check if the restored person matches our device
+          checkMySignup(data.mainList, data.waitlist, deviceId);
+        } else if (!isUnsnooze && mySignup && data.snoozedNames?.includes(mySignup.name)) {
           setHasSignedUp(false);
           setMySignup(null);
         }
@@ -452,7 +458,7 @@ export default function OrgRSVP() {
         showToast(data.error, 'error');
       }
     } catch (error) {
-      showToast('Failed to snooze. Please try again.', 'error');
+      showToast(`Failed to ${isUnsnooze ? 'rejoin' : 'snooze'}. Please try again.`, 'error');
     }
     setSnoozing(false);
   };
@@ -864,6 +870,39 @@ export default function OrgRSVP() {
             </div>
           )}
 
+          {/* Snoozed Members Section */}
+          {snoozedNames.length > 0 && (
+            <div className="glass-card-solid rounded-3xl shadow-2xl p-4 md:p-6 mb-4">
+              <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <span>😴</span> Skipping This Week ({snoozedNames.length})
+              </h2>
+              <div className="space-y-2">
+                {snoozedNames.map((name, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-3 rounded-xl bg-gray-100"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-white bg-gradient-to-br from-gray-400 to-gray-500">
+                        {getInitials(name)}
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-600">{formatDisplayName(name)}</span>
+                        <p className="text-xs text-gray-400">Snoozed for this week</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setSnoozeModal({ show: true, personName: name, isUnsnooze: true })}
+                      className="text-green-600 hover:bg-green-50 px-3 py-1.5 rounded-lg text-sm font-medium"
+                    >
+                      Rejoin
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Game Info Section */}
           {gameInfo && gameInfo.enabled && (
             <div className="space-y-4 mb-4">
@@ -1022,10 +1061,12 @@ export default function OrgRSVP() {
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="glass-card-solid rounded-3xl shadow-2xl p-6 max-w-md w-full">
               <h3 className="text-xl font-bold text-gray-800 mb-2">
-                Skip This Week?
+                {snoozeModal.isUnsnooze ? 'Rejoin the List?' : 'Skip This Week?'}
               </h3>
               <p className="text-gray-600 mb-4">
-                Enter your member snooze code to skip this week. You'll automatically be back on the list next week.
+                {snoozeModal.isUnsnooze
+                  ? 'Enter your member snooze code to rejoin the list for this week.'
+                  : "Enter your member snooze code to skip this week. You'll automatically be back on the list next week."}
               </p>
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1035,7 +1076,7 @@ export default function OrgRSVP() {
                   type="text"
                   value={snoozeCode}
                   onChange={(e) => setSnoozeCode(e.target.value.toUpperCase())}
-                  onKeyDown={(e) => e.key === 'Enter' && !snoozing && handleSnooze()}
+                  onKeyDown={(e) => e.key === 'Enter' && !snoozing && handleSnooze(snoozeModal.isUnsnooze)}
                   placeholder="Enter 6-character code"
                   maxLength={6}
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-amber-500 focus:outline-none text-center text-xl font-mono tracking-widest uppercase"
@@ -1048,7 +1089,7 @@ export default function OrgRSVP() {
               <div className="flex gap-3">
                 <button
                   onClick={() => {
-                    setSnoozeModal({ show: false, personName: null });
+                    setSnoozeModal({ show: false, personName: null, isUnsnooze: false });
                     setSnoozeCode('');
                   }}
                   className="flex-1 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl"
@@ -1056,11 +1097,11 @@ export default function OrgRSVP() {
                   Cancel
                 </button>
                 <button
-                  onClick={handleSnooze}
+                  onClick={() => handleSnooze(snoozeModal.isUnsnooze)}
                   disabled={snoozing || snoozeCode.length < 6}
-                  className="flex-1 px-4 py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-300 text-white font-medium rounded-xl flex items-center justify-center"
+                  className={`flex-1 px-4 py-3 ${snoozeModal.isUnsnooze ? 'bg-green-500 hover:bg-green-600' : 'bg-amber-500 hover:bg-amber-600'} disabled:bg-gray-300 text-white font-medium rounded-xl flex items-center justify-center`}
                 >
-                  {snoozing ? <Spinner /> : 'Skip This Week'}
+                  {snoozing ? <Spinner /> : (snoozeModal.isUnsnooze ? 'Rejoin List' : 'Skip This Week')}
                 </button>
               </div>
             </div>
