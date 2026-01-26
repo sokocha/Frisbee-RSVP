@@ -1,5 +1,6 @@
 import { getOrganizations } from '../../../lib/organizations';
 import { getOrgData, ORG_KEY_SUFFIXES } from '../../../lib/kv';
+import { isFormOpen } from '../../../lib/recurrence';
 
 /**
  * Public API to get all active organizations for browsing
@@ -31,27 +32,7 @@ export default async function handler(req, res) {
       const rsvpData = await getOrgData(org.id, ORG_KEY_SUFFIXES.RSVP_DATA, { mainList: [], waitlist: [] });
 
       // Check if RSVP is currently open
-      let isOpen = true;
-      if (settings.accessPeriod?.enabled) {
-        const now = new Date();
-        const timezone = settings.accessPeriod.timezone || org.timezone || 'Africa/Lagos';
-        const localTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
-        const currentDay = localTime.getDay();
-        const currentHour = localTime.getHours();
-        const currentMinute = localTime.getMinutes();
-
-        const { startDay, startHour, startMinute, endDay, endHour, endMinute } = settings.accessPeriod;
-
-        const currentMins = currentDay * 24 * 60 + currentHour * 60 + currentMinute;
-        const startMins = startDay * 24 * 60 + startHour * 60 + startMinute;
-        const endMins = endDay * 24 * 60 + endHour * 60 + endMinute;
-
-        if (startMins <= endMins) {
-          isOpen = currentMins >= startMins && currentMins < endMins;
-        } else {
-          isOpen = currentMins >= startMins || currentMins < endMins;
-        }
-      }
+      const accessStatus = isFormOpen(settings);
 
       // Get game day and time info
       const gameDay = settings.gameInfo?.gameDay;
@@ -65,7 +46,8 @@ export default async function handler(req, res) {
         location: org.location,
         signupCount: rsvpData.mainList?.length || 0,
         maxParticipants: settings.mainListLimit || 30,
-        isOpen,
+        isOpen: accessStatus.isOpen,
+        nextOpenTime: accessStatus.nextOpenTime || null,
         gameDay: gameDay !== undefined ? gameDay : null,
         startHour: startHour !== undefined ? startHour : null,
         endHour: endHour !== undefined ? endHour : null,

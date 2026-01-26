@@ -19,6 +19,32 @@ const timeOfDayOptions = [
   { value: 'evening', label: 'Evening', range: [17, 24] },
 ];
 
+function formatNextOpen(isoString) {
+  const now = new Date();
+  const target = new Date(isoString);
+  const diffMs = target - now;
+  if (diffMs <= 0) return 'soon';
+
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffDays >= 7) {
+    // Show date: "Feb 3"
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${months[target.getMonth()]} ${target.getDate()}`;
+  }
+  if (diffDays >= 1) {
+    const remainHours = diffHours % 24;
+    return remainHours > 0 ? `in ${diffDays}d ${remainHours}h` : `in ${diffDays}d`;
+  }
+  if (diffHours >= 1) {
+    const remainMins = diffMins % 60;
+    return remainMins > 0 ? `in ${diffHours}h ${remainMins}m` : `in ${diffHours}h`;
+  }
+  return `in ${diffMins}m`;
+}
+
 // Loading skeleton component
 function CardSkeleton() {
   return (
@@ -426,13 +452,15 @@ export default function BrowsePage() {
                   {/* Stats */}
                   <div className="flex items-center justify-between pt-3 border-t border-gray-100">
                     <div className="flex items-center gap-2">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        org.isOpen
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-gray-100 text-gray-500'
-                      }`}>
-                        {org.isOpen ? 'Open' : 'Closed'}
-                      </span>
+                      {org.isOpen ? (
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                          Open
+                        </span>
+                      ) : (
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+                          {org.nextOpenTime ? `Opens ${formatNextOpen(org.nextOpenTime)}` : 'Closed'}
+                        </span>
+                      )}
                     </div>
                     <span className="text-gray-500 text-sm">
                       {org.signupCount}/{org.maxParticipants} signed up
