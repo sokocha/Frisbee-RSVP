@@ -63,6 +63,9 @@ export default async function handler(req, res) {
       gameEndHour,
       gameEndMinute,
       rsvpWindowPreset,
+      // Recurrence (optional - defaults to weekly)
+      recurrence,
+      monthlyOccurrence,
       // Custom RSVP timing (optional)
       rsvpOpenDay,
       rsvpOpenHour,
@@ -93,6 +96,8 @@ export default async function handler(req, res) {
       startMinute: Math.min(Math.max(parseInt(gameStartMinute) || 0, 0), 59),
       endHour: Math.min(Math.max(parseInt(gameEndHour) || 19, 0), 23),
       endMinute: Math.min(Math.max(parseInt(gameEndMinute) || 0, 0), 59),
+      recurrence: recurrence || 'weekly',
+      monthlyOccurrence: recurrence === 'monthly' ? (monthlyOccurrence || 1) : null,
     };
 
     // Add custom RSVP timing if provided (for 'custom' preset)

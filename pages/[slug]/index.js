@@ -913,7 +913,10 @@ export default function OrgRSVP() {
                 </h2>
                 <div className="text-gray-600">
                   <p className="text-lg font-medium">
-                    {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][gameInfo.gameDay]}
+                    {gameInfo.recurrence === 'monthly'
+                      ? `${gameInfo.monthlyOccurrence === 'last' ? 'Last' : ['1st', '2nd', '3rd', '4th'][gameInfo.monthlyOccurrence - 1] || '1st'} ${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][gameInfo.gameDay]} of every month`
+                      : `Every ${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][gameInfo.gameDay]}`
+                    }
                   </p>
                   <p className="text-gray-500">
                     {(() => {

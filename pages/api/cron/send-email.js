@@ -3,6 +3,7 @@
 
 import { getOrganizations } from '../../../lib/organizations';
 import { getOrgData, ORG_KEY_SUFFIXES } from '../../../lib/kv';
+import { getCurrentPeriodId } from '../../../lib/recurrence';
 
 // Default settings for reference
 function getDefaultSettings(timezone = 'Africa/Lagos') {
@@ -26,19 +27,8 @@ function getDefaultSettings(timezone = 'Africa/Lagos') {
   };
 }
 
-// Get current week identifier
-function getCurrentWeekId(timezone) {
-  const now = new Date();
-  const localTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
-  const year = localTime.getFullYear();
-  const startOfYear = new Date(year, 0, 1);
-  const days = Math.floor((localTime - startOfYear) / (24 * 60 * 60 * 1000));
-  const weekNum = Math.ceil((days + startOfYear.getDay() + 1) / 7);
-  return `${year}-W${weekNum.toString().padStart(2, '0')}`;
-}
-
 // Check if the access period just closed (within the last 70 minutes to catch the cron window)
-function shouldSendEmail(settings, timezone, lastEmailWeek) {
+function shouldSendEmail(settings, timezone, lastEmailPeriod) {
   if (!settings?.accessPeriod?.enabled) return false;
   if (!settings?.email?.enabled) return false;
   if (!settings?.email?.recipients?.length) return false;
@@ -63,13 +53,10 @@ function shouldSendEmail(settings, timezone, lastEmailWeek) {
     minutesSinceClosed += 7 * 24 * 60; // Add a full week
   }
 
-  // Only send if window closed within the last 70 minutes (to catch hourly cron)
-  // Also allow sending if it's been less than a full week (to catch missed crons)
-  // but only if this week's email hasn't been sent yet
-  const weekId = getCurrentWeekId(timezone);
+  const periodId = getCurrentPeriodId(settings, timezone);
 
-  // Check if we already sent for this week
-  if (lastEmailWeek === weekId) {
+  // Check if we already sent for this period
+  if (lastEmailPeriod === periodId) {
     return false;
   }
 
@@ -78,12 +65,10 @@ function shouldSendEmail(settings, timezone, lastEmailWeek) {
     return true;
   }
 
-  // Also check: if the window is currently closed and we haven't sent yet this week
+  // Also check: if the window is currently closed and we haven't sent yet this period
   // This catches cases where the cron might have been missed
   const isCurrentlyOpen = isAccessPeriodOpen(settings, timezone);
   if (!isCurrentlyOpen && minutesSinceClosed > 0 && minutesSinceClosed < 7 * 24 * 60 - 120) {
-    // Window is closed and hasn't been closed for almost a full week
-    // (exclude the 2 hours before the window opens to avoid sending right before next session)
     return true;
   }
 
@@ -108,10 +93,8 @@ function isAccessPeriodOpen(settings, timezone) {
 
   // Handle wrap-around (e.g., Friday to Monday)
   if (startTotalMinutes <= endTotalMinutes) {
-    // Normal case: start and end in same week order
     return currentTotalMinutes >= startTotalMinutes && currentTotalMinutes < endTotalMinutes;
   } else {
-    // Wrap-around case: window spans week boundary
     return currentTotalMinutes >= startTotalMinutes || currentTotalMinutes < endTotalMinutes;
   }
 }

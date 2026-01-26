@@ -6,7 +6,7 @@ import { LAGOS_AREAS, formatLocation } from '../../lib/locations';
 
 // Visual timeline component showing the weekly recurring schedule
 // Always shows events in logical order: RSVP Opens -> RSVP Closes -> Game Starts -> Game Ends -> Repeat
-function WeeklyTimeline({ gameDay, gameStartHour, gameStartMinute, gameEndHour, gameEndMinute, rsvpWindowPreset, rsvpOpenDay, rsvpOpenHour, rsvpOpenMinute, rsvpCloseDay, rsvpCloseHour, rsvpCloseMinute }) {
+function WeeklyTimeline({ gameDay, gameStartHour, gameStartMinute, gameEndHour, gameEndMinute, rsvpWindowPreset, rsvpOpenDay, rsvpOpenHour, rsvpOpenMinute, rsvpCloseDay, rsvpCloseHour, rsvpCloseMinute, recurrence, monthlyOccurrence }) {
   const fullDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
   // Calculate times based on preset or custom
@@ -84,7 +84,11 @@ function WeeklyTimeline({ gameDay, gameStartHour, gameStartMinute, gameEndHour, 
             🔄
           </div>
           <div className="flex-1">
-            <span className="text-xs text-gray-500 italic">Cycle repeats weekly</span>
+            <span className="text-xs text-gray-500 italic">
+              {recurrence === 'monthly'
+                ? `Cycle repeats monthly (${monthlyOccurrence === 'last' ? 'last' : ['1st', '2nd', '3rd', '4th'][monthlyOccurrence - 1] || '1st'} ${fullDays[gameDay]})`
+                : 'Cycle repeats weekly'}
+            </span>
           </div>
         </div>
       </div>
@@ -121,6 +125,8 @@ export default function Dashboard() {
     streetAddress: '',
     timezone: 'Africa/Lagos',
     maxParticipants: 30,
+    recurrence: 'weekly', // 'weekly' | 'monthly'
+    monthlyOccurrence: 1, // 1-4 or 'last' (which occurrence of the day)
     gameDay: 0, // Sunday
     gameStartHour: 17,
     gameStartMinute: 0,
@@ -278,6 +284,8 @@ export default function Dashboard() {
         streetAddress: '',
         timezone: 'Africa/Lagos',
         maxParticipants: 30,
+        recurrence: 'weekly',
+        monthlyOccurrence: 1,
         gameDay: 0,
         gameStartHour: 17,
         gameStartMinute: 0,
@@ -876,7 +884,32 @@ export default function Dashboard() {
                   {/* Step 2: Schedule */}
                   {createStep === 2 && (
                     <div className="space-y-4">
-                      <p className="text-gray-500 text-sm mb-4">When does your game typically take place each week?</p>
+                      <p className="text-gray-500 text-sm mb-4">When does your game typically take place?</p>
+
+                      {/* Recurrence Type */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">How often?</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[
+                            { value: 'weekly', label: 'Weekly', desc: 'Every week' },
+                            { value: 'monthly', label: 'Monthly', desc: 'Once a month' },
+                          ].map(opt => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => setNewOrg({ ...newOrg, recurrence: opt.value })}
+                              className={`p-3 rounded-lg border-2 text-left transition-all ${
+                                newOrg.recurrence === opt.value
+                                  ? 'border-blue-500 bg-blue-50'
+                                  : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                            >
+                              <div className="text-sm font-medium">{opt.label}</div>
+                              <div className="text-xs text-gray-500">{opt.desc}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -893,21 +926,41 @@ export default function Dashboard() {
                         <p className="text-xs text-gray-500 mt-1">Additional people will be placed on the waitlist</p>
                       </div>
 
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Game Day</label>
-                        <select
-                          value={newOrg.gameDay}
-                          onChange={e => setNewOrg({ ...newOrg, gameDay: parseInt(e.target.value) })}
-                          className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          <option value={0}>Sunday</option>
-                          <option value={1}>Monday</option>
-                          <option value={2}>Tuesday</option>
-                          <option value={3}>Wednesday</option>
-                          <option value={4}>Thursday</option>
-                          <option value={5}>Friday</option>
-                          <option value={6}>Saturday</option>
-                        </select>
+                      <div className={newOrg.recurrence === 'monthly' ? 'grid grid-cols-2 gap-4' : ''}>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Game Day</label>
+                          <select
+                            value={newOrg.gameDay}
+                            onChange={e => setNewOrg({ ...newOrg, gameDay: parseInt(e.target.value) })}
+                            className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          >
+                            <option value={0}>Sunday</option>
+                            <option value={1}>Monday</option>
+                            <option value={2}>Tuesday</option>
+                            <option value={3}>Wednesday</option>
+                            <option value={4}>Thursday</option>
+                            <option value={5}>Friday</option>
+                            <option value={6}>Saturday</option>
+                          </select>
+                        </div>
+
+                        {/* Monthly occurrence picker */}
+                        {newOrg.recurrence === 'monthly' && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Which occurrence?</label>
+                            <select
+                              value={newOrg.monthlyOccurrence}
+                              onChange={e => setNewOrg({ ...newOrg, monthlyOccurrence: e.target.value === 'last' ? 'last' : parseInt(e.target.value) })}
+                              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            >
+                              <option value={1}>1st</option>
+                              <option value={2}>2nd</option>
+                              <option value={3}>3rd</option>
+                              <option value={4}>4th</option>
+                              <option value="last">Last</option>
+                            </select>
+                          </div>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">
@@ -962,7 +1015,11 @@ export default function Dashboard() {
                       {/* Schedule Preview */}
                       <div className="bg-blue-50 rounded-lg p-3 mt-2">
                         <p className="text-sm text-blue-800">
-                          <span className="font-medium">Preview:</span> Every {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][newOrg.gameDay]}, {newOrg.gameStartHour}:{newOrg.gameStartMinute.toString().padStart(2, '0')} - {newOrg.gameEndHour}:{newOrg.gameEndMinute.toString().padStart(2, '0')}
+                          <span className="font-medium">Preview:</span>{' '}
+                          {newOrg.recurrence === 'monthly'
+                            ? `${newOrg.monthlyOccurrence === 'last' ? 'Last' : ['1st', '2nd', '3rd', '4th'][newOrg.monthlyOccurrence - 1] || '1st'} ${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][newOrg.gameDay]} of every month`
+                            : `Every ${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][newOrg.gameDay]}`
+                          }, {newOrg.gameStartHour}:{newOrg.gameStartMinute.toString().padStart(2, '0')} - {newOrg.gameEndHour}:{newOrg.gameEndMinute.toString().padStart(2, '0')}
                         </p>
                       </div>
                     </div>
@@ -971,7 +1028,7 @@ export default function Dashboard() {
                   {/* Step 3: RSVP Window */}
                   {createStep === 3 && (
                     <div className="space-y-4">
-                      <p className="text-gray-500 text-sm mb-4">Set when RSVPs open and close each week.</p>
+                      <p className="text-gray-500 text-sm mb-4">Set when RSVPs open and close each {newOrg.recurrence === 'monthly' ? 'cycle' : 'week'}.</p>
 
                       {/* RSVP timing inputs */}
                       <div className="space-y-4">
@@ -1052,7 +1109,7 @@ export default function Dashboard() {
                       {/* Visual Timeline - only show when all fields are filled */}
                       {newOrg.rsvpOpenDay !== null && newOrg.rsvpCloseDay !== null && newOrg.rsvpOpenHour !== null && newOrg.rsvpCloseHour !== null && (
                         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 mt-3">
-                          <p className="text-xs font-medium text-gray-600 mb-3">Weekly Schedule Timeline</p>
+                          <p className="text-xs font-medium text-gray-600 mb-3">{newOrg.recurrence === 'monthly' ? 'Monthly' : 'Weekly'} Schedule Timeline</p>
                           <WeeklyTimeline
                             gameDay={newOrg.gameDay}
                             gameStartHour={newOrg.gameStartHour}
@@ -1066,6 +1123,8 @@ export default function Dashboard() {
                             rsvpCloseDay={newOrg.rsvpCloseDay}
                             rsvpCloseHour={newOrg.rsvpCloseHour ?? 0}
                             rsvpCloseMinute={newOrg.rsvpCloseMinute ?? 0}
+                            recurrence={newOrg.recurrence}
+                            monthlyOccurrence={newOrg.monthlyOccurrence}
                           />
                         </div>
                       )}

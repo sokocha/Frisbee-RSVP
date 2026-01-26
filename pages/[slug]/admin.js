@@ -109,7 +109,7 @@ function TimePicker({ hour, minute, onChange, label }) {
 
 // Visual timeline component showing the weekly recurring schedule
 // Always shows events in logical order: RSVP Opens -> RSVP Closes -> Game Starts -> Game Ends -> Repeat
-function WeeklyTimeline({ gameDay, gameStartHour, gameStartMinute, gameEndHour, gameEndMinute, rsvpOpenDay, rsvpOpenHour, rsvpOpenMinute, rsvpCloseDay, rsvpCloseHour, rsvpCloseMinute }) {
+function WeeklyTimeline({ gameDay, gameStartHour, gameStartMinute, gameEndHour, gameEndMinute, rsvpOpenDay, rsvpOpenHour, rsvpOpenMinute, rsvpCloseDay, rsvpCloseHour, rsvpCloseMinute, recurrence, monthlyOccurrence }) {
   const fullDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
   const formatTime = (h, m) => {
@@ -163,7 +163,11 @@ function WeeklyTimeline({ gameDay, gameStartHour, gameStartMinute, gameEndHour, 
             🔄
           </div>
           <div className="flex-1">
-            <span className="text-xs text-gray-500 italic">Cycle repeats weekly</span>
+            <span className="text-xs text-gray-500 italic">
+              {recurrence === 'monthly'
+                ? `Cycle repeats monthly (${monthlyOccurrence === 'last' ? 'last' : ['1st', '2nd', '3rd', '4th'][monthlyOccurrence - 1] || '1st'} ${fullDays[gameDay]})`
+                : 'Cycle repeats weekly'}
+            </span>
           </div>
         </div>
       </div>
@@ -250,6 +254,8 @@ export default function OrgAdmin() {
     },
     gameInfo: {
       enabled: false,
+      recurrence: 'weekly',
+      monthlyOccurrence: null,
       gameDay: 0, // Sunday
       startHour: 17,
       startMinute: 0,
@@ -1169,10 +1175,10 @@ export default function OrgAdmin() {
               {/* Visual Timeline Preview */}
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100 p-6">
                 <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
-                  <span>📅</span> Weekly Schedule Timeline
+                  <span>📅</span> {(settingsForm.gameInfo?.recurrence || 'weekly') === 'monthly' ? 'Monthly' : 'Weekly'} Schedule Timeline
                 </h3>
                 <p className="text-sm text-gray-500 mb-4">
-                  This is how your weekly RSVP cycle works.
+                  This is how your {(settingsForm.gameInfo?.recurrence || 'weekly') === 'monthly' ? 'monthly' : 'weekly'} RSVP cycle works.
                 </p>
                 <WeeklyTimeline
                   gameDay={settingsForm.gameInfo?.gameDay ?? 0}
@@ -1186,6 +1192,8 @@ export default function OrgAdmin() {
                   rsvpCloseDay={settingsForm.accessPeriod?.endDay ?? 0}
                   rsvpCloseHour={settingsForm.accessPeriod?.endHour ?? 0}
                   rsvpCloseMinute={settingsForm.accessPeriod?.endMinute ?? 0}
+                  recurrence={settingsForm.gameInfo?.recurrence || 'weekly'}
+                  monthlyOccurrence={settingsForm.gameInfo?.monthlyOccurrence}
                 />
                 {/* Timezone Display */}
                 <div className="text-xs text-gray-500 mt-4 pt-3 border-t border-blue-100">
@@ -1204,10 +1212,38 @@ export default function OrgAdmin() {
                   <span>🏆</span> Game Schedule
                 </h3>
                 <p className="text-sm text-gray-500 mb-4">
-                  When does your game happen each week?
+                  When does your game happen?
                 </p>
                 <div className="grid grid-cols-2 gap-4">
+                  {/* Recurrence Type */}
                   <div className="col-span-2">
+                    <label className="block text-xs text-gray-500 mb-1">How often?</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { value: 'weekly', label: 'Weekly', desc: 'Every week' },
+                        { value: 'monthly', label: 'Monthly', desc: 'Once a month' },
+                      ].map(opt => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setSettingsForm({
+                            ...settingsForm,
+                            gameInfo: { ...settingsForm.gameInfo, recurrence: opt.value }
+                          })}
+                          className={`p-2.5 rounded-lg border-2 text-left transition-all ${
+                            (settingsForm.gameInfo?.recurrence || 'weekly') === opt.value
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="text-sm font-medium">{opt.label}</div>
+                          <div className="text-xs text-gray-500">{opt.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className={(settingsForm.gameInfo?.recurrence || 'weekly') === 'monthly' ? '' : 'col-span-2'}>
                     <label className="block text-xs text-gray-500 mb-1">Game Day</label>
                     <select
                       value={settingsForm.gameInfo?.gameDay ?? 0}
@@ -1222,6 +1258,27 @@ export default function OrgAdmin() {
                       ))}
                     </select>
                   </div>
+
+                  {/* Monthly Occurrence Picker */}
+                  {(settingsForm.gameInfo?.recurrence || 'weekly') === 'monthly' && (
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Which occurrence?</label>
+                      <select
+                        value={settingsForm.gameInfo?.monthlyOccurrence ?? 1}
+                        onChange={e => setSettingsForm({
+                          ...settingsForm,
+                          gameInfo: { ...settingsForm.gameInfo, monthlyOccurrence: e.target.value === 'last' ? 'last' : parseInt(e.target.value) }
+                        })}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                      >
+                        <option value={1}>1st {days[settingsForm.gameInfo?.gameDay ?? 0]}</option>
+                        <option value={2}>2nd {days[settingsForm.gameInfo?.gameDay ?? 0]}</option>
+                        <option value={3}>3rd {days[settingsForm.gameInfo?.gameDay ?? 0]}</option>
+                        <option value={4}>4th {days[settingsForm.gameInfo?.gameDay ?? 0]}</option>
+                        <option value="last">Last {days[settingsForm.gameInfo?.gameDay ?? 0]}</option>
+                      </select>
+                    </div>
+                  )}
                   <TimePicker
                     label="Game Starts"
                     hour={settingsForm.gameInfo?.startHour ?? 17}

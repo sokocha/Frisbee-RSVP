@@ -2,6 +2,7 @@ import { getOrganizationBySlug, organizerOwnsOrg } from '../../../../lib/organiz
 import { getOrgData, setOrgData, ORG_KEY_SUFFIXES } from '../../../../lib/kv';
 import { verifySession, parseCookies, isSuperAdmin } from '../../../../lib/auth';
 import { getOrganizerById } from '../../../../lib/organizations';
+import { getNthDayOfMonth, isFormOpen, isFormOpenWeekly, isFormOpenMonthly, getCurrentPeriodId, getWeeklyPeriodId, getMonthlyPeriodId } from '../../../../lib/recurrence';
 
 const DEFAULT_MAIN_LIST_LIMIT = 30;
 
@@ -68,73 +69,9 @@ function getDefaultSettings(timezone = 'Africa/Lagos') {
   };
 }
 
-// Check if RSVP form is currently open
-function isFormOpen(settings) {
-  if (!settings.accessPeriod?.enabled) {
-    return { isOpen: true, message: null };
-  }
-
-  const now = new Date();
-  const timezone = settings.accessPeriod.timezone || 'Africa/Lagos';
-  const localTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
-  const currentDay = localTime.getDay();
-  const currentHour = localTime.getHours();
-  const currentMinute = localTime.getMinutes();
-
-  const { startDay, startHour, startMinute, endDay, endHour, endMinute } = settings.accessPeriod;
-
-  const currentMins = currentDay * 24 * 60 + currentHour * 60 + currentMinute;
-  const startMins = startDay * 24 * 60 + startHour * 60 + startMinute;
-  const endMins = endDay * 24 * 60 + endHour * 60 + endMinute;
-
-  let isOpen;
-  if (startMins <= endMins) {
-    isOpen = currentMins >= startMins && currentMins < endMins;
-  } else {
-    isOpen = currentMins >= startMins || currentMins < endMins;
-  }
-
-  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const formatTime = (h, m) => {
-    const hour = h % 12 || 12;
-    const minute = m.toString().padStart(2, '0');
-    const ampm = h < 12 ? 'AM' : 'PM';
-    return `${hour}:${minute} ${ampm}`;
-  };
-
-  const message = isOpen
-    ? null
-    : `RSVP is closed. Opens ${days[startDay]} at ${formatTime(startHour, startMinute)}`;
-
-  let nextOpenTime = null;
-  if (!isOpen) {
-    let daysUntil = startDay - currentDay;
-    if (daysUntil < 0 || (daysUntil === 0 && (currentHour > startHour || (currentHour === startHour && currentMinute >= startMinute)))) {
-      daysUntil += 7;
-    }
-
-    const targetDate = new Date(localTime);
-    targetDate.setDate(targetDate.getDate() + daysUntil);
-    targetDate.setHours(startHour, startMinute, 0, 0);
-
-    // Approximate UTC conversion
-    const utcTime = new Date(targetDate.getTime() - (1 * 60 * 60 * 1000));
-    nextOpenTime = utcTime.toISOString();
-  }
-
-  return { isOpen, message, nextOpenTime };
-}
-
-// Get the current week identifier
-function getCurrentWeekId(timezone) {
-  const now = new Date();
-  const localTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
-  const year = localTime.getFullYear();
-  const startOfYear = new Date(year, 0, 1);
-  const days = Math.floor((localTime - startOfYear) / (24 * 60 * 60 * 1000));
-  const weekNum = Math.ceil((days + startOfYear.getDay() + 1) / 7);
-  return `${year}-W${weekNum.toString().padStart(2, '0')}`;
-}
+// ─────────────────────────────────────────────────────────────
+// Reset / archive
+// ─────────────────────────────────────────────────────────────
 
 // Check if we need to reset and archive
 async function checkAndResetIfNeeded(orgId, settings) {
@@ -143,12 +80,12 @@ async function checkAndResetIfNeeded(orgId, settings) {
   }
 
   const timezone = settings.accessPeriod.timezone || 'Africa/Lagos';
-  const currentWeekId = getCurrentWeekId(timezone);
+  const currentPeriodId = getCurrentPeriodId(settings, timezone);
   const lastReset = await getOrgData(orgId, ORG_KEY_SUFFIXES.LAST_RESET);
 
   const accessStatus = isFormOpen(settings);
 
-  if (accessStatus.isOpen && lastReset !== currentWeekId) {
+  if (accessStatus.isOpen && lastReset !== currentPeriodId) {
     const rsvpData = await getOrgData(orgId, ORG_KEY_SUFFIXES.RSVP_DATA, { mainList: [], waitlist: [] });
 
     if (rsvpData.mainList.length > 0 || rsvpData.waitlist.length > 0) {
@@ -171,8 +108,8 @@ async function checkAndResetIfNeeded(orgId, settings) {
 
     const whitelistedPeople = rsvpData.mainList.filter(p => p.isWhitelisted);
     await setOrgData(orgId, ORG_KEY_SUFFIXES.RSVP_DATA, { mainList: whitelistedPeople, waitlist: [] });
-    await setOrgData(orgId, ORG_KEY_SUFFIXES.SNOOZED, { weekId: currentWeekId, names: [] });
-    await setOrgData(orgId, ORG_KEY_SUFFIXES.LAST_RESET, currentWeekId);
+    await setOrgData(orgId, ORG_KEY_SUFFIXES.SNOOZED, { weekId: currentPeriodId, names: [] });
+    await setOrgData(orgId, ORG_KEY_SUFFIXES.LAST_RESET, currentPeriodId);
 
     return true;
   }
@@ -212,9 +149,9 @@ export default async function handler(req, res) {
       }
 
       const timezone = settings.accessPeriod?.timezone || org.timezone || 'Africa/Lagos';
-      const currentWeekId = getCurrentWeekId(timezone);
-      const snoozedData = await getOrgData(orgId, ORG_KEY_SUFFIXES.SNOOZED, { weekId: currentWeekId, names: [] });
-      const snoozedEntries = snoozedData.weekId === currentWeekId ? snoozedData.names : [];
+      const currentPeriodId = getCurrentPeriodId(settings, timezone);
+      const snoozedData = await getOrgData(orgId, ORG_KEY_SUFFIXES.SNOOZED, { weekId: currentPeriodId, names: [] });
+      const snoozedEntries = snoozedData.weekId === currentPeriodId ? snoozedData.names : [];
       const snoozedNames = snoozedEntries.map(entry =>
         typeof entry === 'string' ? entry : (entry.snapshot?.name || entry.nameLC)
       );
@@ -480,11 +417,11 @@ export default async function handler(req, res) {
         mainList = mainList.filter(p => p.id !== person.id);
 
         const timezone = settings.accessPeriod?.timezone || org.timezone || 'Africa/Lagos';
-        const currentWeekId = getCurrentWeekId(timezone);
-        const snoozedData = await getOrgData(orgId, ORG_KEY_SUFFIXES.SNOOZED, { weekId: currentWeekId, names: [] });
+        const currentPeriodId = getCurrentPeriodId(settings, timezone);
+        const snoozedData = await getOrgData(orgId, ORG_KEY_SUFFIXES.SNOOZED, { weekId: currentPeriodId, names: [] });
 
-        if (snoozedData.weekId !== currentWeekId) {
-          snoozedData.weekId = currentWeekId;
+        if (snoozedData.weekId !== currentPeriodId) {
+          snoozedData.weekId = currentPeriodId;
           snoozedData.names = [];
         }
 
@@ -527,8 +464,8 @@ export default async function handler(req, res) {
 
       if (action === 'unsnooze') {
         const timezone = settings.accessPeriod?.timezone || org.timezone || 'Africa/Lagos';
-        const currentWeekId = getCurrentWeekId(timezone);
-        const snoozedData = await getOrgData(orgId, ORG_KEY_SUFFIXES.SNOOZED, { weekId: currentWeekId, names: [] });
+        const currentPeriodId = getCurrentPeriodId(settings, timezone);
+        const snoozedData = await getOrgData(orgId, ORG_KEY_SUFFIXES.SNOOZED, { weekId: currentPeriodId, names: [] });
 
         // Use authenticated member's name if available, otherwise use personName
         const nameLC = authenticatedMember
