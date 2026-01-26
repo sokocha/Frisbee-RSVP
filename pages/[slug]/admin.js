@@ -1306,8 +1306,16 @@ export default function OrgAdmin() {
                   <span>📬</span> RSVP Window
                 </h3>
                 <p className="text-sm text-gray-500 mb-4">
-                  When can people sign up for your game?
+                  {(settingsForm.gameInfo?.recurrence || 'weekly') === 'monthly'
+                    ? `When can people sign up, relative to your game day (${days[settingsForm.gameInfo?.gameDay ?? 0]})?`
+                    : 'When can people sign up for your game?'}
                 </p>
+
+                {(settingsForm.gameInfo?.recurrence || 'weekly') === 'monthly' && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 mb-4">
+                    For monthly events, these days refer to the week of your game. e.g. if your game is the last {days[settingsForm.gameInfo?.gameDay ?? 0]}, selecting &quot;{days[(settingsForm.gameInfo?.gameDay ?? 0) === 0 ? 6 : (settingsForm.gameInfo?.gameDay ?? 0) - 1]}&quot; means the {days[(settingsForm.gameInfo?.gameDay ?? 0) === 0 ? 6 : (settingsForm.gameInfo?.gameDay ?? 0) - 1]} right before it.
+                  </div>
+                )}
 
                 <label className="flex items-center gap-2 mb-4">
                   <input
@@ -1340,6 +1348,13 @@ export default function OrgAdmin() {
                             <option key={i} value={i}>{day}</option>
                           ))}
                         </select>
+                        {(settingsForm.gameInfo?.recurrence || 'weekly') === 'monthly' && (() => {
+                          const gameDay = settingsForm.gameInfo?.gameDay ?? 0;
+                          let offset = (settingsForm.accessPeriod?.startDay ?? 0) - gameDay;
+                          if (offset > 0) offset -= 7;
+                          const label = offset === 0 ? 'Same day as game' : `${Math.abs(offset)} day${Math.abs(offset) > 1 ? 's' : ''} before game day`;
+                          return <p className="text-xs text-blue-600 mt-1">{label}</p>;
+                        })()}
                       </div>
                       <TimePicker
                         label="Opens at"
@@ -1368,6 +1383,13 @@ export default function OrgAdmin() {
                             <option key={i} value={i}>{day}</option>
                           ))}
                         </select>
+                        {(settingsForm.gameInfo?.recurrence || 'weekly') === 'monthly' && (() => {
+                          const gameDay = settingsForm.gameInfo?.gameDay ?? 0;
+                          let offset = (settingsForm.accessPeriod?.endDay ?? 0) - gameDay;
+                          if (offset > 0) offset -= 7;
+                          const label = offset === 0 ? 'Same day as game' : `${Math.abs(offset)} day${Math.abs(offset) > 1 ? 's' : ''} before game day`;
+                          return <p className="text-xs text-blue-600 mt-1">{label}</p>;
+                        })()}
                       </div>
                       <TimePicker
                         label="Closes at"
@@ -1378,7 +1400,6 @@ export default function OrgAdmin() {
                           accessPeriod: { ...settingsForm.accessPeriod, endHour: h, endMinute: m }
                         })}
                       />
-                    </div>
                   </div>
                 )}
 

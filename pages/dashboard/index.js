@@ -1028,7 +1028,16 @@ export default function Dashboard() {
                   {/* Step 3: RSVP Window */}
                   {createStep === 3 && (
                     <div className="space-y-4">
-                      <p className="text-gray-500 text-sm mb-4">Set when RSVPs open and close each {newOrg.recurrence === 'monthly' ? 'cycle' : 'week'}.</p>
+                      <p className="text-gray-500 text-sm mb-4">
+                        {newOrg.recurrence === 'monthly'
+                          ? `Set when RSVPs open and close relative to your game day (${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][newOrg.gameDay]}).`
+                          : 'Set when RSVPs open and close each week.'}
+                      </p>
+                      {newOrg.recurrence === 'monthly' && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+                          For monthly events, these days refer to the week of your game. e.g. if your game is the last Tuesday, selecting &quot;Monday&quot; means the Monday right before that Tuesday.
+                        </div>
+                      )}
 
                       {/* RSVP timing inputs */}
                       <div className="space-y-4">
@@ -1067,6 +1076,12 @@ export default function Dashboard() {
                               className="w-16 px-2 py-2 border border-gray-300 rounded-lg text-center text-sm"
                             />
                           </div>
+                          {newOrg.recurrence === 'monthly' && newOrg.rsvpOpenDay !== null && (() => {
+                            let offset = newOrg.rsvpOpenDay - newOrg.gameDay;
+                            if (offset > 0) offset -= 7;
+                            const label = offset === 0 ? 'Same day as game' : `${Math.abs(offset)} day${Math.abs(offset) > 1 ? 's' : ''} before game day`;
+                            return <p className="text-xs text-blue-600 mt-1">{label}</p>;
+                          })()}
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">RSVP Closes</label>
@@ -1103,6 +1118,12 @@ export default function Dashboard() {
                               className="w-16 px-2 py-2 border border-gray-300 rounded-lg text-center text-sm"
                             />
                           </div>
+                          {newOrg.recurrence === 'monthly' && newOrg.rsvpCloseDay !== null && (() => {
+                            let offset = newOrg.rsvpCloseDay - newOrg.gameDay;
+                            if (offset > 0) offset -= 7;
+                            const label = offset === 0 ? 'Same day as game' : `${Math.abs(offset)} day${Math.abs(offset) > 1 ? 's' : ''} before game day`;
+                            return <p className="text-xs text-blue-600 mt-1">{label}</p>;
+                          })()}
                         </div>
                       </div>
 
