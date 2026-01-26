@@ -5,8 +5,8 @@ import { useRouter } from 'next/router';
 import { LAGOS_AREAS, formatLocation } from '../../lib/locations';
 
 // Visual timeline component showing the weekly recurring schedule
+// Always shows events in logical order: RSVP Opens -> RSVP Closes -> Game Starts -> Game Ends -> Repeat
 function WeeklyTimeline({ gameDay, gameStartHour, gameStartMinute, gameEndHour, gameEndMinute, rsvpWindowPreset, rsvpOpenDay, rsvpOpenHour, rsvpOpenMinute, rsvpCloseDay, rsvpCloseHour, rsvpCloseMinute }) {
-  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const fullDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
   // Calculate times based on preset or custom
@@ -21,7 +21,7 @@ function WeeklyTimeline({ gameDay, gameStartHour, gameStartMinute, gameEndHour, 
     closeMin = rsvpCloseMinute;
   } else {
     // Calculate from preset
-    const hoursBefore = { '6-hours': 6, '12-hours': 12, '24-hours': 24 }[rsvpWindowPreset] || 6;
+    const hoursBefore = { '6-hours': 6, '12-hours': 12, '24-hours': 24, '48-hours': 48 }[rsvpWindowPreset] || 6;
 
     // Close time
     closeHour = gameStartHour - hoursBefore;
@@ -40,8 +40,8 @@ function WeeklyTimeline({ gameDay, gameStartHour, gameStartMinute, gameEndHour, 
 
   const formatTime = (h, m) => `${h}:${m.toString().padStart(2, '0')}`;
 
-  // Build ordered timeline events starting from RSVP open
-  // Timeline: RSVP Opens -> RSVP Closes -> Game Starts -> Game Ends -> (repeat)
+  // Always show events in logical order (not sorted by time)
+  // This is the recurring cycle: Opens -> Closes -> Game Starts -> Game Ends -> (repeat)
   const events = [
     { type: 'open', day: openDay, hour: openHour, minute: openMin, label: 'RSVP Opens', color: 'text-green-600', bg: 'bg-green-100', icon: '📬' },
     { type: 'close', day: closeDay, hour: closeHour, minute: closeMin, label: 'RSVP Closes', color: 'text-orange-600', bg: 'bg-orange-100', icon: '🔒' },
@@ -49,24 +49,14 @@ function WeeklyTimeline({ gameDay, gameStartHour, gameStartMinute, gameEndHour, 
     { type: 'game-end', day: gameDay, hour: gameEndHour, minute: gameEndMinute, label: 'Game Ends', color: 'text-purple-600', bg: 'bg-purple-100', icon: '🏁' },
   ];
 
-  // Sort events by day and time, starting from the RSVP open day
-  const getMinutesInWeek = (day, hour, minute, startDay) => {
-    let adjustedDay = (day - startDay + 7) % 7;
-    return adjustedDay * 24 * 60 + hour * 60 + minute;
-  };
-
-  const sortedEvents = [...events].sort((a, b) => {
-    return getMinutesInWeek(a.day, a.hour, a.minute, openDay) - getMinutesInWeek(b.day, b.hour, b.minute, openDay);
-  });
-
   return (
     <div className="relative">
       {/* Timeline line */}
       <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gradient-to-b from-green-300 via-blue-300 to-purple-300"></div>
 
-      {/* Events */}
+      {/* Events - always in logical order */}
       <div className="space-y-3">
-        {sortedEvents.map((event, index) => (
+        {events.map((event, index) => (
           <div key={event.type} className="flex items-start gap-3 relative">
             {/* Dot on timeline */}
             <div className={`w-8 h-8 rounded-full ${event.bg} flex items-center justify-center text-sm z-10 flex-shrink-0`}>
@@ -82,7 +72,7 @@ function WeeklyTimeline({ gameDay, gameStartHour, gameStartMinute, gameEndHour, 
               </p>
             </div>
             {/* Connector to next */}
-            {index < sortedEvents.length - 1 && (
+            {index < events.length - 1 && (
               <div className="absolute left-4 top-8 w-0.5 h-3 bg-gray-200"></div>
             )}
           </div>
@@ -985,10 +975,10 @@ export default function Dashboard() {
 
                       <div className="space-y-2">
                         {[
-                          { value: 'always-open', label: 'Always open', desc: 'People can sign up anytime' },
                           { value: '6-hours', label: 'Close 6 hours before', desc: 'Most common - gives you time to plan' },
                           { value: '12-hours', label: 'Close 12 hours before', desc: 'Close the night before morning games' },
                           { value: '24-hours', label: 'Close 24 hours before', desc: 'Close a full day ahead' },
+                          { value: '48-hours', label: 'Close 48 hours before', desc: 'Close two days ahead' },
                           { value: 'custom', label: 'Custom schedule', desc: 'Set exact open & close times' },
                         ].map(option => (
                           <label
@@ -1113,8 +1103,7 @@ export default function Dashboard() {
                       )}
 
                       {/* Visual Timeline */}
-                      {newOrg.rsvpWindowPreset !== 'always-open' && (
-                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 mt-3">
+                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 mt-3">
                           <p className="text-xs font-medium text-gray-600 mb-3">Weekly Schedule Timeline</p>
                           <WeeklyTimeline
                             gameDay={newOrg.gameDay}
@@ -1131,7 +1120,6 @@ export default function Dashboard() {
                             rsvpCloseMinute={newOrg.rsvpCloseMinute}
                           />
                         </div>
-                      )}
                     </div>
                   )}
 
