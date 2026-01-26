@@ -161,6 +161,8 @@ export default async function handler(req, res) {
       // Prepare gameInfo for public display (only if enabled)
       const gameInfo = settings.gameInfo?.enabled ? {
         enabled: true,
+        recurrence: settings.gameInfo.recurrence || 'weekly',
+        monthlyOccurrence: settings.gameInfo.monthlyOccurrence || null,
         gameDay: settings.gameInfo.gameDay,
         startHour: settings.gameInfo.startHour,
         startMinute: settings.gameInfo.startMinute,
