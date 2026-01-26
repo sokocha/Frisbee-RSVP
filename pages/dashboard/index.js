@@ -3,11 +3,13 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { LAGOS_AREAS, formatLocation } from '../../lib/locations';
+import { getNthDayOfMonth } from '../../lib/recurrence';
 
 // Visual timeline component showing the weekly recurring schedule
 // Always shows events in logical order: RSVP Opens -> RSVP Closes -> Game Starts -> Game Ends -> Repeat
 function WeeklyTimeline({ gameDay, gameStartHour, gameStartMinute, gameEndHour, gameEndMinute, rsvpWindowPreset, rsvpOpenDay, rsvpOpenHour, rsvpOpenMinute, rsvpCloseDay, rsvpCloseHour, rsvpCloseMinute, recurrence, monthlyOccurrence }) {
   const fullDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
   // Calculate times based on preset or custom
   let openDay, openHour, openMin, closeDay, closeHour, closeMin;
@@ -40,6 +42,55 @@ function WeeklyTimeline({ gameDay, gameStartHour, gameStartMinute, gameEndHour, 
 
   const formatTime = (h, m) => `${h}:${m.toString().padStart(2, '0')}`;
 
+  // Calculate the next upcoming game date
+  const getNextGameDate = () => {
+    const now = new Date();
+    if (recurrence === 'monthly') {
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      for (let offset = 0; offset <= 2; offset++) {
+        const m = (month + offset) % 12;
+        const y = (month + offset) >= 12 ? year + 1 : year;
+        const candidate = getNthDayOfMonth(y, m, gameDay, monthlyOccurrence || 1);
+        if (candidate) {
+          const gameDateTime = new Date(candidate);
+          gameDateTime.setHours(gameStartHour, gameStartMinute, 0, 0);
+          if (gameDateTime > now) return candidate;
+        }
+      }
+      return null;
+    }
+    const today = now.getDay();
+    let daysUntil = gameDay - today;
+    if (daysUntil < 0) daysUntil += 7;
+    if (daysUntil === 0) {
+      const gameTime = new Date(now);
+      gameTime.setHours(gameStartHour, gameStartMinute, 0, 0);
+      if (now >= gameTime) daysUntil = 7;
+    }
+    const nextGame = new Date(now);
+    nextGame.setDate(nextGame.getDate() + daysUntil);
+    return nextGame;
+  };
+
+  const nextGameDate = getNextGameDate();
+
+  const getEventDate = (eventDay) => {
+    if (!nextGameDate) return null;
+    let dayOffset = eventDay - gameDay;
+    if (recurrence === 'monthly') {
+      if (dayOffset > 0) dayOffset -= 7;
+    }
+    const eventDate = new Date(nextGameDate);
+    eventDate.setDate(eventDate.getDate() + dayOffset);
+    return eventDate;
+  };
+
+  const formatDate = (date) => {
+    if (!date) return '';
+    return `${monthNames[date.getMonth()]} ${date.getDate()}`;
+  };
+
   // Always show events in logical order (not sorted by time)
   // This is the recurring cycle: Opens -> Closes -> Game Starts -> Game Ends -> (repeat)
   const events = [
@@ -56,27 +107,33 @@ function WeeklyTimeline({ gameDay, gameStartHour, gameStartMinute, gameEndHour, 
 
       {/* Events - always in logical order */}
       <div className="space-y-3">
-        {events.map((event, index) => (
-          <div key={event.type} className="flex items-start gap-3 relative">
-            {/* Dot on timeline */}
-            <div className={`w-8 h-8 rounded-full ${event.bg} flex items-center justify-center text-sm z-10 flex-shrink-0`}>
-              {event.icon}
-            </div>
-            {/* Event details */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className={`text-sm font-medium ${event.color}`}>{event.label}</span>
+        {events.map((event, index) => {
+          const eventDate = getEventDate(event.day);
+          return (
+            <div key={event.type} className="flex items-start gap-3 relative">
+              {/* Dot on timeline */}
+              <div className={`w-8 h-8 rounded-full ${event.bg} flex items-center justify-center text-sm z-10 flex-shrink-0`}>
+                {event.icon}
               </div>
-              <p className="text-xs text-gray-500">
-                {fullDays[event.day]} at {formatTime(event.hour, event.minute)}
-              </p>
+              {/* Event details */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm font-medium ${event.color}`}>{event.label}</span>
+                </div>
+                <p className="text-xs text-gray-500">
+                  {fullDays[event.day]} at {formatTime(event.hour, event.minute)}
+                  {eventDate && (
+                    <span className="text-gray-400"> — {formatDate(eventDate)}</span>
+                  )}
+                </p>
+              </div>
+              {/* Connector to next */}
+              {index < events.length - 1 && (
+                <div className="absolute left-4 top-8 w-0.5 h-3 bg-gray-200"></div>
+              )}
             </div>
-            {/* Connector to next */}
-            {index < events.length - 1 && (
-              <div className="absolute left-4 top-8 w-0.5 h-3 bg-gray-200"></div>
-            )}
-          </div>
-        ))}
+          );
+        })}
 
         {/* Repeat indicator */}
         <div className="flex items-start gap-3 relative opacity-60">
