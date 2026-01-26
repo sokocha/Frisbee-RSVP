@@ -107,6 +107,70 @@ function TimePicker({ hour, minute, onChange, label }) {
   );
 }
 
+// Visual timeline component showing the weekly recurring schedule
+// Always shows events in logical order: RSVP Opens -> RSVP Closes -> Game Starts -> Game Ends -> Repeat
+function WeeklyTimeline({ gameDay, gameStartHour, gameStartMinute, gameEndHour, gameEndMinute, rsvpOpenDay, rsvpOpenHour, rsvpOpenMinute, rsvpCloseDay, rsvpCloseHour, rsvpCloseMinute }) {
+  const fullDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  const formatTime = (h, m) => {
+    const hour = h % 12 || 12;
+    const min = (m || 0).toString().padStart(2, '0');
+    const ampm = h < 12 ? 'am' : 'pm';
+    return `${hour}:${min}${ampm}`;
+  };
+
+  // Always show events in logical order (not sorted by time)
+  // This is the recurring cycle: Opens -> Closes -> Game Starts -> Game Ends -> (repeat)
+  const events = [
+    { type: 'open', day: rsvpOpenDay, hour: rsvpOpenHour, minute: rsvpOpenMinute, label: 'RSVP Opens', color: 'text-green-600', bg: 'bg-green-100', icon: '📬' },
+    { type: 'close', day: rsvpCloseDay, hour: rsvpCloseHour, minute: rsvpCloseMinute, label: 'RSVP Closes', color: 'text-orange-600', bg: 'bg-orange-100', icon: '🔒' },
+    { type: 'game-start', day: gameDay, hour: gameStartHour, minute: gameStartMinute, label: 'Game Starts', color: 'text-blue-600', bg: 'bg-blue-100', icon: '🏆' },
+    { type: 'game-end', day: gameDay, hour: gameEndHour, minute: gameEndMinute, label: 'Game Ends', color: 'text-purple-600', bg: 'bg-purple-100', icon: '🏁' },
+  ];
+
+  return (
+    <div className="relative">
+      {/* Timeline line */}
+      <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gradient-to-b from-green-300 via-blue-300 to-purple-300"></div>
+
+      {/* Events - always in logical order */}
+      <div className="space-y-3">
+        {events.map((event, index) => (
+          <div key={event.type} className="flex items-start gap-3 relative">
+            {/* Dot on timeline */}
+            <div className={`w-8 h-8 rounded-full ${event.bg} flex items-center justify-center text-sm z-10 flex-shrink-0`}>
+              {event.icon}
+            </div>
+            {/* Event details */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className={`text-sm font-medium ${event.color}`}>{event.label}</span>
+              </div>
+              <p className="text-xs text-gray-500">
+                {fullDays[event.day]} at {formatTime(event.hour, event.minute)}
+              </p>
+            </div>
+            {/* Connector to next */}
+            {index < events.length - 1 && (
+              <div className="absolute left-4 top-8 w-0.5 h-3 bg-gray-200"></div>
+            )}
+          </div>
+        ))}
+
+        {/* Repeat indicator */}
+        <div className="flex items-start gap-3 relative opacity-60">
+          <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-sm z-10 flex-shrink-0">
+            🔄
+          </div>
+          <div className="flex-1">
+            <span className="text-xs text-gray-500 italic">Cycle repeats weekly</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function OrgAdmin() {
   const router = useRouter();
   const { slug } = router.query;
@@ -769,6 +833,7 @@ export default function OrgAdmin() {
             <nav className="flex gap-6 overflow-x-auto">
               {[
                 { id: 'people', label: 'People' },
+                { id: 'schedule', label: 'Schedule' },
                 { id: 'settings', label: 'Settings' },
                 { id: 'communication', label: 'Communication' },
                 { id: 'event', label: 'Event Details' },
@@ -792,9 +857,10 @@ export default function OrgAdmin() {
 
         {/* Tabs - Mobile Bottom Nav */}
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40">
-          <nav className="grid grid-cols-5 gap-1 px-2 py-2">
+          <nav className="grid grid-cols-6 gap-1 px-2 py-2">
             {[
               { id: 'people', icon: '👥', label: 'People' },
+              { id: 'schedule', icon: '🗓️', label: 'Schedule' },
               { id: 'settings', icon: '⚙️', label: 'Settings' },
               { id: 'communication', icon: '💬', label: 'Comms' },
               { id: 'event', icon: '📅', label: 'Event' },
@@ -1097,6 +1163,186 @@ export default function OrgAdmin() {
             </div>
           )}
 
+          {/* Schedule Tab - Game Schedule + RSVP Window + Timeline */}
+          {activeTab === 'schedule' && (
+            <div className="space-y-6 max-w-2xl">
+              {/* Visual Timeline Preview */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100 p-6">
+                <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                  <span>📅</span> Weekly Schedule Timeline
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  This is how your weekly RSVP cycle works.
+                </p>
+                <WeeklyTimeline
+                  gameDay={settingsForm.gameInfo?.gameDay ?? 0}
+                  gameStartHour={settingsForm.gameInfo?.startHour ?? 17}
+                  gameStartMinute={settingsForm.gameInfo?.startMinute ?? 0}
+                  gameEndHour={settingsForm.gameInfo?.endHour ?? 19}
+                  gameEndMinute={settingsForm.gameInfo?.endMinute ?? 0}
+                  rsvpOpenDay={settingsForm.accessPeriod?.startDay ?? 0}
+                  rsvpOpenHour={settingsForm.accessPeriod?.startHour ?? 0}
+                  rsvpOpenMinute={settingsForm.accessPeriod?.startMinute ?? 0}
+                  rsvpCloseDay={settingsForm.accessPeriod?.endDay ?? 0}
+                  rsvpCloseHour={settingsForm.accessPeriod?.endHour ?? 0}
+                  rsvpCloseMinute={settingsForm.accessPeriod?.endMinute ?? 0}
+                />
+                {/* Timezone Display */}
+                <div className="text-xs text-gray-500 mt-4 pt-3 border-t border-blue-100">
+                  <span className="font-medium">Timezone:</span> {settingsForm.accessPeriod?.timezone || org?.timezone || 'Africa/Lagos'}
+                  {getCurrentTimeInTimezone(settingsForm.accessPeriod?.timezone || org?.timezone || 'Africa/Lagos') && (
+                    <span className="ml-2 text-gray-400">
+                      (Currently: {getCurrentTimeInTimezone(settingsForm.accessPeriod?.timezone || org?.timezone || 'Africa/Lagos')})
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Game Schedule Section */}
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                  <span>🏆</span> Game Schedule
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  When does your game happen each week?
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <label className="block text-xs text-gray-500 mb-1">Game Day</label>
+                    <select
+                      value={settingsForm.gameInfo?.gameDay ?? 0}
+                      onChange={e => setSettingsForm({
+                        ...settingsForm,
+                        gameInfo: { ...settingsForm.gameInfo, gameDay: parseInt(e.target.value) }
+                      })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                    >
+                      {days.map((day, i) => (
+                        <option key={i} value={i}>{day}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <TimePicker
+                    label="Game Starts"
+                    hour={settingsForm.gameInfo?.startHour ?? 17}
+                    minute={settingsForm.gameInfo?.startMinute ?? 0}
+                    onChange={(h, m) => setSettingsForm({
+                      ...settingsForm,
+                      gameInfo: { ...settingsForm.gameInfo, startHour: h, startMinute: m }
+                    })}
+                  />
+                  <TimePicker
+                    label="Game Ends"
+                    hour={settingsForm.gameInfo?.endHour ?? 19}
+                    minute={settingsForm.gameInfo?.endMinute ?? 0}
+                    onChange={(h, m) => setSettingsForm({
+                      ...settingsForm,
+                      gameInfo: { ...settingsForm.gameInfo, endHour: h, endMinute: m }
+                    })}
+                  />
+                </div>
+              </div>
+
+              {/* RSVP Window Section */}
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                  <span>📬</span> RSVP Window
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  When can people sign up for your game?
+                </p>
+
+                <label className="flex items-center gap-2 mb-4">
+                  <input
+                    type="checkbox"
+                    checked={settingsForm.accessPeriod?.enabled ?? true}
+                    onChange={e => setSettingsForm({
+                      ...settingsForm,
+                      accessPeriod: { ...settingsForm.accessPeriod, enabled: e.target.checked }
+                    })}
+                    className="rounded"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Enable scheduled RSVP window</span>
+                </label>
+
+                {settingsForm.accessPeriod?.enabled && (
+                  <div className="space-y-4 pl-4 border-l-2 border-green-100">
+                    {/* RSVP Opens */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Opens on</label>
+                        <select
+                          value={settingsForm.accessPeriod?.startDay ?? 0}
+                          onChange={e => setSettingsForm({
+                            ...settingsForm,
+                            accessPeriod: { ...settingsForm.accessPeriod, startDay: parseInt(e.target.value) }
+                          })}
+                          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm"
+                        >
+                          {days.map((day, i) => (
+                            <option key={i} value={i}>{day}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <TimePicker
+                        label="Opens at"
+                        hour={settingsForm.accessPeriod?.startHour ?? 0}
+                        minute={settingsForm.accessPeriod?.startMinute ?? 0}
+                        onChange={(h, m) => setSettingsForm({
+                          ...settingsForm,
+                          accessPeriod: { ...settingsForm.accessPeriod, startHour: h, startMinute: m }
+                        })}
+                      />
+                    </div>
+
+                    {/* RSVP Closes */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Closes on</label>
+                        <select
+                          value={settingsForm.accessPeriod?.endDay ?? 0}
+                          onChange={e => setSettingsForm({
+                            ...settingsForm,
+                            accessPeriod: { ...settingsForm.accessPeriod, endDay: parseInt(e.target.value) }
+                          })}
+                          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm"
+                        >
+                          {days.map((day, i) => (
+                            <option key={i} value={i}>{day}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <TimePicker
+                        label="Closes at"
+                        hour={settingsForm.accessPeriod?.endHour ?? 0}
+                        minute={settingsForm.accessPeriod?.endMinute ?? 0}
+                        onChange={(h, m) => setSettingsForm({
+                          ...settingsForm,
+                          accessPeriod: { ...settingsForm.accessPeriod, endHour: h, endMinute: m }
+                        })}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {!settingsForm.accessPeriod?.enabled && (
+                  <p className="text-sm text-amber-600 bg-amber-50 p-3 rounded-lg">
+                    ⚠️ RSVPs are always open. Anyone can sign up at any time.
+                  </p>
+                )}
+              </div>
+
+              {/* Save Button */}
+              <button
+                onClick={handleSaveSettings}
+                disabled={saving}
+                className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
+              >
+                {saving ? 'Saving...' : 'Save Schedule Settings'}
+              </button>
+            </div>
+          )}
+
           {/* Settings Tab - Reorganized into sections */}
           {activeTab === 'settings' && (
             <div className="space-y-6 max-w-2xl">
@@ -1122,117 +1368,6 @@ export default function OrgAdmin() {
                   />
                   <p className="text-xs text-gray-400 mt-1">Additional signups will be placed on the waitlist</p>
                 </div>
-              </div>
-
-              {/* RSVP Window Section */}
-              <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
-                  <span>🗓️</span> RSVP Window
-                </h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  Control when people can sign up for your event.
-                </p>
-
-                <label className="flex items-center gap-2 mb-4">
-                  <input
-                    type="checkbox"
-                    checked={settingsForm.accessPeriod.enabled}
-                    onChange={e => setSettingsForm({
-                      ...settingsForm,
-                      accessPeriod: { ...settingsForm.accessPeriod, enabled: e.target.checked }
-                    })}
-                    className="rounded"
-                  />
-                  <span className="text-sm font-medium text-gray-700">Enable scheduled RSVP window</span>
-                </label>
-
-                {settingsForm.accessPeriod.enabled && (
-                  <div className="space-y-4 pl-4 border-l-2 border-blue-100">
-                    {/* Schedule Preview */}
-                    <div className="bg-blue-50 rounded-lg p-3">
-                      <p className="text-sm font-medium text-blue-900 mb-1">Weekly Schedule</p>
-                      <div className="flex flex-wrap items-center gap-2 text-sm text-blue-700">
-                        <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded">Opens</span>
-                        <span>{days[settingsForm.accessPeriod.startDay]} {formatTime12h(settingsForm.accessPeriod.startHour, settingsForm.accessPeriod.startMinute)}</span>
-                        <span className="text-blue-400">→</span>
-                        <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded">Closes</span>
-                        <span>{days[settingsForm.accessPeriod.endDay]} {formatTime12h(settingsForm.accessPeriod.endHour, settingsForm.accessPeriod.endMinute)}</span>
-                      </div>
-                      <p className="text-xs text-blue-600 mt-2">
-                        {settingsForm.accessPeriod.startDay === settingsForm.accessPeriod.endDay
-                          ? `RSVPs are open for ~1 week (from ${days[settingsForm.accessPeriod.startDay]} to the following ${days[settingsForm.accessPeriod.endDay]})`
-                          : `RSVPs are open from ${days[settingsForm.accessPeriod.startDay]} to ${days[settingsForm.accessPeriod.endDay]} each week`
-                        }
-                      </p>
-                    </div>
-
-                    {/* Timezone Display */}
-                    <div className="text-xs text-gray-500">
-                      <span className="font-medium">Timezone:</span> {settingsForm.accessPeriod.timezone || org?.timezone || 'Africa/Lagos'}
-                      {getCurrentTimeInTimezone(settingsForm.accessPeriod.timezone || org?.timezone || 'Africa/Lagos') && (
-                        <span className="ml-2 text-gray-400">
-                          (Currently: {getCurrentTimeInTimezone(settingsForm.accessPeriod.timezone || org?.timezone || 'Africa/Lagos')})
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Opens */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Opens on</label>
-                        <select
-                          value={settingsForm.accessPeriod.startDay}
-                          onChange={e => setSettingsForm({
-                            ...settingsForm,
-                            accessPeriod: { ...settingsForm.accessPeriod, startDay: parseInt(e.target.value) }
-                          })}
-                          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm"
-                        >
-                          {days.map((day, i) => (
-                            <option key={i} value={i}>{day}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <TimePicker
-                        label="Opens at"
-                        hour={settingsForm.accessPeriod.startHour}
-                        minute={settingsForm.accessPeriod.startMinute}
-                        onChange={(h, m) => setSettingsForm({
-                          ...settingsForm,
-                          accessPeriod: { ...settingsForm.accessPeriod, startHour: h, startMinute: m }
-                        })}
-                      />
-                    </div>
-
-                    {/* Closes */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Closes on</label>
-                        <select
-                          value={settingsForm.accessPeriod.endDay}
-                          onChange={e => setSettingsForm({
-                            ...settingsForm,
-                            accessPeriod: { ...settingsForm.accessPeriod, endDay: parseInt(e.target.value) }
-                          })}
-                          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm"
-                        >
-                          {days.map((day, i) => (
-                            <option key={i} value={i}>{day}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <TimePicker
-                        label="Closes at"
-                        hour={settingsForm.accessPeriod.endHour}
-                        minute={settingsForm.accessPeriod.endMinute}
-                        onChange={(h, m) => setSettingsForm({
-                          ...settingsForm,
-                          accessPeriod: { ...settingsForm.accessPeriod, endHour: h, endMinute: m }
-                        })}
-                      />
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Visibility Section */}
@@ -1565,94 +1700,13 @@ export default function OrgAdmin() {
                   />
                   <div>
                     <span className="font-medium text-gray-900">Show Event Details</span>
-                    <p className="text-sm text-gray-500">Display schedule, weather, location, and rules on the public RSVP page</p>
+                    <p className="text-sm text-gray-500">Display weather, location, and rules on the public RSVP page</p>
                   </div>
                 </label>
               </div>
 
               {settingsForm.gameInfo?.enabled && (
                 <>
-                  {/* Schedule Section */}
-                  <div className="bg-white rounded-lg border border-gray-200 p-6">
-                    <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
-                      <span>🕐</span> Schedule
-                    </h3>
-                    <p className="text-sm text-gray-500 mb-4">Set when your event typically takes place (also used for weather forecast)</p>
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                      <div className="col-span-2 md:col-span-1">
-                        <label className="block text-xs text-gray-500 mb-1">Day</label>
-                        <select
-                          value={settingsForm.gameInfo?.gameDay || 0}
-                          onChange={e => setSettingsForm({
-                            ...settingsForm,
-                            gameInfo: { ...settingsForm.gameInfo, gameDay: parseInt(e.target.value) }
-                          })}
-                          className="w-full px-2 py-2 border border-gray-200 rounded text-sm"
-                        >
-                          {days.map((day, i) => (
-                            <option key={i} value={i}>{day}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Start Hour</label>
-                        <input
-                          type="number"
-                          min={0}
-                          max={23}
-                          value={settingsForm.gameInfo?.startHour || 17}
-                          onChange={e => setSettingsForm({
-                            ...settingsForm,
-                            gameInfo: { ...settingsForm.gameInfo, startHour: parseInt(e.target.value) || 0 }
-                          })}
-                          className="w-full px-2 py-2 border border-gray-200 rounded text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Start Min</label>
-                        <input
-                          type="number"
-                          min={0}
-                          max={59}
-                          value={settingsForm.gameInfo?.startMinute || 0}
-                          onChange={e => setSettingsForm({
-                            ...settingsForm,
-                            gameInfo: { ...settingsForm.gameInfo, startMinute: parseInt(e.target.value) || 0 }
-                          })}
-                          className="w-full px-2 py-2 border border-gray-200 rounded text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">End Hour</label>
-                        <input
-                          type="number"
-                          min={0}
-                          max={23}
-                          value={settingsForm.gameInfo?.endHour || 19}
-                          onChange={e => setSettingsForm({
-                            ...settingsForm,
-                            gameInfo: { ...settingsForm.gameInfo, endHour: parseInt(e.target.value) || 0 }
-                          })}
-                          className="w-full px-2 py-2 border border-gray-200 rounded text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">End Min</label>
-                        <input
-                          type="number"
-                          min={0}
-                          max={59}
-                          value={settingsForm.gameInfo?.endMinute || 0}
-                          onChange={e => setSettingsForm({
-                            ...settingsForm,
-                            gameInfo: { ...settingsForm.gameInfo, endMinute: parseInt(e.target.value) || 0 }
-                          })}
-                          className="w-full px-2 py-2 border border-gray-200 rounded text-sm"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
                   {/* Weather Section */}
                   <div className="bg-white rounded-lg border border-gray-200 p-6">
                     <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
