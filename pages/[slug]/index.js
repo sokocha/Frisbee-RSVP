@@ -627,6 +627,90 @@ export default function OrgRSVP() {
             <p className="text-white/50 text-sm mt-1">{mainListLimit} spots available</p>
           </div>
 
+          {/* Game Day Schedule Card */}
+          {gameInfo && gameInfo.enabled && (
+            <div className="glass-card-solid rounded-3xl shadow-2xl p-4 md:p-6 mb-4">
+              <h2 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+                <span>📅</span> Game Day Schedule
+              </h2>
+              <div className="text-gray-600">
+                <p className="text-lg font-medium">
+                  {gameInfo.recurrence === 'monthly'
+                    ? `${gameInfo.monthlyOccurrence === 'last' ? 'Last' : ['1st', '2nd', '3rd', '4th'][gameInfo.monthlyOccurrence - 1] || '1st'} ${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][gameInfo.gameDay]} of every month`
+                    : `Every ${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][gameInfo.gameDay]}`
+                  }
+                </p>
+                <p className="text-gray-500">
+                  {(() => {
+                    const formatGameTime = (h, m) => {
+                      const hour = h % 12 || 12;
+                      const minute = m.toString().padStart(2, '0');
+                      const ampm = h < 12 ? 'AM' : 'PM';
+                      return `${hour}:${minute} ${ampm}`;
+                    };
+                    return `${formatGameTime(gameInfo.startHour, gameInfo.startMinute)} - ${formatGameTime(gameInfo.endHour, gameInfo.endMinute)}`;
+                  })()}
+                </p>
+                {(() => {
+                  const now = new Date();
+                  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                  let nextDate = null;
+
+                  if (gameInfo.recurrence === 'monthly') {
+                    const occ = gameInfo.monthlyOccurrence || 1;
+                    for (let offset = 0; offset <= 2; offset++) {
+                      const m = (now.getMonth() + offset) % 12;
+                      const y = (now.getMonth() + offset) >= 12 ? now.getFullYear() + 1 : now.getFullYear();
+                      if (occ === 'last') {
+                        const lastDay = new Date(y, m + 1, 0);
+                        let d = lastDay.getDate();
+                        while (new Date(y, m, d).getDay() !== gameInfo.gameDay) d--;
+                        const candidate = new Date(y, m, d);
+                        candidate.setHours(gameInfo.startHour, gameInfo.startMinute, 0, 0);
+                        if (candidate > now) { nextDate = candidate; break; }
+                      } else {
+                        let count = 0;
+                        for (let d = 1; d <= 31; d++) {
+                          const dt = new Date(y, m, d);
+                          if (dt.getMonth() !== m) break;
+                          if (dt.getDay() === gameInfo.gameDay) {
+                            count++;
+                            if (count === occ) {
+                              dt.setHours(gameInfo.startHour, gameInfo.startMinute, 0, 0);
+                              if (dt > now) { nextDate = dt; }
+                              break;
+                            }
+                          }
+                        }
+                        if (nextDate) break;
+                      }
+                    }
+                  } else {
+                    const today = now.getDay();
+                    let daysUntil = gameInfo.gameDay - today;
+                    if (daysUntil < 0) daysUntil += 7;
+                    if (daysUntil === 0) {
+                      const gameTime = new Date(now);
+                      gameTime.setHours(gameInfo.startHour, gameInfo.startMinute, 0, 0);
+                      if (now >= gameTime) daysUntil = 7;
+                    }
+                    nextDate = new Date(now);
+                    nextDate.setDate(nextDate.getDate() + daysUntil);
+                  }
+
+                  if (nextDate) {
+                    return (
+                      <p className="text-sm text-blue-600 font-medium mt-1">
+                        Next game: {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][nextDate.getDay()]}, {months[nextDate.getMonth()]} {nextDate.getDate()}
+                      </p>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+            </div>
+          )}
+
           {/* Access Status Banner */}
           {!accessStatus.isOpen && (
             <div className="mb-4 glass-card rounded-2xl p-4 text-center border-red-500/30">
@@ -903,91 +987,9 @@ export default function OrgRSVP() {
             </div>
           )}
 
-          {/* Game Info Section */}
+          {/* Game Info Details Section */}
           {gameInfo && gameInfo.enabled && (
             <div className="space-y-4 mb-4">
-              {/* Game Schedule Card */}
-              <div className="glass-card-solid rounded-3xl shadow-2xl p-4 md:p-6">
-                <h2 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
-                  <span>📅</span> Game Day Schedule
-                </h2>
-                <div className="text-gray-600">
-                  <p className="text-lg font-medium">
-                    {gameInfo.recurrence === 'monthly'
-                      ? `${gameInfo.monthlyOccurrence === 'last' ? 'Last' : ['1st', '2nd', '3rd', '4th'][gameInfo.monthlyOccurrence - 1] || '1st'} ${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][gameInfo.gameDay]} of every month`
-                      : `Every ${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][gameInfo.gameDay]}`
-                    }
-                  </p>
-                  <p className="text-gray-500">
-                    {(() => {
-                      const formatGameTime = (h, m) => {
-                        const hour = h % 12 || 12;
-                        const minute = m.toString().padStart(2, '0');
-                        const ampm = h < 12 ? 'AM' : 'PM';
-                        return `${hour}:${minute} ${ampm}`;
-                      };
-                      return `${formatGameTime(gameInfo.startHour, gameInfo.startMinute)} - ${formatGameTime(gameInfo.endHour, gameInfo.endMinute)}`;
-                    })()}
-                  </p>
-                  {(() => {
-                    const now = new Date();
-                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                    let nextDate = null;
-
-                    if (gameInfo.recurrence === 'monthly') {
-                      const occ = gameInfo.monthlyOccurrence || 1;
-                      for (let offset = 0; offset <= 2; offset++) {
-                        const m = (now.getMonth() + offset) % 12;
-                        const y = (now.getMonth() + offset) >= 12 ? now.getFullYear() + 1 : now.getFullYear();
-                        if (occ === 'last') {
-                          const lastDay = new Date(y, m + 1, 0);
-                          let d = lastDay.getDate();
-                          while (new Date(y, m, d).getDay() !== gameInfo.gameDay) d--;
-                          const candidate = new Date(y, m, d);
-                          candidate.setHours(gameInfo.startHour, gameInfo.startMinute, 0, 0);
-                          if (candidate > now) { nextDate = candidate; break; }
-                        } else {
-                          let count = 0;
-                          for (let d = 1; d <= 31; d++) {
-                            const dt = new Date(y, m, d);
-                            if (dt.getMonth() !== m) break;
-                            if (dt.getDay() === gameInfo.gameDay) {
-                              count++;
-                              if (count === occ) {
-                                dt.setHours(gameInfo.startHour, gameInfo.startMinute, 0, 0);
-                                if (dt > now) { nextDate = dt; }
-                                break;
-                              }
-                            }
-                          }
-                          if (nextDate) break;
-                        }
-                      }
-                    } else {
-                      const today = now.getDay();
-                      let daysUntil = gameInfo.gameDay - today;
-                      if (daysUntil < 0) daysUntil += 7;
-                      if (daysUntil === 0) {
-                        const gameTime = new Date(now);
-                        gameTime.setHours(gameInfo.startHour, gameInfo.startMinute, 0, 0);
-                        if (now >= gameTime) daysUntil = 7;
-                      }
-                      nextDate = new Date(now);
-                      nextDate.setDate(nextDate.getDate() + daysUntil);
-                    }
-
-                    if (nextDate) {
-                      return (
-                        <p className="text-sm text-blue-600 font-medium mt-1">
-                          Next game: {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][nextDate.getDay()]}, {months[nextDate.getMonth()]} {nextDate.getDate()}
-                        </p>
-                      );
-                    }
-                    return null;
-                  })()}
-                </div>
-              </div>
-
               {/* Weather Card */}
               {gameInfo.weather && (
                 <WeatherCard
