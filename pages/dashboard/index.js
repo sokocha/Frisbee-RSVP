@@ -1334,7 +1334,7 @@ export default function Dashboard() {
                           setError('');
                           setCreateStep(createStep + 1);
                         }}
-                        disabled={createStep === 1 && slugStatus.checking}
+                        disabled={(createStep === 1 && slugStatus.checking) || (createStep === 3 && newOrg.rsvpOpenDay !== null && newOrg.rsvpOpenDay === newOrg.rsvpCloseDay && ((newOrg.rsvpCloseHour ?? 0) * 60 + (newOrg.rsvpCloseMinute ?? 0)) <= ((newOrg.rsvpOpenHour ?? 0) * 60 + (newOrg.rsvpOpenMinute ?? 0)))}
                         className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
                       >
                         Continue
