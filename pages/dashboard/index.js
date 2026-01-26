@@ -1321,6 +1321,15 @@ export default function Dashboard() {
                               setError('Please set when RSVPs open and close');
                               return;
                             }
+                            // Validate close time is after open time on same day
+                            if (newOrg.rsvpOpenDay === newOrg.rsvpCloseDay) {
+                              const openMins = (newOrg.rsvpOpenHour ?? 0) * 60 + (newOrg.rsvpOpenMinute ?? 0);
+                              const closeMins = (newOrg.rsvpCloseHour ?? 0) * 60 + (newOrg.rsvpCloseMinute ?? 0);
+                              if (closeMins <= openMins) {
+                                setError('RSVP close time must be after open time when on the same day');
+                                return;
+                              }
+                            }
                           }
                           setError('');
                           setCreateStep(createStep + 1);
