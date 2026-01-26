@@ -415,7 +415,7 @@ describe('Org RSVP API - PATCH (snooze)', () => {
     await handler(req, res);
 
     expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Password is required' });
+    expect(res.json).toHaveBeenCalledWith({ error: 'Snooze code is required' });
   });
 
   it('rejects invalid password', async () => {
@@ -483,7 +483,7 @@ describe('Org RSVP API - PATCH (snooze)', () => {
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({
-      error: 'Only whitelisted members can snooze'
+      error: 'Only members can snooze'
     });
   });
 });

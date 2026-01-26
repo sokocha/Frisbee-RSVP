@@ -2,7 +2,7 @@
  * Unit tests for recurrence helpers (lib/recurrence.js)
  */
 
-import { getNthDayOfMonth, getMonthlyPeriodId, getWeeklyPeriodId, getCurrentPeriodId } from '../../lib/recurrence';
+import { getNthDayOfMonth, getMonthlyPeriodId, getWeeklyPeriodId, getCurrentPeriodId, isFormOpen, isFormOpenWeekly, isFormOpenMonthly } from '../../lib/recurrence';
 
 // ─────────────────────────────────────────────────────────────
 // getNthDayOfMonth
@@ -293,5 +293,253 @@ describe('getCurrentPeriodId', () => {
     mockDate('2026-01-26T12:00:00Z');
     const result = getCurrentPeriodId(null, 'UTC');
     expect(result).toMatch(/^2026-W\d{2}$/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// isFormOpen
+// ─────────────────────────────────────────────────────────────
+
+describe('isFormOpen', () => {
+  test('returns open when accessPeriod is not enabled', () => {
+    const settings = { accessPeriod: { enabled: false } };
+    const result = isFormOpen(settings);
+    expect(result.isOpen).toBe(true);
+    expect(result.message).toBeNull();
+  });
+
+  test('returns open when accessPeriod is missing', () => {
+    const settings = {};
+    const result = isFormOpen(settings);
+    expect(result.isOpen).toBe(true);
+    expect(result.message).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// isFormOpenWeekly
+// ─────────────────────────────────────────────────────────────
+
+describe('isFormOpenWeekly', () => {
+  const originalDate = global.Date;
+
+  afterEach(() => {
+    global.Date = originalDate;
+  });
+
+  function mockDate(dateString) {
+    const fixed = new originalDate(dateString);
+    global.Date = class extends originalDate {
+      constructor(...args) {
+        if (args.length === 0) return fixed;
+        return new originalDate(...args);
+      }
+      static now() { return fixed.getTime(); }
+    };
+  }
+
+  // Helper: Wednesday=3, opens Mon 9am, closes Wed 6pm
+  const weeklySettings = {
+    accessPeriod: {
+      enabled: true,
+      timezone: 'UTC',
+      startDay: 1, startHour: 9, startMinute: 0,   // Monday 9:00 AM
+      endDay: 3, endHour: 18, endMinute: 0,          // Wednesday 6:00 PM
+    },
+    gameInfo: { recurrence: 'weekly', gameDay: 3 },
+  };
+
+  test('returns open when current time is within window', () => {
+    // Tuesday Jan 27 2026 at noon — between Mon 9am and Wed 6pm
+    mockDate('2026-01-27T12:00:00Z');
+    const result = isFormOpenWeekly(weeklySettings);
+    expect(result.isOpen).toBe(true);
+    expect(result.message).toBeNull();
+  });
+
+  test('returns open at exact start time', () => {
+    // Monday Jan 26 2026 at 9:00 AM
+    mockDate('2026-01-26T09:00:00Z');
+    const result = isFormOpenWeekly(weeklySettings);
+    expect(result.isOpen).toBe(true);
+  });
+
+  test('returns closed just before start time', () => {
+    // Monday Jan 26 2026 at 8:59 AM
+    mockDate('2026-01-26T08:59:00Z');
+    const result = isFormOpenWeekly(weeklySettings);
+    expect(result.isOpen).toBe(false);
+    expect(result.message).toContain('Monday');
+    expect(result.message).toContain('9:00 AM');
+  });
+
+  test('returns closed at exact end time', () => {
+    // Wednesday Jan 28 2026 at 6:00 PM
+    mockDate('2026-01-28T18:00:00Z');
+    const result = isFormOpenWeekly(weeklySettings);
+    expect(result.isOpen).toBe(false);
+  });
+
+  test('returns closed after end time', () => {
+    // Thursday Jan 29 2026 at noon — after Wed 6pm close
+    mockDate('2026-01-29T12:00:00Z');
+    const result = isFormOpenWeekly(weeklySettings);
+    expect(result.isOpen).toBe(false);
+  });
+
+  test('provides nextOpenTime when closed', () => {
+    // Thursday Jan 29 2026 — closed, next open is Monday Feb 2
+    mockDate('2026-01-29T12:00:00Z');
+    const result = isFormOpenWeekly(weeklySettings);
+    expect(result.isOpen).toBe(false);
+    expect(result.nextOpenTime).toBeTruthy();
+  });
+
+  test('handles wrapping window (start > end across week boundary)', () => {
+    // Window: Saturday 8am → Monday 8am (wraps over Sunday)
+    const wrappingSettings = {
+      accessPeriod: {
+        enabled: true,
+        timezone: 'UTC',
+        startDay: 6, startHour: 8, startMinute: 0,  // Saturday 8am
+        endDay: 1, endHour: 8, endMinute: 0,          // Monday 8am
+      },
+      gameInfo: { recurrence: 'weekly', gameDay: 6 },
+    };
+
+    // Sunday Jan 25 2026 at noon — should be inside wrapping window
+    mockDate('2026-01-25T12:00:00Z');
+    const result = isFormOpenWeekly(wrappingSettings);
+    expect(result.isOpen).toBe(true);
+  });
+
+  test('wrapping window: closed before start', () => {
+    const wrappingSettings = {
+      accessPeriod: {
+        enabled: true,
+        timezone: 'UTC',
+        startDay: 6, startHour: 8, startMinute: 0,
+        endDay: 1, endHour: 8, endMinute: 0,
+      },
+      gameInfo: { recurrence: 'weekly', gameDay: 6 },
+    };
+
+    // Friday Jan 30 2026 at noon — before Saturday 8am start
+    mockDate('2026-01-30T12:00:00Z');
+    const result = isFormOpenWeekly(wrappingSettings);
+    expect(result.isOpen).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// isFormOpenMonthly
+// ─────────────────────────────────────────────────────────────
+
+describe('isFormOpenMonthly', () => {
+  const originalDate = global.Date;
+
+  afterEach(() => {
+    global.Date = originalDate;
+  });
+
+  function mockDate(dateString) {
+    const fixed = new originalDate(dateString);
+    global.Date = class extends originalDate {
+      constructor(...args) {
+        if (args.length === 0) return fixed;
+        return new originalDate(...args);
+      }
+      static now() { return fixed.getTime(); }
+    };
+  }
+
+  // 2nd Saturday of the month, RSVP opens Wednesday 9am, closes Friday 6pm
+  // (relative to game day Saturday: Wed=-3, Fri=-1)
+  const monthlySettings = {
+    accessPeriod: {
+      enabled: true,
+      timezone: 'UTC',
+      startDay: 3, startHour: 9, startMinute: 0,   // Wednesday 9am
+      endDay: 5, endHour: 18, endMinute: 0,          // Friday 6pm
+    },
+    gameInfo: { recurrence: 'monthly', gameDay: 6, monthlyOccurrence: 2 },
+  };
+
+  test('returns open during the monthly RSVP window', () => {
+    // 2nd Saturday of Jan 2026 is Jan 10.
+    // Window: Wed Jan 7 9am → Fri Jan 9 6pm
+    // Thursday Jan 8 at noon — inside window
+    mockDate('2026-01-08T12:00:00Z');
+    const result = isFormOpenMonthly(monthlySettings);
+    expect(result.isOpen).toBe(true);
+  });
+
+  test('returns closed outside the monthly RSVP window', () => {
+    // 2nd Saturday of Jan 2026 is Jan 10.
+    // Monday Jan 5 — before Wed Jan 7 window opens
+    mockDate('2026-01-05T12:00:00Z');
+    const result = isFormOpenMonthly(monthlySettings);
+    expect(result.isOpen).toBe(false);
+  });
+
+  test('returns closed after window closes', () => {
+    // 2nd Saturday of Jan 2026 is Jan 10.
+    // Saturday Jan 10 at noon — window closed at Fri 6pm
+    mockDate('2026-01-10T12:00:00Z');
+    const result = isFormOpenMonthly(monthlySettings);
+    expect(result.isOpen).toBe(false);
+  });
+
+  test('returns closed message with occurrence label', () => {
+    mockDate('2026-01-05T12:00:00Z');
+    const result = isFormOpenMonthly(monthlySettings);
+    expect(result.isOpen).toBe(false);
+    expect(result.message).toContain('2nd');
+    expect(result.message).toContain('Saturday');
+  });
+
+  test('provides nextOpenTime when closed', () => {
+    mockDate('2026-01-05T12:00:00Z');
+    const result = isFormOpenMonthly(monthlySettings);
+    expect(result.isOpen).toBe(false);
+    expect(result.nextOpenTime).toBeTruthy();
+  });
+
+  test('handles last occurrence of month', () => {
+    const lastSettings = {
+      accessPeriod: {
+        enabled: true,
+        timezone: 'UTC',
+        startDay: 4, startHour: 9, startMinute: 0,   // Thursday 9am
+        endDay: 6, endHour: 18, endMinute: 0,          // Saturday 6pm
+      },
+      gameInfo: { recurrence: 'monthly', gameDay: 0, monthlyOccurrence: 'last' },
+    };
+
+    // Last Sunday of Jan 2026 is Jan 25.
+    // Window: Thu Jan 22 9am → Sat Jan 24 6pm
+    // Friday Jan 23 at noon — inside window
+    mockDate('2026-01-23T12:00:00Z');
+    const result = isFormOpenMonthly(lastSettings);
+    expect(result.isOpen).toBe(true);
+  });
+
+  test('closed message uses "last" label for last occurrence', () => {
+    const lastSettings = {
+      accessPeriod: {
+        enabled: true,
+        timezone: 'UTC',
+        startDay: 4, startHour: 9, startMinute: 0,
+        endDay: 6, endHour: 18, endMinute: 0,
+      },
+      gameInfo: { recurrence: 'monthly', gameDay: 0, monthlyOccurrence: 'last' },
+    };
+
+    // Well outside window
+    mockDate('2026-01-10T12:00:00Z');
+    const result = isFormOpenMonthly(lastSettings);
+    expect(result.isOpen).toBe(false);
+    expect(result.message).toContain('last');
+    expect(result.message).toContain('Sunday');
   });
 });
