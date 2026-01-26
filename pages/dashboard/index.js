@@ -75,10 +75,11 @@ function WeeklyTimeline({ gameDay, gameStartHour, gameStartMinute, gameEndHour, 
 
   const nextGameDate = getNextGameDate();
 
-  const getEventDate = (eventDay) => {
+  const getEventDate = (eventDay, eventType) => {
     if (!nextGameDate) return null;
     let dayOffset = eventDay - gameDay;
-    if (recurrence === 'monthly') {
+    // RSVP events (open/close) happen before or on game day, not after
+    if (eventType === 'open' || eventType === 'close') {
       if (dayOffset > 0) dayOffset -= 7;
     }
     const eventDate = new Date(nextGameDate);
@@ -108,7 +109,7 @@ function WeeklyTimeline({ gameDay, gameStartHour, gameStartMinute, gameEndHour, 
       {/* Events - always in logical order */}
       <div className="space-y-3">
         {events.map((event, index) => {
-          const eventDate = getEventDate(event.day);
+          const eventDate = getEventDate(event.day, event.type);
           return (
             <div key={event.type} className="flex items-start gap-3 relative">
               {/* Dot on timeline */}
