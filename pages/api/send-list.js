@@ -5,11 +5,24 @@ import PDFDocument from 'pdfkit';
 const RSVP_KEY = 'frisbee-rsvp-data';
 const SETTINGS_KEY = 'frisbee-settings';
 const LAST_EMAIL_KEY = 'frisbee-last-email';
+const EMAIL_STATUS_KEY = 'frisbee-email-status';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Generate PDF buffer from RSVP list
-async function generatePDF(mainList, waitlist, weekId) {
+// Update email status in KV store
+async function updateEmailStatus(weekId, status, details = {}) {
+  const statusData = {
+    weekId,
+    status, // 'pending', 'sent', 'failed'
+    updatedAt: new Date().toISOString(),
+    ...details
+  };
+  await kv.set(EMAIL_STATUS_KEY, statusData);
+  return statusData;
+}
+
+// Generate PDF buffer from RSVP list (main list only, no waitlist)
+async function generatePDF(mainList, weekId) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 50 });
     const chunks = [];
@@ -24,31 +37,17 @@ async function generatePDF(mainList, waitlist, weekId) {
     doc.text(`Generated: ${new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' })} WAT`, { align: 'center' });
     doc.moveDown(2);
 
-    // Sort lists alphabetically by name
+    // Sort list alphabetically by name
     const sortedMainList = [...mainList].sort((a, b) => a.name.localeCompare(b.name));
-    const sortedWaitlist = [...waitlist].sort((a, b) => a.name.localeCompare(b.name));
 
     // Main List
-    doc.fontSize(16).font('Helvetica-Bold').text(`Main List (${mainList.length} participants)`);
+    doc.fontSize(16).font('Helvetica-Bold').text(`Participants (${mainList.length})`);
     doc.moveDown(0.5);
 
     if (sortedMainList.length === 0) {
       doc.fontSize(11).font('Helvetica').text('No participants registered.');
     } else {
       sortedMainList.forEach((person, index) => {
-        const badge = person.isWhitelisted ? ' [AIS]' : '';
-        doc.fontSize(11).font('Helvetica').text(`${index + 1}. ${person.name}${badge}`);
-      });
-    }
-
-    doc.moveDown(1.5);
-
-    // Waitlist
-    if (sortedWaitlist.length > 0) {
-      doc.fontSize(16).font('Helvetica-Bold').text(`Waitlist (${sortedWaitlist.length})`);
-      doc.moveDown(0.5);
-
-      sortedWaitlist.forEach((person, index) => {
         const badge = person.isWhitelisted ? ' [AIS]' : '';
         doc.fontSize(11).font('Helvetica').text(`${index + 1}. ${person.name}${badge}`);
       });
@@ -130,8 +129,8 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Email already sent for this week. Use force=true to resend.' });
     }
 
-    // Generate PDF
-    const pdfBuffer = await generatePDF(rsvpData.mainList, rsvpData.waitlist, weekId);
+    // Generate PDF (main list only)
+    const pdfBuffer = await generatePDF(rsvpData.mainList, weekId);
 
     // Prepare template variables
     const templateVars = {
@@ -179,6 +178,12 @@ export default async function handler(req, res) {
 
     if (error) {
       console.error('Failed to send email:', error);
+      // Track failed status
+      await updateEmailStatus(weekId, 'failed', {
+        error: error.message,
+        recipientCount: emailSettings.recipients.length,
+        attemptedAt: new Date().toISOString()
+      });
       return res.status(500).json({ error: 'Failed to send email', details: error.message });
     }
 
@@ -190,6 +195,17 @@ export default async function handler(req, res) {
     let message = `Email sent to ${emailSettings.recipients.length} recipient(s)`;
     if (ccCount > 0) message += `, ${ccCount} CC`;
     if (bccCount > 0) message += `, ${bccCount} BCC`;
+
+    // Track successful status
+    await updateEmailStatus(weekId, 'sent', {
+      emailId: data?.id,
+      sentAt: new Date().toISOString(),
+      recipientCount: emailSettings.recipients.length,
+      ccCount,
+      bccCount,
+      mainListCount: rsvpData.mainList.length,
+      waitlistCount: rsvpData.waitlist.length
+    });
 
     return res.status(200).json({
       success: true,

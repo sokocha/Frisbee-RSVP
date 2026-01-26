@@ -1,0 +1,1416 @@
+import { useState, useEffect, useRef } from 'react';
+import Head from 'next/head';
+import Link from 'next/link';
+import { useRouter } from 'next/router';
+import { LAGOS_AREAS, formatLocation } from '../../lib/locations';
+import { getNthDayOfMonth } from '../../lib/recurrence';
+
+// Visual timeline component showing the weekly recurring schedule
+// Always shows events in logical order: RSVP Opens -> RSVP Closes -> Game Starts -> Game Ends -> Repeat
+function WeeklyTimeline({ gameDay, gameStartHour, gameStartMinute, gameEndHour, gameEndMinute, rsvpWindowPreset, rsvpOpenDay, rsvpOpenHour, rsvpOpenMinute, rsvpCloseDay, rsvpCloseHour, rsvpCloseMinute, recurrence, monthlyOccurrence }) {
+  const fullDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  // Calculate times based on preset or custom
+  let openDay, openHour, openMin, closeDay, closeHour, closeMin;
+
+  if (rsvpWindowPreset === 'custom') {
+    openDay = rsvpOpenDay;
+    openHour = rsvpOpenHour;
+    openMin = rsvpOpenMinute;
+    closeDay = rsvpCloseDay;
+    closeHour = rsvpCloseHour;
+    closeMin = rsvpCloseMinute;
+  } else {
+    // Calculate from preset
+    const hoursBefore = { '6-hours': 6, '12-hours': 12, '24-hours': 24, '48-hours': 48 }[rsvpWindowPreset] || 6;
+
+    // Close time
+    closeHour = gameStartHour - hoursBefore;
+    closeDay = gameDay;
+    closeMin = gameStartMinute;
+    while (closeHour < 0) { closeHour += 24; closeDay--; }
+    if (closeDay < 0) closeDay += 7;
+
+    // Open time (1 min after game ends)
+    openMin = gameEndMinute + 1;
+    openHour = gameEndHour;
+    openDay = gameDay;
+    if (openMin >= 60) { openMin = 0; openHour++; }
+    if (openHour >= 24) { openHour = 0; openDay = (openDay + 1) % 7; }
+  }
+
+  const formatTime = (h, m) => `${h}:${m.toString().padStart(2, '0')}`;
+
+  // Calculate the next upcoming game date
+  const getNextGameDate = () => {
+    const now = new Date();
+    if (recurrence === 'monthly') {
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      for (let offset = 0; offset <= 2; offset++) {
+        const m = (month + offset) % 12;
+        const y = (month + offset) >= 12 ? year + 1 : year;
+        const candidate = getNthDayOfMonth(y, m, gameDay, monthlyOccurrence || 1);
+        if (candidate) {
+          const gameDateTime = new Date(candidate);
+          gameDateTime.setHours(gameStartHour, gameStartMinute, 0, 0);
+          if (gameDateTime > now) return candidate;
+        }
+      }
+      return null;
+    }
+    const today = now.getDay();
+    let daysUntil = gameDay - today;
+    if (daysUntil < 0) daysUntil += 7;
+    if (daysUntil === 0) {
+      const gameTime = new Date(now);
+      gameTime.setHours(gameStartHour, gameStartMinute, 0, 0);
+      if (now >= gameTime) daysUntil = 7;
+    }
+    const nextGame = new Date(now);
+    nextGame.setDate(nextGame.getDate() + daysUntil);
+    return nextGame;
+  };
+
+  const nextGameDate = getNextGameDate();
+
+  const getEventDate = (eventDay) => {
+    if (!nextGameDate) return null;
+    let dayOffset = eventDay - gameDay;
+    if (recurrence === 'monthly') {
+      if (dayOffset > 0) dayOffset -= 7;
+    }
+    const eventDate = new Date(nextGameDate);
+    eventDate.setDate(eventDate.getDate() + dayOffset);
+    return eventDate;
+  };
+
+  const formatDate = (date) => {
+    if (!date) return '';
+    return `${monthNames[date.getMonth()]} ${date.getDate()}`;
+  };
+
+  // Always show events in logical order (not sorted by time)
+  // This is the recurring cycle: Opens -> Closes -> Game Starts -> Game Ends -> (repeat)
+  const events = [
+    { type: 'open', day: openDay, hour: openHour, minute: openMin, label: 'RSVP Opens', color: 'text-green-600', bg: 'bg-green-100', icon: '📬' },
+    { type: 'close', day: closeDay, hour: closeHour, minute: closeMin, label: 'RSVP Closes', color: 'text-orange-600', bg: 'bg-orange-100', icon: '🔒' },
+    { type: 'game-start', day: gameDay, hour: gameStartHour, minute: gameStartMinute, label: 'Game Starts', color: 'text-blue-600', bg: 'bg-blue-100', icon: '🏆' },
+    { type: 'game-end', day: gameDay, hour: gameEndHour, minute: gameEndMinute, label: 'Game Ends', color: 'text-purple-600', bg: 'bg-purple-100', icon: '🏁' },
+  ];
+
+  return (
+    <div className="relative">
+      {/* Timeline line */}
+      <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gradient-to-b from-green-300 via-blue-300 to-purple-300"></div>
+
+      {/* Events - always in logical order */}
+      <div className="space-y-3">
+        {events.map((event, index) => {
+          const eventDate = getEventDate(event.day);
+          return (
+            <div key={event.type} className="flex items-start gap-3 relative">
+              {/* Dot on timeline */}
+              <div className={`w-8 h-8 rounded-full ${event.bg} flex items-center justify-center text-sm z-10 flex-shrink-0`}>
+                {event.icon}
+              </div>
+              {/* Event details */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm font-medium ${event.color}`}>{event.label}</span>
+                </div>
+                <p className="text-xs text-gray-500">
+                  {fullDays[event.day]} at {formatTime(event.hour, event.minute)}
+                  {eventDate && (
+                    <span className="text-gray-400"> — {formatDate(eventDate)}</span>
+                  )}
+                </p>
+              </div>
+              {/* Connector to next */}
+              {index < events.length - 1 && (
+                <div className="absolute left-4 top-8 w-0.5 h-3 bg-gray-200"></div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Repeat indicator */}
+        <div className="flex items-start gap-3 relative opacity-60">
+          <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-sm z-10 flex-shrink-0">
+            🔄
+          </div>
+          <div className="flex-1">
+            <span className="text-xs text-gray-500 italic">
+              {recurrence === 'monthly'
+                ? `Cycle repeats monthly (${monthlyOccurrence === 'last' ? 'last' : ['1st', '2nd', '3rd', '4th'][monthlyOccurrence - 1] || '1st'} ${fullDays[gameDay]})`
+                : 'Cycle repeats weekly'}
+            </span>
+          </div>
+        </div>
+
+        {/* Validation warning: close before open on same day */}
+        {openDay === closeDay && (closeHour * 60 + (closeMin || 0)) <= (openHour * 60 + (openMin || 0)) && (
+          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-sm text-red-700 font-medium">
+              Close time must be after open time
+            </p>
+            <p className="text-xs text-red-600 mt-1">
+              RSVP opens and closes on {fullDays[openDay]}, but the close time is before the open time.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function Dashboard() {
+  const router = useRouter();
+  const [user, setUser] = useState(null);
+  const [organizations, setOrganizations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [copiedSlug, setCopiedSlug] = useState(null);
+  const [draggedOrg, setDraggedOrg] = useState(null);
+  const [dragOverOrg, setDragOverOrg] = useState(null);
+
+  // Bulk delete state
+  const [bulkSelectMode, setBulkSelectMode] = useState(false);
+  const [selectedOrgs, setSelectedOrgs] = useState([]);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState('');
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  // New org form state
+  const [newOrg, setNewOrg] = useState({
+    name: '',
+    slug: '',
+    sport: '',
+    location: '',
+    streetAddress: '',
+    timezone: 'Africa/Lagos',
+    maxParticipants: 30,
+    recurrence: 'weekly', // 'weekly' | 'monthly'
+    monthlyOccurrence: 1, // 1-4 or 'last' (which occurrence of the day)
+    gameDay: 0, // Sunday
+    gameStartHour: 12,
+    gameStartMinute: 0,
+    gameEndHour: 14,
+    gameEndMinute: 0,
+    rsvpWindowPreset: 'custom', // Always custom
+    // Custom RSVP timing - start blank for user to fill
+    rsvpOpenDay: null,
+    rsvpOpenHour: null,
+    rsvpOpenMinute: null,
+    rsvpCloseDay: null,
+    rsvpCloseHour: null,
+    rsvpCloseMinute: null,
+    // List reset (defaults to same as RSVP close for now)
+    listResetDay: 0,
+    listResetHour: 0,
+    listResetMinute: 0,
+  });
+  const [slugStatus, setSlugStatus] = useState({ checking: false, available: null, error: null });
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+  const [createStep, setCreateStep] = useState(1); // Multi-step wizard: 1=Basics, 2=Game Schedule, 3=RSVP Window, 4=Location
+
+  useEffect(() => {
+    fetchUserData();
+  }, []);
+
+  // Check for create=true query param to auto-open the create modal
+  useEffect(() => {
+    if (router.isReady && router.query.create === 'true' && !loading) {
+      setShowCreateForm(true);
+      // Remove the query param from URL without refreshing
+      router.replace('/dashboard', undefined, { shallow: true });
+    }
+  }, [router.isReady, router.query.create, loading]);
+
+  async function fetchUserData() {
+    try {
+      const res = await fetch('/api/auth/me');
+      if (res.status === 401) {
+        router.push('/auth/login');
+        return;
+      }
+      const data = await res.json();
+      setUser(data.organizer);
+      setOrganizations(data.organizations);
+    } catch (err) {
+      console.error('Failed to fetch user data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function checkSlug(slug) {
+    if (!slug || slug.length < 3) {
+      setSlugStatus({ checking: false, available: null, error: null });
+      return;
+    }
+
+    setSlugStatus({ checking: true, available: null, error: null });
+
+    try {
+      const res = await fetch(`/api/organizations/check-slug?slug=${encodeURIComponent(slug)}`);
+      const data = await res.json();
+      setSlugStatus({
+        checking: false,
+        available: data.available,
+        error: data.error,
+        normalized: data.normalized,
+      });
+    } catch (err) {
+      setSlugStatus({ checking: false, available: null, error: 'Failed to check slug' });
+    }
+  }
+
+  // Generate slug from name
+  function generateSlugFromName(name) {
+    return name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, '') // Remove special chars
+      .replace(/\s+/g, '-')          // Replace spaces with hyphens
+      .replace(/-+/g, '-')           // Replace multiple hyphens with single
+      .replace(/^-|-$/g, '');        // Remove leading/trailing hyphens
+  }
+
+  function handleNameChange(e) {
+    const name = e.target.value;
+    const updates = { ...newOrg, name };
+
+    // Auto-generate slug if not manually edited
+    if (!slugManuallyEdited) {
+      const generatedSlug = generateSlugFromName(name);
+      updates.slug = generatedSlug;
+
+      // Debounce slug check for auto-generated slug
+      clearTimeout(window.slugCheckTimeout);
+      if (generatedSlug.length >= 3) {
+        window.slugCheckTimeout = setTimeout(() => checkSlug(generatedSlug), 300);
+      } else {
+        setSlugStatus({ checking: false, available: null, error: null });
+      }
+    }
+
+    setNewOrg(updates);
+  }
+
+  function handleSlugChange(e) {
+    const value = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    setNewOrg({ ...newOrg, slug: value });
+    setSlugManuallyEdited(true); // Mark as manually edited
+
+    // Debounce slug check
+    clearTimeout(window.slugCheckTimeout);
+    window.slugCheckTimeout = setTimeout(() => checkSlug(value), 300);
+  }
+
+  async function handleCreateOrg(e) {
+    e.preventDefault();
+
+    // Only submit on the final step
+    if (createStep < 4) {
+      return;
+    }
+
+    // Validate step 4 fields
+    if (!newOrg.location || !newOrg.streetAddress) {
+      setError('Please fill in all required fields');
+      return;
+    }
+
+    setCreating(true);
+    setError('');
+
+    try {
+      const res = await fetch('/api/organizations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newOrg),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to create organization');
+      }
+
+      // Re-fetch user data to get updated org list with stats
+      await fetchUserData();
+      setShowCreateForm(false);
+      setNewOrg({
+        name: '',
+        slug: '',
+        sport: '',
+        location: '',
+        streetAddress: '',
+        timezone: 'Africa/Lagos',
+        maxParticipants: 30,
+        recurrence: 'weekly',
+        monthlyOccurrence: 1,
+        gameDay: 0,
+        gameStartHour: 12,
+        gameStartMinute: 0,
+        gameEndHour: 14,
+        gameEndMinute: 0,
+        rsvpWindowPreset: 'custom',
+        rsvpOpenDay: null,
+        rsvpOpenHour: null,
+        rsvpOpenMinute: null,
+        rsvpCloseDay: null,
+        rsvpCloseHour: null,
+        rsvpCloseMinute: null,
+        listResetDay: 0,
+        listResetHour: 0,
+        listResetMinute: 0,
+      });
+      setSlugManuallyEdited(false);
+      setSlugStatus({ checking: false, available: null, error: null });
+      setCreateStep(1);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.push('/');
+  }
+
+  // Copy link to clipboard
+  async function handleCopyLink(slug) {
+    const url = `${window.location.origin}/${slug}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedSlug(slug);
+      setTimeout(() => setCopiedSlug(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  }
+
+  // Format relative time
+  function formatRelativeTime(timestamp) {
+    if (!timestamp) return null;
+    const now = new Date();
+    const then = new Date(timestamp);
+    const diffMs = now - then;
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return then.toLocaleDateString();
+  }
+
+  // Filter organizations by search
+  const filteredOrgs = organizations.filter(org =>
+    org.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    org.slug.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    org.sport?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Drag and drop handlers
+  function handleDragStart(e, org) {
+    setDraggedOrg(org);
+    e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function handleDragOver(e, org) {
+    e.preventDefault();
+    if (draggedOrg && draggedOrg.id !== org.id) {
+      setDragOverOrg(org);
+    }
+  }
+
+  function handleDragLeave() {
+    setDragOverOrg(null);
+  }
+
+  function handleDrop(e, targetOrg) {
+    e.preventDefault();
+    if (!draggedOrg || draggedOrg.id === targetOrg.id) return;
+
+    const newOrgs = [...organizations];
+    const draggedIndex = newOrgs.findIndex(o => o.id === draggedOrg.id);
+    const targetIndex = newOrgs.findIndex(o => o.id === targetOrg.id);
+
+    // Remove dragged item and insert at target position
+    const [removed] = newOrgs.splice(draggedIndex, 1);
+    newOrgs.splice(targetIndex, 0, removed);
+
+    // Update display order
+    const reordered = newOrgs.map((org, index) => ({ ...org, displayOrder: index }));
+    setOrganizations(reordered);
+
+    // Save new order to backend
+    saveOrgOrder(reordered.map(o => ({ id: o.id, displayOrder: o.displayOrder })));
+
+    setDraggedOrg(null);
+    setDragOverOrg(null);
+  }
+
+  function handleDragEnd() {
+    setDraggedOrg(null);
+    setDragOverOrg(null);
+  }
+
+  async function saveOrgOrder(orderData) {
+    try {
+      await fetch('/api/organizations/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order: orderData }),
+      });
+    } catch (err) {
+      console.error('Failed to save order:', err);
+    }
+  }
+
+  // Bulk delete handlers
+  function toggleBulkSelectMode() {
+    setBulkSelectMode(!bulkSelectMode);
+    setSelectedOrgs([]);
+  }
+
+  function toggleOrgSelection(orgId) {
+    if (selectedOrgs.includes(orgId)) {
+      setSelectedOrgs(selectedOrgs.filter(id => id !== orgId));
+    } else {
+      setSelectedOrgs([...selectedOrgs, orgId]);
+    }
+  }
+
+  async function handleBulkDelete() {
+    console.log('handleBulkDelete called', { bulkDeleteConfirm, selectedOrgs });
+
+    if (bulkDeleteConfirm !== 'DELETE') {
+      console.log('Confirmation text does not match DELETE');
+      return;
+    }
+
+    setBulkDeleting(true);
+    try {
+      console.log('Sending bulk delete request with ids:', selectedOrgs);
+      const res = await fetch('/api/organizations/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedOrgs }),
+      });
+
+      console.log('Response status:', res.status);
+      const data = await res.json();
+      console.log('Response data:', data);
+
+      if (res.ok) {
+        // Re-fetch to update the list
+        await fetchUserData();
+        setShowBulkDeleteModal(false);
+        setBulkDeleteConfirm('');
+        setBulkSelectMode(false);
+        setSelectedOrgs([]);
+      } else {
+        console.error('Bulk delete failed:', data.error);
+        alert('Delete failed: ' + (data.error || 'Unknown error'));
+      }
+    } catch (err) {
+      console.error('Bulk delete failed:', err);
+      alert('Delete failed: ' + err.message);
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
+  // Get selected org names for the confirmation modal
+  const selectedOrgNames = organizations
+    .filter(org => selectedOrgs.includes(org.id))
+    .map(org => org.name);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <Head>
+        <title>Dashboard - PlayDay</title>
+        <meta name="robots" content="noindex, nofollow" />
+      </Head>
+
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <header className="bg-white shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+            <Link href="/browse" className="flex items-center gap-2 group">
+              <span className="text-2xl">🏆</span>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 group-hover:text-blue-600 transition-colors">PlayDay</h1>
+                <p className="text-sm text-gray-500">Welcome, {user?.name}</p>
+              </div>
+            </Link>
+            <div className="flex items-center gap-4">
+              <Link
+                href="/browse"
+                className="text-sm text-gray-600 hover:text-gray-900"
+              >
+                Browse Communities
+              </Link>
+              {user?.isSuperAdmin && (
+                <Link
+                  href="/super-admin"
+                  className="text-sm text-purple-600 hover:text-purple-700 font-medium"
+                >
+                  Super Admin
+                </Link>
+              )}
+              <button
+                onClick={handleLogout}
+                className="text-sm text-gray-600 hover:text-gray-800"
+              >
+                Log out
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Communities */}
+          <div className="mb-8">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Your Communities</h2>
+              <div className="flex gap-3 w-full sm:w-auto">
+                {organizations.length > 1 && !bulkSelectMode && (
+                  <input
+                    type="text"
+                    placeholder="Search communities..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    className="flex-1 sm:w-64 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                )}
+                {bulkSelectMode ? (
+                  <>
+                    <button
+                      onClick={toggleBulkSelectMode}
+                      className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium whitespace-nowrap"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => setShowBulkDeleteModal(true)}
+                      disabled={selectedOrgs.length === 0}
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium whitespace-nowrap"
+                    >
+                      Delete Selected ({selectedOrgs.length})
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {organizations.length > 1 && (
+                      <button
+                        onClick={toggleBulkSelectMode}
+                        className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium whitespace-nowrap"
+                      >
+                        Select
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setShowCreateForm(true)}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium whitespace-nowrap"
+                    >
+                      Create Community
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {organizations.length === 0 ? (
+              <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+                <p className="text-gray-500 mb-4">You don't have any communities yet.</p>
+                <button
+                  onClick={() => setShowCreateForm(true)}
+                  className="text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  Create your first community
+                </button>
+              </div>
+            ) : filteredOrgs.length === 0 ? (
+              <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+                <p className="text-gray-500">No communities match "{searchQuery}"</p>
+              </div>
+            ) : (
+              <>
+                {organizations.length > 1 && !bulkSelectMode && (
+                  <p className="text-xs text-gray-400 mb-3">Drag cards to reorder</p>
+                )}
+                {bulkSelectMode && (
+                  <p className="text-xs text-red-500 mb-3">Click communities to select them for deletion</p>
+                )}
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {filteredOrgs.map(org => (
+                    <div
+                      key={org.id}
+                      draggable={!bulkSelectMode}
+                      onDragStart={e => !bulkSelectMode && handleDragStart(e, org)}
+                      onDragOver={e => !bulkSelectMode && handleDragOver(e, org)}
+                      onDragLeave={!bulkSelectMode ? handleDragLeave : undefined}
+                      onDrop={e => !bulkSelectMode && handleDrop(e, org)}
+                      onDragEnd={!bulkSelectMode ? handleDragEnd : undefined}
+                      onClick={bulkSelectMode ? () => toggleOrgSelection(org.id) : undefined}
+                      className={`bg-white rounded-lg border p-5 transition-all ${
+                        bulkSelectMode
+                          ? `cursor-pointer ${selectedOrgs.includes(org.id) ? 'border-red-500 bg-red-50 ring-2 ring-red-200' : 'border-gray-200 hover:border-gray-300'}`
+                          : `cursor-move ${
+                              draggedOrg?.id === org.id
+                                ? 'opacity-50 border-blue-300'
+                                : dragOverOrg?.id === org.id
+                                ? 'border-blue-500 shadow-lg'
+                                : 'border-gray-200 hover:shadow-md'
+                            }`
+                      }`}
+                    >
+                      {/* Header row */}
+                      <div className="flex items-start justify-between mb-3">
+                        {bulkSelectMode && (
+                          <div className="mr-3 flex-shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={selectedOrgs.includes(org.id)}
+                              onChange={() => toggleOrgSelection(org.id)}
+                              className="w-5 h-5 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                            />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-gray-900 truncate">{org.name}</h3>
+                          <p className="text-sm text-gray-500 capitalize">{org.sport}</p>
+                          {org.location && (
+                            <p className="text-xs text-gray-400 truncate mt-0.5" title={org.location}>
+                              📍 {org.location}
+                            </p>
+                          )}
+                        </div>
+                        {/* Window status badge */}
+                        <span className={`ml-2 px-2 py-1 text-xs rounded-full font-medium whitespace-nowrap ${
+                          org.stats?.windowStatus === 'open'
+                            ? 'bg-green-100 text-green-700'
+                            : org.stats?.windowStatus === 'always_open'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {org.stats?.windowStatus === 'open' && (
+                            <>Open{org.stats.windowTimeUntilChange && ` · ${org.stats.windowTimeUntilChange}`}</>
+                          )}
+                          {org.stats?.windowStatus === 'closed' && (
+                            <>Closed{org.stats.windowTimeUntilChange && ` · Opens in ${org.stats.windowTimeUntilChange}`}</>
+                          )}
+                          {org.stats?.windowStatus === 'always_open' && 'Always Open'}
+                        </span>
+                      </div>
+
+                      {/* Stats row */}
+                      <div className="flex items-center gap-4 mb-3 text-sm">
+                        <div className="flex items-center gap-1.5">
+                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          <span className="font-medium text-gray-900">
+                            {org.stats?.mainListCount || 0}/{org.stats?.mainListLimit || 30}
+                          </span>
+                          <span className="text-gray-500">signed up</span>
+                        </div>
+                        {org.stats?.waitlistCount > 0 && (
+                          <span className="text-orange-600 text-xs">
+                            +{org.stats.waitlistCount} waitlist
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Last activity */}
+                      {org.stats?.lastSignup && (
+                        <p className="text-xs text-gray-400 mb-3">
+                          Last signup: {formatRelativeTime(org.stats.lastSignup)}
+                        </p>
+                      )}
+
+                      {/* Action buttons */}
+                      <div className="flex gap-2 items-center">
+                        <a
+                          href={`/${org.slug}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          className="flex-1 text-center px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50"
+                        >
+                          View
+                        </a>
+                        <button
+                          onClick={e => { e.stopPropagation(); handleCopyLink(org.slug); }}
+                          className={`px-3 py-2 text-sm border rounded-lg transition-colors ${
+                            copiedSlug === org.slug
+                              ? 'border-green-500 bg-green-50 text-green-700'
+                              : 'border-gray-200 hover:bg-gray-50 text-gray-600'
+                          }`}
+                          title="Copy public link"
+                        >
+                          {copiedSlug === org.slug ? (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                            </svg>
+                          )}
+                        </button>
+                        <a
+                          href={`/${org.slug}/admin`}
+                          onClick={e => e.stopPropagation()}
+                          className="flex-1 text-center px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        >
+                          Manage
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </main>
+
+        {/* Create Community Modal - Multi-step Wizard */}
+        {showCreateForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl max-w-md w-full overflow-hidden">
+              {/* Header with Progress */}
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 text-white">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-semibold">Create Community</h3>
+                  <button
+                    onClick={() => {
+                      setShowCreateForm(false);
+                      setError('');
+                      setSlugManuallyEdited(false);
+                      setSlugStatus({ checking: false, available: null, error: null });
+                      setCreateStep(1);
+                    }}
+                    className="text-white/70 hover:text-white"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                {/* Step Indicators */}
+                <div className="flex items-center gap-1">
+                  {[
+                    { num: 1, label: 'Basics' },
+                    { num: 2, label: 'Schedule' },
+                    { num: 3, label: 'RSVP' },
+                    { num: 4, label: 'Location' },
+                  ].map((step, i) => (
+                    <div key={step.num} className="flex items-center">
+                      <div className={`flex items-center gap-1 ${createStep >= step.num ? 'text-white' : 'text-white/50'}`}>
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-medium ${
+                          createStep > step.num
+                            ? 'bg-white text-blue-600'
+                            : createStep === step.num
+                            ? 'bg-white/20 border-2 border-white'
+                            : 'bg-white/10 border border-white/30'
+                        }`}>
+                          {createStep > step.num ? (
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : (
+                            step.num
+                          )}
+                        </div>
+                        <span className="text-xs font-medium hidden sm:inline">{step.label}</span>
+                      </div>
+                      {i < 3 && (
+                        <div className={`w-4 sm:w-6 h-0.5 mx-0.5 ${createStep > step.num ? 'bg-white' : 'bg-white/20'}`} />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Form Content */}
+              <div className="p-6">
+                {error && (
+                  <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm">
+                    {error}
+                  </div>
+                )}
+
+                <form
+                  onSubmit={handleCreateOrg}
+                  onKeyDown={e => {
+                    // Prevent Enter key from submitting form - only allow button click
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                    }
+                  }}
+                >
+                  {/* Step 1: Basics */}
+                  {createStep === 1 && (
+                    <div className="space-y-4">
+                      <p className="text-gray-500 text-sm mb-4">Let's start with the basics about your community.</p>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Community Name *
+                        </label>
+                        <input
+                          type="text"
+                          value={newOrg.name}
+                          onChange={handleNameChange}
+                          placeholder="e.g., Lagos Padel Club"
+                          className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          URL Slug *
+                        </label>
+                        <div className="flex items-center">
+                          <span className="text-gray-400 text-sm mr-1">itsplayday.com/</span>
+                          <input
+                            type="text"
+                            value={newOrg.slug}
+                            onChange={handleSlugChange}
+                            placeholder="lagos-padel"
+                            className="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                        {slugStatus.checking && (
+                          <p className="text-sm text-gray-500 mt-1 flex items-center gap-1">
+                            <span className="animate-spin">⏳</span> Checking availability...
+                          </p>
+                        )}
+                        {slugStatus.available === true && (
+                          <p className="text-sm text-green-600 mt-1 flex items-center gap-1">
+                            <span>✓</span> This slug is available!
+                          </p>
+                        )}
+                        {slugStatus.error && (
+                          <p className="text-sm text-red-600 mt-1">{slugStatus.error}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Sport *
+                        </label>
+                        <select
+                          value={newOrg.sport}
+                          onChange={e => setNewOrg({ ...newOrg, sport: e.target.value })}
+                          className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          <option value="">Select a sport</option>
+                          <option value="american-football">🏈 American Football</option>
+                          <option value="badminton">🏸 Badminton</option>
+                          <option value="basketball">🏀 Basketball</option>
+                          <option value="crossfit">🏋🏾 CrossFit</option>
+                          <option value="cycling">🚴🏾 Cycling</option>
+                          <option value="football">⚽ Football</option>
+                          <option value="frisbee">🥏 Frisbee</option>
+                          <option value="golf">⛳ Golf</option>
+                          <option value="hiking">🥾 Hiking</option>
+                          <option value="padel">🎾 Padel</option>
+                          <option value="pickleball">🏓 Pickleball</option>
+                          <option value="running">🏃🏾 Running</option>
+                          <option value="swimming">🏊🏾 Swimming</option>
+                          <option value="tennis">🎾 Tennis</option>
+                          <option value="volleyball">🏐 Volleyball</option>
+                          <option value="yoga">🧘🏾 Yoga</option>
+                          <option value="other">🏆 Other</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 2: Schedule */}
+                  {createStep === 2 && (
+                    <div className="space-y-4">
+                      <p className="text-gray-500 text-sm mb-4">When does your game typically take place?</p>
+
+                      {/* Recurrence Type */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">How often?</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[
+                            { value: 'weekly', label: 'Weekly', desc: 'Every week' },
+                            { value: 'monthly', label: 'Monthly', desc: 'Once a month' },
+                          ].map(opt => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => setNewOrg({ ...newOrg, recurrence: opt.value })}
+                              className={`p-3 rounded-lg border-2 text-left transition-all ${
+                                newOrg.recurrence === opt.value
+                                  ? 'border-blue-500 bg-blue-50'
+                                  : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                            >
+                              <div className="text-sm font-medium">{opt.label}</div>
+                              <div className="text-xs text-gray-500">{opt.desc}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Max Participants *
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={500}
+                          value={newOrg.maxParticipants}
+                          onChange={e => setNewOrg({ ...newOrg, maxParticipants: parseInt(e.target.value) || 30 })}
+                          className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Additional people will be placed on the waitlist</p>
+                      </div>
+
+                      <div className={newOrg.recurrence === 'monthly' ? 'grid grid-cols-2 gap-4' : ''}>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Game Day</label>
+                          <select
+                            value={newOrg.gameDay}
+                            onChange={e => setNewOrg({ ...newOrg, gameDay: parseInt(e.target.value) })}
+                            className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          >
+                            <option value={0}>Sunday</option>
+                            <option value={1}>Monday</option>
+                            <option value={2}>Tuesday</option>
+                            <option value={3}>Wednesday</option>
+                            <option value={4}>Thursday</option>
+                            <option value={5}>Friday</option>
+                            <option value={6}>Saturday</option>
+                          </select>
+                        </div>
+
+                        {/* Monthly occurrence picker */}
+                        {newOrg.recurrence === 'monthly' && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Which occurrence?</label>
+                            <select
+                              value={newOrg.monthlyOccurrence}
+                              onChange={e => setNewOrg({ ...newOrg, monthlyOccurrence: e.target.value === 'last' ? 'last' : parseInt(e.target.value) })}
+                              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            >
+                              <option value={1}>1st</option>
+                              <option value={2}>2nd</option>
+                              <option value={3}>3rd</option>
+                              <option value={4}>4th</option>
+                              <option value="last">Last</option>
+                            </select>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min={0}
+                              max={23}
+                              value={newOrg.gameStartHour}
+                              onChange={e => setNewOrg({ ...newOrg, gameStartHour: parseInt(e.target.value) || 0 })}
+                              className="w-14 px-2 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
+                            />
+                            <span className="text-gray-400">:</span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={59}
+                              step={5}
+                              value={newOrg.gameStartMinute.toString().padStart(2, '0')}
+                              onChange={e => setNewOrg({ ...newOrg, gameStartMinute: parseInt(e.target.value) || 0 })}
+                              className="w-14 px-2 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min={0}
+                              max={23}
+                              value={newOrg.gameEndHour}
+                              onChange={e => setNewOrg({ ...newOrg, gameEndHour: parseInt(e.target.value) || 0 })}
+                              className="w-14 px-2 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
+                            />
+                            <span className="text-gray-400">:</span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={59}
+                              step={5}
+                              value={newOrg.gameEndMinute.toString().padStart(2, '0')}
+                              onChange={e => setNewOrg({ ...newOrg, gameEndMinute: parseInt(e.target.value) || 0 })}
+                              className="w-14 px-2 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Schedule Preview */}
+                      <div className="bg-blue-50 rounded-lg p-3 mt-2">
+                        <p className="text-sm text-blue-800">
+                          <span className="font-medium">Preview:</span>{' '}
+                          {newOrg.recurrence === 'monthly'
+                            ? `${newOrg.monthlyOccurrence === 'last' ? 'Last' : ['1st', '2nd', '3rd', '4th'][newOrg.monthlyOccurrence - 1] || '1st'} ${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][newOrg.gameDay]} of every month`
+                            : `Every ${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][newOrg.gameDay]}`
+                          }, {newOrg.gameStartHour}:{newOrg.gameStartMinute.toString().padStart(2, '0')} - {newOrg.gameEndHour}:{newOrg.gameEndMinute.toString().padStart(2, '0')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 3: RSVP Window */}
+                  {createStep === 3 && (
+                    <div className="space-y-4">
+                      <p className="text-gray-500 text-sm mb-4">
+                        {newOrg.recurrence === 'monthly'
+                          ? `Set when RSVPs open and close relative to your game day (${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][newOrg.gameDay]}).`
+                          : 'Set when RSVPs open and close each week.'}
+                      </p>
+                      {newOrg.recurrence === 'monthly' && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+                          For monthly events, these days refer to the week of your game. e.g. if your game is the last Tuesday, selecting &quot;Monday&quot; means the Monday right before that Tuesday.
+                        </div>
+                      )}
+
+                      {/* RSVP timing inputs */}
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">RSVP Opens</label>
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={newOrg.rsvpOpenDay ?? ''}
+                              onChange={e => setNewOrg({ ...newOrg, rsvpOpenDay: e.target.value === '' ? null : parseInt(e.target.value) })}
+                              className="px-3 py-2 border border-gray-300 rounded-lg text-sm flex-1"
+                            >
+                              <option value="">Select day</option>
+                              {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day, i) => (
+                                <option key={i} value={i}>{day}</option>
+                              ))}
+                            </select>
+                            <span className="text-gray-400">at</span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={23}
+                              value={newOrg.rsvpOpenHour ?? ''}
+                              onChange={e => setNewOrg({ ...newOrg, rsvpOpenHour: e.target.value === '' ? null : parseInt(e.target.value) })}
+                              placeholder="HH"
+                              className="w-16 px-2 py-2 border border-gray-300 rounded-lg text-center text-sm"
+                            />
+                            <span className="text-gray-400">:</span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={59}
+                              step={5}
+                              value={newOrg.rsvpOpenMinute ?? ''}
+                              onChange={e => setNewOrg({ ...newOrg, rsvpOpenMinute: e.target.value === '' ? null : parseInt(e.target.value) })}
+                              placeholder="MM"
+                              className="w-16 px-2 py-2 border border-gray-300 rounded-lg text-center text-sm"
+                            />
+                          </div>
+                          {newOrg.recurrence === 'monthly' && newOrg.rsvpOpenDay !== null && (() => {
+                            let offset = newOrg.rsvpOpenDay - newOrg.gameDay;
+                            if (offset > 0) offset -= 7;
+                            const label = offset === 0 ? 'Same day as game' : `${Math.abs(offset)} day${Math.abs(offset) > 1 ? 's' : ''} before game day`;
+                            return <p className="text-xs text-blue-600 mt-1">{label}</p>;
+                          })()}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">RSVP Closes</label>
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={newOrg.rsvpCloseDay ?? ''}
+                              onChange={e => setNewOrg({ ...newOrg, rsvpCloseDay: e.target.value === '' ? null : parseInt(e.target.value) })}
+                              className="px-3 py-2 border border-gray-300 rounded-lg text-sm flex-1"
+                            >
+                              <option value="">Select day</option>
+                              {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day, i) => (
+                                <option key={i} value={i}>{day}</option>
+                              ))}
+                            </select>
+                            <span className="text-gray-400">at</span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={23}
+                              value={newOrg.rsvpCloseHour ?? ''}
+                              onChange={e => setNewOrg({ ...newOrg, rsvpCloseHour: e.target.value === '' ? null : parseInt(e.target.value) })}
+                              placeholder="HH"
+                              className="w-16 px-2 py-2 border border-gray-300 rounded-lg text-center text-sm"
+                            />
+                            <span className="text-gray-400">:</span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={59}
+                              step={5}
+                              value={newOrg.rsvpCloseMinute ?? ''}
+                              onChange={e => setNewOrg({ ...newOrg, rsvpCloseMinute: e.target.value === '' ? null : parseInt(e.target.value) })}
+                              placeholder="MM"
+                              className="w-16 px-2 py-2 border border-gray-300 rounded-lg text-center text-sm"
+                            />
+                          </div>
+                          {newOrg.recurrence === 'monthly' && newOrg.rsvpCloseDay !== null && (() => {
+                            let offset = newOrg.rsvpCloseDay - newOrg.gameDay;
+                            if (offset > 0) offset -= 7;
+                            const label = offset === 0 ? 'Same day as game' : `${Math.abs(offset)} day${Math.abs(offset) > 1 ? 's' : ''} before game day`;
+                            return <p className="text-xs text-blue-600 mt-1">{label}</p>;
+                          })()}
+                        </div>
+                      </div>
+
+                      {/* Visual Timeline - only show when all fields are filled */}
+                      {newOrg.rsvpOpenDay !== null && newOrg.rsvpCloseDay !== null && newOrg.rsvpOpenHour !== null && newOrg.rsvpCloseHour !== null && (
+                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 mt-3">
+                          <p className="text-xs font-medium text-gray-600 mb-3">{newOrg.recurrence === 'monthly' ? 'Monthly' : 'Weekly'} Schedule Timeline</p>
+                          <WeeklyTimeline
+                            gameDay={newOrg.gameDay}
+                            gameStartHour={newOrg.gameStartHour}
+                            gameStartMinute={newOrg.gameStartMinute}
+                            gameEndHour={newOrg.gameEndHour}
+                            gameEndMinute={newOrg.gameEndMinute}
+                            rsvpWindowPreset="custom"
+                            rsvpOpenDay={newOrg.rsvpOpenDay}
+                            rsvpOpenHour={newOrg.rsvpOpenHour ?? 0}
+                            rsvpOpenMinute={newOrg.rsvpOpenMinute ?? 0}
+                            rsvpCloseDay={newOrg.rsvpCloseDay}
+                            rsvpCloseHour={newOrg.rsvpCloseHour ?? 0}
+                            rsvpCloseMinute={newOrg.rsvpCloseMinute ?? 0}
+                            recurrence={newOrg.recurrence}
+                            monthlyOccurrence={newOrg.monthlyOccurrence}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Step 4: Location */}
+                  {createStep === 4 && (
+                    <div className="space-y-4">
+                      <p className="text-gray-500 text-sm mb-4">Where do you play? This helps people find you.</p>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Area (Lagos) *
+                        </label>
+                        <select
+                          value={newOrg.location}
+                          onChange={e => setNewOrg({ ...newOrg, location: e.target.value })}
+                          required
+                          className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          <option value="">Select area</option>
+                          {LAGOS_AREAS.map(area => (
+                            <option key={area} value={formatLocation(area)}>
+                              {area}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Street Address *
+                        </label>
+                        <input
+                          type="text"
+                          value={newOrg.streetAddress}
+                          onChange={e => setNewOrg({ ...newOrg, streetAddress: e.target.value })}
+                          placeholder="e.g., 15 Adeola Odeku Street"
+                          required
+                          className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Specific venue address for players to find you</p>
+                      </div>
+
+                      {/* Summary Preview */}
+                      <div className="bg-gray-50 rounded-lg p-4 mt-2">
+                        <p className="text-sm font-medium text-gray-700 mb-2">Summary</p>
+                        <div className="space-y-1 text-sm text-gray-600">
+                          <p><span className="text-gray-400">Name:</span> {newOrg.name || '—'}</p>
+                          <p><span className="text-gray-400">Sport:</span> {newOrg.sport ? newOrg.sport.charAt(0).toUpperCase() + newOrg.sport.slice(1) : '—'}</p>
+                          <p><span className="text-gray-400">Capacity:</span> {newOrg.maxParticipants} players</p>
+                          {newOrg.location && <p><span className="text-gray-400">Location:</span> {newOrg.location}</p>}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Navigation Buttons */}
+                  <div className="flex gap-3 mt-6">
+                    {createStep > 1 ? (
+                      <button
+                        type="button"
+                        onClick={() => setCreateStep(createStep - 1)}
+                        className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
+                      >
+                        Back
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCreateForm(false);
+                          setError('');
+                          setSlugManuallyEdited(false);
+                          setSlugStatus({ checking: false, available: null, error: null });
+                          setCreateStep(1);
+                        }}
+                        className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
+                      >
+                        Cancel
+                      </button>
+                    )}
+
+                    {createStep < 4 ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Validate current step before proceeding
+                          if (createStep === 1) {
+                            if (!newOrg.name || !newOrg.slug || !newOrg.sport) {
+                              setError('Please fill in all required fields');
+                              return;
+                            }
+                            if (slugStatus.available === false) {
+                              setError('Please choose an available URL slug');
+                              return;
+                            }
+                          }
+                          if (createStep === 3) {
+                            // Validate RSVP timing fields
+                            if (newOrg.rsvpOpenDay === null || newOrg.rsvpOpenHour === null ||
+                                newOrg.rsvpCloseDay === null || newOrg.rsvpCloseHour === null) {
+                              setError('Please set when RSVPs open and close');
+                              return;
+                            }
+                            // Validate close time is after open time on same day
+                            if (newOrg.rsvpOpenDay === newOrg.rsvpCloseDay) {
+                              const openMins = (newOrg.rsvpOpenHour ?? 0) * 60 + (newOrg.rsvpOpenMinute ?? 0);
+                              const closeMins = (newOrg.rsvpCloseHour ?? 0) * 60 + (newOrg.rsvpCloseMinute ?? 0);
+                              if (closeMins <= openMins) {
+                                setError('RSVP close time must be after open time when on the same day');
+                                return;
+                              }
+                            }
+                          }
+                          setError('');
+                          setCreateStep(createStep + 1);
+                        }}
+                        disabled={(createStep === 1 && slugStatus.checking) || (createStep === 3 && newOrg.rsvpOpenDay !== null && newOrg.rsvpOpenDay === newOrg.rsvpCloseDay && ((newOrg.rsvpCloseHour ?? 0) * 60 + (newOrg.rsvpCloseMinute ?? 0)) <= ((newOrg.rsvpOpenHour ?? 0) * 60 + (newOrg.rsvpOpenMinute ?? 0)))}
+                        className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
+                      >
+                        Continue
+                      </button>
+                    ) : (
+                      <button
+                        type="submit"
+                        disabled={creating}
+                        className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
+                      >
+                        {creating ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <span className="animate-spin">⏳</span> Creating...
+                          </span>
+                        ) : (
+                          'Create Community'
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Bulk Delete Confirmation Modal */}
+        {showBulkDeleteModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-md w-full p-6">
+              <h3 className="text-lg font-semibold text-red-600 mb-2">Delete {selectedOrgs.length} Communities</h3>
+              <p className="text-gray-600 mb-3">
+                You are about to permanently delete the following communities:
+              </p>
+              <ul className="text-sm text-gray-700 mb-4 bg-gray-50 rounded-lg p-3 max-h-32 overflow-y-auto">
+                {selectedOrgNames.map((name, i) => (
+                  <li key={i} className="py-1 border-b border-gray-200 last:border-0">
+                    • {name}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-sm text-gray-500 mb-4">
+                This will permanently delete all RSVP signups, whitelist members, settings, and archive history for each community.
+              </p>
+              <p className="text-sm text-gray-700 mb-3">
+                Type <strong className="text-red-600">DELETE</strong> to confirm:
+              </p>
+              <input
+                type="text"
+                value={bulkDeleteConfirm}
+                onChange={e => setBulkDeleteConfirm(e.target.value)}
+                placeholder="Type DELETE"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              />
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowBulkDeleteModal(false);
+                    setBulkDeleteConfirm('');
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleting || bulkDeleteConfirm !== 'DELETE'}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {bulkDeleting ? 'Deleting...' : 'Delete Forever'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
