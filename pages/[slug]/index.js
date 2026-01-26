@@ -708,6 +708,37 @@ export default function OrgRSVP() {
                   return null;
                 })()}
               </div>
+
+              {/* Location inline within schedule card */}
+              {gameInfo.location && (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <div className="flex items-start gap-3">
+                    <span className="text-lg">📍</span>
+                    <div>
+                      {gameInfo.location.name && (
+                        <p className="font-medium text-gray-800">{gameInfo.location.name}</p>
+                      )}
+                      {gameInfo.location.address && (
+                        <p className="text-gray-500 text-sm">{gameInfo.location.address}</p>
+                      )}
+                      {(gameInfo.location.googleMapsUrl || gameInfo.location.address) && (
+                        <a
+                          href={gameInfo.location.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([gameInfo.location.address, gameInfo.location.name].filter(Boolean).join(', '))}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          Open in Google Maps
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -748,94 +779,92 @@ export default function OrgRSVP() {
             </div>
           )}
 
-          {/* RSVP Form */}
-          <div className="glass-card-solid rounded-3xl shadow-2xl p-4 md:p-6 mb-4 md:mb-6">
-            {!accessStatus.isOpen ? (
-              <div className="text-center text-gray-400 py-4">
-                <p className="text-lg font-medium text-gray-500">RSVP is currently closed</p>
-              </div>
-            ) : !hasSignedUp ? (
-              savedName && !showNameEdit ? (
-                <div className="space-y-3">
-                  <div className="text-center">
-                    <p className="text-gray-600 text-sm">Welcome back!</p>
-                    <p className="text-gray-800 font-semibold text-lg">{savedName}</p>
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <button
-                      onClick={handleRSVP}
-                      disabled={submitting}
-                      className={`flex-1 px-6 py-3 bg-gradient-to-r from-${colors.accent}-500 to-${colors.accent}-600 hover:from-${colors.accent}-600 hover:to-${colors.accent}-700 disabled:from-gray-300 disabled:to-gray-400 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2`}
-                    >
-                      {submitting ? <Spinner /> : 'RSVP Now'}
-                    </button>
-                    <button
-                      onClick={() => setShowNameEdit(true)}
-                      className="px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl text-sm"
-                    >
-                      Change name
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {showNameEdit && (
-                    <div className="flex justify-between items-center">
-                      <p className="text-gray-600 text-sm">Enter a different name:</p>
+          {/* RSVP Form — only shown when form is open */}
+          {accessStatus.isOpen && (
+            <div className="glass-card-solid rounded-3xl shadow-2xl p-4 md:p-6 mb-4 md:mb-6">
+              {!hasSignedUp ? (
+                savedName && !showNameEdit ? (
+                  <div className="space-y-3">
+                    <div className="text-center">
+                      <p className="text-gray-600 text-sm">Welcome back!</p>
+                      <p className="text-gray-800 font-semibold text-lg">{savedName}</p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <button
-                        onClick={() => { setShowNameEdit(false); setName(savedName); }}
-                        className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                        onClick={handleRSVP}
+                        disabled={submitting}
+                        className={`flex-1 px-6 py-3 bg-gradient-to-r from-${colors.accent}-500 to-${colors.accent}-600 hover:from-${colors.accent}-600 hover:to-${colors.accent}-700 disabled:from-gray-300 disabled:to-gray-400 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2`}
                       >
-                        Cancel
+                        {submitting ? <Spinner /> : 'RSVP Now'}
+                      </button>
+                      <button
+                        onClick={() => setShowNameEdit(true)}
+                        className="px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl text-sm"
+                      >
+                        Change name
                       </button>
                     </div>
-                  )}
-                  <div className="flex flex-col md:flex-row gap-3">
-                    <div className="flex-1">
-                      <input
-                        type="text"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && !submitting && handleRSVP()}
-                        placeholder="Your full name (first & last)"
-                        disabled={submitting}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none text-base disabled:bg-gray-50"
-                      />
-                    </div>
-                    <button
-                      onClick={handleRSVP}
-                      disabled={submitting}
-                      className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-400 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2"
-                    >
-                      {submitting ? <Spinner /> : 'RSVP'}
-                    </button>
                   </div>
+                ) : (
+                  <div className="space-y-3">
+                    {showNameEdit && (
+                      <div className="flex justify-between items-center">
+                        <p className="text-gray-600 text-sm">Enter a different name:</p>
+                        <button
+                          onClick={() => { setShowNameEdit(false); setName(savedName); }}
+                          className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
+                    <div className="flex flex-col md:flex-row gap-3">
+                      <div className="flex-1">
+                        <input
+                          type="text"
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && !submitting && handleRSVP()}
+                          placeholder="Your full name (first & last)"
+                          disabled={submitting}
+                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none text-base disabled:bg-gray-50"
+                        />
+                      </div>
+                      <button
+                        onClick={handleRSVP}
+                        disabled={submitting}
+                        className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-400 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2"
+                      >
+                        {submitting ? <Spinner /> : 'RSVP'}
+                      </button>
+                    </div>
+                  </div>
+                )
+              ) : (
+                <div className="text-center text-gray-500 py-2">
+                  <p>You've already signed up for this week!</p>
                 </div>
-              )
-            ) : (
-              <div className="text-center text-gray-500 py-2">
-                <p>You've already signed up for this week!</p>
-              </div>
-            )}
+              )}
 
-            {/* Progress Bar */}
-            <div className="mt-4">
-              <div className="flex justify-between text-sm text-gray-600 mb-2">
-                <span className="font-medium">{mainList.length} / {mainListLimit} spots filled</span>
-                <span className={`font-semibold ${spotsLeft === 0 ? 'text-orange-500' : isLowSpots ? 'text-red-500' : 'text-green-600'}`}>
-                  {spotsLeft > 0 ? `${spotsLeft} spots left` : 'Waitlist open'}
-                </span>
-              </div>
-              <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className={`h-full transition-all duration-700 rounded-full ${
-                    spotsLeft === 0 ? 'bg-orange-500' : isLowSpots ? 'bg-red-500' : 'bg-green-500'
-                  }`}
-                  style={{ width: `${(mainList.length / mainListLimit) * 100}%` }}
-                />
+              {/* Progress Bar */}
+              <div className="mt-4">
+                <div className="flex justify-between text-sm text-gray-600 mb-2">
+                  <span className="font-medium">{mainList.length} / {mainListLimit} spots filled</span>
+                  <span className={`font-semibold ${spotsLeft === 0 ? 'text-orange-500' : isLowSpots ? 'text-red-500' : 'text-green-600'}`}>
+                    {spotsLeft > 0 ? `${spotsLeft} spots left` : 'Waitlist open'}
+                  </span>
+                </div>
+                <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-700 rounded-full ${
+                      spotsLeft === 0 ? 'bg-orange-500' : isLowSpots ? 'bg-red-500' : 'bg-green-500'
+                    }`}
+                    style={{ width: `${(mainList.length / mainListLimit) * 100}%` }}
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Main List */}
           <div className="glass-card-solid rounded-3xl shadow-2xl p-4 md:p-6 mb-4">
@@ -846,7 +875,9 @@ export default function OrgRSVP() {
               <div className="text-center py-8">
                 <div className="text-5xl mb-3">{emoji}</div>
                 <p className="text-gray-400">No RSVPs yet</p>
-                <p className="text-gray-500 text-sm mt-1">Be the first to claim your spot!</p>
+                <p className="text-gray-500 text-sm mt-1">
+                  {accessStatus.isOpen ? 'Be the first to claim your spot!' : 'RSVPs will open soon'}
+                </p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -987,8 +1018,8 @@ export default function OrgRSVP() {
             </div>
           )}
 
-          {/* Game Info Details Section */}
-          {gameInfo && gameInfo.enabled && (
+          {/* Game Info Details Section — Weather & Rules */}
+          {gameInfo && gameInfo.enabled && (gameInfo.weather || (gameInfo.rules && gameInfo.rules.items && gameInfo.rules.items.length > 0)) && (
             <div className="space-y-4 mb-4">
               {/* Weather Card */}
               {gameInfo.weather && (
@@ -997,37 +1028,6 @@ export default function OrgRSVP() {
                   weatherLoading={weatherLoading}
                   weatherMessage={weatherMessage}
                 />
-              )}
-
-              {/* Location Card */}
-              {gameInfo.location && (
-                <div className="glass-card-solid rounded-3xl shadow-2xl p-4 md:p-6">
-                  <h2 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
-                    <span>📍</span> Location & Directions
-                  </h2>
-                  <div className="space-y-2">
-                    {gameInfo.location.name && (
-                      <p className="text-lg font-medium text-gray-800">{gameInfo.location.name}</p>
-                    )}
-                    {gameInfo.location.address && (
-                      <p className="text-gray-600">{gameInfo.location.address}</p>
-                    )}
-                    {(gameInfo.location.googleMapsUrl || gameInfo.location.address) && (
-                      <a
-                        href={gameInfo.location.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([gameInfo.location.address, gameInfo.location.name].filter(Boolean).join(', '))}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 mt-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl transition-colors"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        Open in Google Maps
-                      </a>
-                    )}
-                  </div>
-                </div>
               )}
 
               {/* Rules Card */}
