@@ -898,26 +898,26 @@ export default function OrgRSVP() {
                       isMySignup(person) ? 'bg-blue-50 ring-2 ring-blue-300' : 'bg-gray-50 hover:bg-gray-100'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-white bg-gradient-to-br ${
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-white bg-gradient-to-br flex-shrink-0 ${
                         isMySignup(person) ? 'from-blue-400 to-blue-600' : getAvatarColor(person.name)
                       }`}>
                         {getInitials(person.name)}
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-gray-800">{formatDisplayName(person.name)}</span>
+                          <span className="font-medium text-gray-800 truncate">{formatDisplayName(person.name)}</span>
                           {person.isWhitelisted && (
-                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Member</span>
+                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full flex-shrink-0">Member</span>
                           )}
                           {isMySignup(person) && (
-                            <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full">You</span>
+                            <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full flex-shrink-0">You</span>
                           )}
                         </div>
                         <span className="text-xs text-gray-400">{formatTime(person.timestamp)}</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-shrink-0">
                       <span className="text-xs text-gray-400">#{index + 1}</span>
                       {person.isWhitelisted && (
                         <button
@@ -960,23 +960,23 @@ export default function OrgRSVP() {
                         isMySignup(person) ? 'bg-blue-50 ring-2 ring-blue-300' : 'bg-orange-50 hover:bg-orange-100'
                       }`}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-white bg-gradient-to-br ${
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-white bg-gradient-to-br flex-shrink-0 ${
                           isMySignup(person) ? 'from-blue-400 to-blue-600' : 'from-orange-400 to-amber-500'
                         }`}>
                           {getInitials(person.name)}
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="font-medium text-gray-800">{formatDisplayName(person.name)}</span>
+                            <span className="font-medium text-gray-800 truncate">{formatDisplayName(person.name)}</span>
                             {isMySignup(person) && (
-                              <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full">You</span>
+                              <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full flex-shrink-0">You</span>
                             )}
                           </div>
                           <span className="text-xs text-gray-400">{formatTime(person.timestamp)}</span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-shrink-0">
                         <span className="text-xs text-gray-400">#{index + 1}</span>
                         {isMySignup(person) && (
                           <button
