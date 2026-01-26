@@ -1401,6 +1401,7 @@ export default function OrgAdmin() {
                         })}
                       />
                   </div>
+                  </div>
                 )}
 
                 {!settingsForm.accessPeriod?.enabled && (
