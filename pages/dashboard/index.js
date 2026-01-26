@@ -148,6 +148,18 @@ function WeeklyTimeline({ gameDay, gameStartHour, gameStartMinute, gameEndHour, 
             </span>
           </div>
         </div>
+
+        {/* Validation warning: close before open on same day */}
+        {openDay === closeDay && (closeHour * 60 + (closeMin || 0)) <= (openHour * 60 + (openMin || 0)) && (
+          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-sm text-red-700 font-medium">
+              Close time must be after open time
+            </p>
+            <p className="text-xs text-red-600 mt-1">
+              RSVP opens and closes on {fullDays[openDay]}, but the close time is before the open time.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
