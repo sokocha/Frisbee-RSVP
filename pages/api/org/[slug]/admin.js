@@ -1,6 +1,7 @@
 import { verifySession, parseCookies, isSuperAdmin } from '../../../../lib/auth';
 import { getOrganizerById, getOrganizationBySlug, organizerOwnsOrg, updateOrganization, deleteOrganization } from '../../../../lib/organizations';
 import { getOrgData, setOrgData, ORG_KEY_SUFFIXES, deleteAllOrgData } from '../../../../lib/kv';
+import { getCurrentPeriodId } from '../../../../lib/recurrence';
 import { Resend } from 'resend';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -123,17 +124,6 @@ function getDefaultSettings(timezone = 'Africa/Lagos') {
   };
 }
 
-// Get the current week identifier
-function getCurrentWeekId(timezone) {
-  const now = new Date();
-  const localTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
-  const year = localTime.getFullYear();
-  const startOfYear = new Date(year, 0, 1);
-  const days = Math.floor((localTime - startOfYear) / (24 * 60 * 60 * 1000));
-  const weekNum = Math.ceil((days + startOfYear.getDay() + 1) / 7);
-  return `${year}-W${weekNum.toString().padStart(2, '0')}`;
-}
-
 export default async function handler(req, res) {
   const { slug } = req.query;
 
@@ -199,7 +189,7 @@ export default async function handler(req, res) {
       }
 
       const timezone = settings.accessPeriod?.timezone || org.timezone || 'Africa/Lagos';
-      const currentWeekId = getCurrentWeekId(timezone);
+      const currentWeekId = getCurrentPeriodId(settings, timezone);
 
       // Prepopulate gameInfo.location with organization's location/streetAddress if not already set
       if (settings.gameInfo?.location) {

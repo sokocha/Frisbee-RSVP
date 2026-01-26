@@ -4,6 +4,7 @@ import { getOrganizationBySlug } from '../../../../lib/organizations';
 import { getOrgData, setOrgData, ORG_KEY_SUFFIXES } from '../../../../lib/kv';
 import { verifySession, parseCookies, isSuperAdmin } from '../../../../lib/auth';
 import { getOrganizerById, organizerOwnsOrg } from '../../../../lib/organizations';
+import { getCurrentPeriodId } from '../../../../lib/recurrence';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -20,17 +21,6 @@ function getDefaultSettings(timezone = 'Africa/Lagos') {
       body: 'Please find attached the RSVP list for this week.\n\nTotal participants: {{count}}'
     }
   };
-}
-
-// Get current week identifier
-function getCurrentWeekId(timezone) {
-  const now = new Date();
-  const localTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
-  const year = localTime.getFullYear();
-  const startOfYear = new Date(year, 0, 1);
-  const days = Math.floor((localTime - startOfYear) / (24 * 60 * 60 * 1000));
-  const weekNum = Math.ceil((days + startOfYear.getDay() + 1) / 7);
-  return `${year}-W${weekNum.toString().padStart(2, '0')}`;
 }
 
 // Replace template variables
@@ -168,7 +158,7 @@ export default async function handler(req, res) {
 
       const rsvpData = await getOrgData(orgId, ORG_KEY_SUFFIXES.RSVP_DATA, { mainList: [], waitlist: [] });
       const timezone = settings?.accessPeriod?.timezone || org.timezone || 'Africa/Lagos';
-      const weekId = getCurrentWeekId(timezone);
+      const weekId = getCurrentPeriodId(settings, timezone);
 
       // Generate PDF (main list only)
       const pdfBuffer = await generatePDF(rsvpData.mainList, weekId, org.name, org.sport);
@@ -247,7 +237,7 @@ export default async function handler(req, res) {
 
     const rsvpData = await getOrgData(orgId, ORG_KEY_SUFFIXES.RSVP_DATA, { mainList: [], waitlist: [] });
     const timezone = settings?.accessPeriod?.timezone || org.timezone || 'Africa/Lagos';
-    const weekId = getCurrentWeekId(timezone);
+    const weekId = getCurrentPeriodId(settings, timezone);
 
     // Check if we already sent email for this week (prevent duplicates)
     const lastEmail = await getOrgData(orgId, ORG_KEY_SUFFIXES.LAST_EMAIL, null);

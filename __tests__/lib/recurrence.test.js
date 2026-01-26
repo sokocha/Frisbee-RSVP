@@ -109,6 +109,7 @@ describe('getMonthlyPeriodId', () => {
   }
 
   test('returns monthly period ID for 2nd Saturday in January 2026', () => {
+    // 2nd Saturday of Jan 2026 is Jan 10. On Jan 10 at noon, we are still in that period.
     mockDate('2026-01-10T12:00:00Z');
     const settings = {
       gameInfo: { gameDay: 6, monthlyOccurrence: 2, recurrence: 'monthly' },
@@ -118,6 +119,7 @@ describe('getMonthlyPeriodId', () => {
   });
 
   test('returns monthly period ID for last Sunday in March 2026', () => {
+    // Last Sunday of Mar 2026 is Mar 29. On Mar 15, we are leading up to that game.
     mockDate('2026-03-15T12:00:00Z');
     const settings = {
       gameInfo: { gameDay: 0, monthlyOccurrence: 'last', recurrence: 'monthly' },
@@ -127,12 +129,36 @@ describe('getMonthlyPeriodId', () => {
   });
 
   test('returns monthly period ID for 1st Wednesday in December 2026', () => {
+    // 1st Wednesday of Dec 2026 is Dec 2. On Dec 1, we are leading up to that game.
     mockDate('2026-12-01T12:00:00Z');
     const settings = {
       gameInfo: { gameDay: 3, monthlyOccurrence: 1, recurrence: 'monthly' },
     };
     const result = getMonthlyPeriodId(settings, 'UTC');
     expect(result).toBe('2026-M12-1WED');
+  });
+
+  test('rolls to next month period after midnight following game day', () => {
+    // 2nd Saturday of Jan 2026 is Jan 10.
+    // At midnight Jan 11 (day after game), the period should roll to February.
+    // 2nd Saturday of Feb 2026 is Feb 14.
+    mockDate('2026-01-11T00:00:00Z');
+    const settings = {
+      gameInfo: { gameDay: 6, monthlyOccurrence: 2, recurrence: 'monthly' },
+    };
+    const result = getMonthlyPeriodId(settings, 'UTC');
+    expect(result).toBe('2026-M02-2SAT');
+  });
+
+  test('stays in current period on game day before midnight', () => {
+    // 2nd Saturday of Jan 2026 is Jan 10.
+    // At 11pm on Jan 10, we are still in the Jan period.
+    mockDate('2026-01-10T23:00:00Z');
+    const settings = {
+      gameInfo: { gameDay: 6, monthlyOccurrence: 2, recurrence: 'monthly' },
+    };
+    const result = getMonthlyPeriodId(settings, 'UTC');
+    expect(result).toBe('2026-M01-2SAT');
   });
 });
 
@@ -160,18 +186,56 @@ describe('getWeeklyPeriodId', () => {
 
   test('returns weekly period ID format', () => {
     mockDate('2026-01-26T12:00:00Z');
-    const result = getWeeklyPeriodId('UTC');
+    const settings = { gameInfo: { gameDay: 4 } }; // Thursday
+    const result = getWeeklyPeriodId(settings, 'UTC');
     expect(result).toMatch(/^2026-W\d{2}$/);
   });
 
-  test('returns consistent ID for same week', () => {
+  test('returns consistent ID within same game-week period', () => {
+    const settings = { gameInfo: { gameDay: 4 } }; // Thursday game
+    // Jan 26 is Monday, Jan 27 is Tuesday — both before Thursday game
     mockDate('2026-01-26T12:00:00Z');
-    const monday = getWeeklyPeriodId('UTC');
+    const monday = getWeeklyPeriodId(settings, 'UTC');
     mockDate('2026-01-27T12:00:00Z');
-    const tuesday = getWeeklyPeriodId('UTC');
-    // Both should be the same week
-    // Note: due to the calculation method, these should be same week
+    const tuesday = getWeeklyPeriodId(settings, 'UTC');
     expect(monday).toBe(tuesday);
+  });
+
+  test('period changes at midnight after game day', () => {
+    const settings = { gameInfo: { gameDay: 4 } }; // Thursday game
+    // Jan 29 2026 is Thursday (game day), Jan 30 is Friday (reset day)
+    mockDate('2026-01-29T23:59:00Z'); // Thursday 11:59pm - still current period
+    const beforeReset = getWeeklyPeriodId(settings, 'UTC');
+    mockDate('2026-01-30T00:00:00Z'); // Friday midnight - new period
+    const afterReset = getWeeklyPeriodId(settings, 'UTC');
+    expect(beforeReset).not.toBe(afterReset);
+  });
+
+  test('game day stays in current period', () => {
+    const settings = { gameInfo: { gameDay: 4 } }; // Thursday game
+    // Jan 29 2026 is Thursday
+    mockDate('2026-01-29T12:00:00Z'); // Thursday noon
+    const onGameDay = getWeeklyPeriodId(settings, 'UTC');
+    mockDate('2026-01-28T12:00:00Z'); // Wednesday (day before game)
+    const dayBefore = getWeeklyPeriodId(settings, 'UTC');
+    expect(onGameDay).toBe(dayBefore);
+  });
+
+  test('handles null settings by defaulting gameDay to Sunday', () => {
+    mockDate('2026-01-26T12:00:00Z');
+    const result = getWeeklyPeriodId(null, 'UTC');
+    expect(result).toMatch(/^2026-W\d{2}$/);
+  });
+
+  test('handles Saturday game day (wrap around to Sunday reset)', () => {
+    const settings = { gameInfo: { gameDay: 6 } }; // Saturday game
+    // Jan 31 2026 is Saturday (game day)
+    mockDate('2026-01-31T23:00:00Z'); // Saturday 11pm - current period
+    const saturdayNight = getWeeklyPeriodId(settings, 'UTC');
+    // Feb 1 2026 is Sunday (reset day)
+    mockDate('2026-02-01T00:00:00Z'); // Sunday midnight - new period
+    const sundayMidnight = getWeeklyPeriodId(settings, 'UTC');
+    expect(saturdayNight).not.toBe(sundayMidnight);
   });
 });
 
@@ -212,7 +276,8 @@ describe('getCurrentPeriodId', () => {
       gameInfo: { recurrence: 'monthly', gameDay: 6, monthlyOccurrence: 2 },
     };
     const result = getCurrentPeriodId(settings, 'UTC');
-    expect(result).toBe('2026-M01-2SAT');
+    // Jan 26 is after Jan 10 (2nd Sat) reset, so should be Feb period
+    expect(result).toBe('2026-M02-2SAT');
   });
 
   test('defaults to weekly when recurrence is not set', () => {
