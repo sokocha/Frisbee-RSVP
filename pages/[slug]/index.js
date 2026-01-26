@@ -929,6 +929,62 @@ export default function OrgRSVP() {
                       return `${formatGameTime(gameInfo.startHour, gameInfo.startMinute)} - ${formatGameTime(gameInfo.endHour, gameInfo.endMinute)}`;
                     })()}
                   </p>
+                  {(() => {
+                    const now = new Date();
+                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    let nextDate = null;
+
+                    if (gameInfo.recurrence === 'monthly') {
+                      const occ = gameInfo.monthlyOccurrence || 1;
+                      for (let offset = 0; offset <= 2; offset++) {
+                        const m = (now.getMonth() + offset) % 12;
+                        const y = (now.getMonth() + offset) >= 12 ? now.getFullYear() + 1 : now.getFullYear();
+                        if (occ === 'last') {
+                          const lastDay = new Date(y, m + 1, 0);
+                          let d = lastDay.getDate();
+                          while (new Date(y, m, d).getDay() !== gameInfo.gameDay) d--;
+                          const candidate = new Date(y, m, d);
+                          candidate.setHours(gameInfo.startHour, gameInfo.startMinute, 0, 0);
+                          if (candidate > now) { nextDate = candidate; break; }
+                        } else {
+                          let count = 0;
+                          for (let d = 1; d <= 31; d++) {
+                            const dt = new Date(y, m, d);
+                            if (dt.getMonth() !== m) break;
+                            if (dt.getDay() === gameInfo.gameDay) {
+                              count++;
+                              if (count === occ) {
+                                dt.setHours(gameInfo.startHour, gameInfo.startMinute, 0, 0);
+                                if (dt > now) { nextDate = dt; }
+                                break;
+                              }
+                            }
+                          }
+                          if (nextDate) break;
+                        }
+                      }
+                    } else {
+                      const today = now.getDay();
+                      let daysUntil = gameInfo.gameDay - today;
+                      if (daysUntil < 0) daysUntil += 7;
+                      if (daysUntil === 0) {
+                        const gameTime = new Date(now);
+                        gameTime.setHours(gameInfo.startHour, gameInfo.startMinute, 0, 0);
+                        if (now >= gameTime) daysUntil = 7;
+                      }
+                      nextDate = new Date(now);
+                      nextDate.setDate(nextDate.getDate() + daysUntil);
+                    }
+
+                    if (nextDate) {
+                      return (
+                        <p className="text-sm text-blue-600 font-medium mt-1">
+                          Next game: {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][nextDate.getDay()]}, {months[nextDate.getMonth()]} {nextDate.getDate()}
+                        </p>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
               </div>
 
