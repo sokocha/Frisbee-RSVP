@@ -523,6 +523,19 @@ export default function OrgAdmin() {
 
   async function handleSaveSettings(e) {
     e.preventDefault();
+
+    // Validate RSVP window: if same day, close time must be after open time
+    if (settingsForm.accessPeriod?.enabled) {
+      const ap = settingsForm.accessPeriod;
+      const sameDay = (ap.startDay ?? 0) === (ap.endDay ?? 0);
+      const startTime = (ap.startHour ?? 0) * 60 + (ap.startMinute ?? 0);
+      const endTime = (ap.endHour ?? 0) * 60 + (ap.endMinute ?? 0);
+      if (sameDay && endTime <= startTime) {
+        showMessage('RSVP window is invalid: close time must be after open time when on the same day', 'error');
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       // Parse email text fields into arrays before saving
@@ -1462,6 +1475,28 @@ export default function OrgAdmin() {
                         })}
                       />
                   </div>
+
+                    {/* RSVP Window Validation Warning */}
+                    {(() => {
+                      const ap = settingsForm.accessPeriod;
+                      if (!ap) return null;
+                      const sameDay = (ap.startDay ?? 0) === (ap.endDay ?? 0);
+                      const startTime = (ap.startHour ?? 0) * 60 + (ap.startMinute ?? 0);
+                      const endTime = (ap.endHour ?? 0) * 60 + (ap.endMinute ?? 0);
+                      if (sameDay && endTime <= startTime) {
+                        return (
+                          <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                            <p className="text-sm text-red-700 font-medium">
+                              Close time must be after open time
+                            </p>
+                            <p className="text-xs text-red-600 mt-1">
+                              The RSVP window opens and closes on the same day, but the close time is before or equal to the open time. Set a later close time, or change the close day.
+                            </p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                 )}
 

@@ -200,6 +200,7 @@ export default async function handler(req, res) {
           name: org.name,
           sport: org.sport,
           location: org.location,
+          visibility: org.visibility || 'public',
         },
         mainList: rebalanced.mainList,
         waitlist: rebalanced.waitlist,

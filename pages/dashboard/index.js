@@ -185,9 +185,9 @@ export default function Dashboard() {
     recurrence: 'weekly', // 'weekly' | 'monthly'
     monthlyOccurrence: 1, // 1-4 or 'last' (which occurrence of the day)
     gameDay: 0, // Sunday
-    gameStartHour: 17,
+    gameStartHour: 12,
     gameStartMinute: 0,
-    gameEndHour: 19,
+    gameEndHour: 14,
     gameEndMinute: 0,
     rsvpWindowPreset: 'custom', // Always custom
     // Custom RSVP timing - start blank for user to fill
@@ -344,9 +344,9 @@ export default function Dashboard() {
         recurrence: 'weekly',
         monthlyOccurrence: 1,
         gameDay: 0,
-        gameStartHour: 17,
+        gameStartHour: 12,
         gameStartMinute: 0,
-        gameEndHour: 19,
+        gameEndHour: 14,
         gameEndMinute: 0,
         rsvpWindowPreset: 'custom',
         rsvpOpenDay: null,
