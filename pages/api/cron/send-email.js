@@ -28,10 +28,17 @@ function getDefaultSettings(timezone = 'Africa/Lagos') {
 }
 
 // Check if the access period just closed (within the last 70 minutes to catch the cron window)
+// Returns { shouldSend: boolean, reason: string } for diagnostics
 function shouldSendEmail(settings, timezone, lastEmailPeriod) {
-  if (!settings?.accessPeriod?.enabled) return false;
-  if (!settings?.email?.enabled) return false;
-  if (!settings?.email?.recipients?.length) return false;
+  if (!settings?.accessPeriod?.enabled) {
+    return { shouldSend: false, reason: 'access period not enabled' };
+  }
+  if (!settings?.email?.enabled) {
+    return { shouldSend: false, reason: 'email sending not enabled in org settings' };
+  }
+  if (!settings?.email?.recipients?.length) {
+    return { shouldSend: false, reason: 'no email recipients configured' };
+  }
 
   const now = new Date();
   const localTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
@@ -57,22 +64,22 @@ function shouldSendEmail(settings, timezone, lastEmailPeriod) {
 
   // Check if we already sent for this period
   if (lastEmailPeriod === periodId) {
-    return false;
+    return { shouldSend: false, reason: `already sent for period ${periodId}` };
   }
 
   // Send if window closed in the last 70 minutes
   if (minutesSinceClosed >= 0 && minutesSinceClosed <= 70) {
-    return true;
+    return { shouldSend: true, reason: `window closed ${minutesSinceClosed} min ago (period ${periodId})` };
   }
 
   // Also check: if the window is currently closed and we haven't sent yet this period
   // This catches cases where the cron might have been missed
   const isCurrentlyOpen = isAccessPeriodOpen(settings, timezone);
   if (!isCurrentlyOpen && minutesSinceClosed > 0 && minutesSinceClosed < 7 * 24 * 60 - 120) {
-    return true;
+    return { shouldSend: true, reason: `catch-up: window closed ${minutesSinceClosed} min ago, not yet sent for ${periodId}` };
   }
 
-  return false;
+  return { shouldSend: false, reason: `window closed ${minutesSinceClosed} min ago (outside send window)` };
 }
 
 // Helper to check if access period is currently open
@@ -146,13 +153,17 @@ export default async function handler(req, res) {
         const lastEmailWeek = await getOrgData(org.id, ORG_KEY_SUFFIXES.LAST_EMAIL, null);
 
         // Check if this org's window just closed
-        if (!shouldSendEmail(settings, timezone, lastEmailWeek)) {
+        const { shouldSend, reason } = shouldSendEmail(settings, timezone, lastEmailWeek);
+        if (!shouldSend) {
           results.skipped.push({
             slug: org.slug,
-            reason: 'Not time to send or already sent'
+            reason
           });
+          console.log(`Cron: Skipped ${org.slug} - ${reason}`);
           continue;
         }
+
+        console.log(`Cron: Sending for ${org.slug} - ${reason}`);
 
         // Trigger email send for this org
         const response = await fetch(`${baseUrl}/api/org/${org.slug}/send-list`, {
