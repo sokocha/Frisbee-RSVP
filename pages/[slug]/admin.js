@@ -1794,9 +1794,8 @@ export default function OrgAdmin() {
                     </div>
                   </div>
 
-                  {/* Last Sent Indicator */}
-                  {(emailLog.length > 0 || emailStatus || lastEmailWeek) && (
-                    <div className="bg-white rounded-lg border border-gray-200 p-6">
+                  {/* Email History */}
+                  <div className="bg-white rounded-lg border border-gray-200 p-6">
                       <h3 className="font-semibold mb-3">Email History</h3>
                       {emailLog.length > 0 ? (
                         <div className="overflow-x-auto">
@@ -1872,7 +1871,6 @@ export default function OrgAdmin() {
                         <p className="text-sm text-gray-500">No emails sent yet.</p>
                       )}
                     </div>
-                  )}
 
                   {/* Test & Manual Send Section */}
                   <div className="bg-white rounded-lg border border-gray-200 p-6">
