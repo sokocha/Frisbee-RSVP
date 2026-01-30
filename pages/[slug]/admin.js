@@ -273,6 +273,7 @@ export default function OrgAdmin() {
   // Email status
   const [emailStatus, setEmailStatus] = useState(null);
   const [lastEmailWeek, setLastEmailWeek] = useState(null);
+  const [emailLog, setEmailLog] = useState([]);
   const [sendingTestEmail, setSendingTestEmail] = useState(false);
 
   // Whitelist form
@@ -385,6 +386,7 @@ export default function OrgAdmin() {
         setArchive(data.archive || []);
         setEmailStatus(data.emailStatus || null);
         setLastEmailWeek(data.lastEmailWeek || null);
+        setEmailLog(data.emailLog || []);
 
         if (data.settings) {
           const formData = {
@@ -1793,13 +1795,59 @@ export default function OrgAdmin() {
                   </div>
 
                   {/* Last Sent Indicator */}
-                  {(emailStatus || lastEmailWeek) && (
+                  {(emailLog.length > 0 || emailStatus || lastEmailWeek) && (
                     <div className="bg-white rounded-lg border border-gray-200 p-6">
-                      <h3 className="font-semibold mb-3">Email Status</h3>
-                      <div className="space-y-2">
-                        {lastEmailWeek && (
+                      <h3 className="font-semibold mb-3">Email History</h3>
+                      {emailLog.length > 0 ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-left text-gray-500 border-b border-gray-100">
+                                <th className="pb-2 pr-4 font-medium">Status</th>
+                                <th className="pb-2 pr-4 font-medium">Period</th>
+                                <th className="pb-2 pr-4 font-medium">Date</th>
+                                <th className="pb-2 font-medium">Recipients</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {[...emailLog].reverse().map((entry, i) => (
+                                <tr key={i} className="border-b border-gray-50 last:border-0">
+                                  <td className="py-2 pr-4">
+                                    <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full ${
+                                      entry.status === 'sent'
+                                        ? 'bg-green-50 text-green-700'
+                                        : 'bg-red-50 text-red-700'
+                                    }`}>
+                                      <span className={`w-1.5 h-1.5 rounded-full ${
+                                        entry.status === 'sent' ? 'bg-green-500' : 'bg-red-500'
+                                      }`}></span>
+                                      {entry.status === 'sent' ? 'Sent' : 'Failed'}
+                                    </span>
+                                  </td>
+                                  <td className="py-2 pr-4 text-gray-600">{entry.weekId}</td>
+                                  <td className="py-2 pr-4 text-gray-600">
+                                    {new Date(entry.sentAt || entry.attemptedAt || entry.updatedAt).toLocaleDateString('en-US', {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      hour: 'numeric',
+                                      minute: '2-digit',
+                                    })}
+                                  </td>
+                                  <td className="py-2 text-gray-600">
+                                    {entry.status === 'sent'
+                                      ? `${entry.recipientCount || '?'} recipient${entry.recipientCount !== 1 ? 's' : ''}`
+                                      : (entry.error || 'Unknown error')
+                                    }
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : lastEmailWeek ? (
+                        <div className="space-y-2">
                           <div className="flex items-center gap-2 text-sm">
-                            <span className={`w-2 h-2 rounded-full ${emailStatus?.success !== false ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                            <span className={`w-2 h-2 rounded-full ${emailStatus?.status !== 'failed' ? 'bg-green-500' : 'bg-red-500'}`}></span>
                             <span className="text-gray-600">
                               Last sent: Week {lastEmailWeek}
                               {emailStatus?.sentAt && (
@@ -1814,13 +1862,15 @@ export default function OrgAdmin() {
                               )}
                             </span>
                           </div>
-                        )}
-                        {emailStatus?.recipientCount && (
-                          <p className="text-xs text-gray-500">
-                            Sent to {emailStatus.recipientCount} recipient{emailStatus.recipientCount !== 1 ? 's' : ''}
-                          </p>
-                        )}
-                      </div>
+                          {emailStatus?.recipientCount && (
+                            <p className="text-xs text-gray-500">
+                              Sent to {emailStatus.recipientCount} recipient{emailStatus.recipientCount !== 1 ? 's' : ''}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500">No emails sent yet.</p>
+                      )}
                     </div>
                   )}
 
