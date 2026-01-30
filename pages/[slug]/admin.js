@@ -615,6 +615,27 @@ export default function OrgAdmin() {
   }
 
   async function handleMovePerson(personId, to) {
+    // Optimistic UI update: move person in local state immediately
+    const prevMainList = mainList;
+    const prevWaitlist = waitlist;
+    const person = mainList.find(p => p.id === personId) || waitlist.find(p => p.id === personId);
+    if (!person) return;
+
+    if (to === 'waitlist') {
+      const newMainList = mainList.filter(p => p.id !== personId);
+      const newWaitlist = [...waitlist];
+      // Auto-promote first waitlister to fill the spot
+      if (newWaitlist.length > 0) {
+        newMainList.push(newWaitlist.shift());
+      }
+      newWaitlist.push(person);
+      setMainList(newMainList);
+      setWaitlist(newWaitlist);
+    } else {
+      setMainList([...mainList, person]);
+      setWaitlist(waitlist.filter(p => p.id !== personId));
+    }
+
     setSaving(true);
     try {
       const res = await fetch(`/api/org/${slug}/admin`, {
@@ -626,20 +647,27 @@ export default function OrgAdmin() {
       const data = await res.json();
 
       if (res.ok) {
+        // Reconcile with server state
         setMainList(data.mainList);
         setWaitlist(data.waitlist);
         if (data.promoted) {
-          showMessage(`Moved ${data.moved} to ${to === 'waitlist' ? 'waitlist' : 'main list'}. ${data.promoted} promoted.`);
+          showMessage(`Moved ${person.name} to ${to === 'waitlist' ? 'waitlist' : 'main list'}. ${data.promoted} promoted.`);
         } else {
-          showMessage(`Moved ${data.moved} to ${to === 'waitlist' ? 'waitlist' : 'main list'}.`);
+          showMessage(`Moved ${person.name} to ${to === 'waitlist' ? 'waitlist' : 'main list'}.`);
         }
         if (data.dropoutLog) {
           setDropoutLog(data.dropoutLog);
         }
       } else {
+        // Revert on failure
+        setMainList(prevMainList);
+        setWaitlist(prevWaitlist);
         showMessage(data.error, 'error');
       }
     } catch (error) {
+      // Revert on failure
+      setMainList(prevMainList);
+      setWaitlist(prevWaitlist);
       showMessage('Failed to move person', 'error');
     }
     setSaving(false);
