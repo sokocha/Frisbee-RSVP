@@ -276,6 +276,9 @@ export default function OrgAdmin() {
   const [emailLog, setEmailLog] = useState([]);
   const [sendingTestEmail, setSendingTestEmail] = useState(false);
 
+  // Dropout log
+  const [dropoutLog, setDropoutLog] = useState([]);
+
   // Whitelist form
   const [newWhitelistNames, setNewWhitelistNames] = useState('');
   const [newMemberName, setNewMemberName] = useState('');
@@ -387,6 +390,7 @@ export default function OrgAdmin() {
         setEmailStatus(data.emailStatus || null);
         setLastEmailWeek(data.lastEmailWeek || null);
         setEmailLog(data.emailLog || []);
+        setDropoutLog(data.dropoutLog || []);
 
         if (data.settings) {
           const formData = {
@@ -1288,6 +1292,56 @@ export default function OrgAdmin() {
                       </div>
                     )}
                   </div>
+                </div>
+              </div>
+
+              {/* Recent Dropouts Section */}
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <span>🚪</span> Recent Dropouts
+                </h2>
+                <div className="bg-white rounded-lg border border-gray-200 p-4">
+                  {dropoutLog.length === 0 ? (
+                    <p className="text-gray-400 text-center py-4">No dropouts recorded yet.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-200">
+                            <th className="text-left py-2 pr-3 font-medium text-gray-500">Name</th>
+                            <th className="text-left py-2 pr-3 font-medium text-gray-500">When</th>
+                            <th className="text-left py-2 pr-3 font-medium text-gray-500">List</th>
+                            <th className="text-left py-2 font-medium text-gray-500">Period</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dropoutLog.map((entry, i) => (
+                            <tr key={i} className="border-b border-gray-100 last:border-0">
+                              <td className="py-2 pr-3 font-medium text-gray-900">{entry.name}</td>
+                              <td className="py-2 pr-3 text-gray-600 whitespace-nowrap">
+                                {new Date(entry.timestamp).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: 'numeric',
+                                  minute: '2-digit',
+                                })}
+                              </td>
+                              <td className="py-2 pr-3">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                  entry.list === 'main'
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'bg-orange-100 text-orange-700'
+                                }`}>
+                                  {entry.list === 'main' ? 'Main' : 'Waitlist'}
+                                </span>
+                              </td>
+                              <td className="py-2 text-gray-600">{entry.periodId}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

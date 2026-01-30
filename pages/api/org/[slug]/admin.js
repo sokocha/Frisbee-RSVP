@@ -181,6 +181,7 @@ export default async function handler(req, res) {
       const emailStatus = await getOrgData(orgId, ORG_KEY_SUFFIXES.EMAIL_STATUS, null);
       const lastEmailWeek = await getOrgData(orgId, ORG_KEY_SUFFIXES.LAST_EMAIL, null);
       const emailLog = await getOrgData(orgId, ORG_KEY_SUFFIXES.EMAIL_LOG, []);
+      const dropoutLog = await getOrgData(orgId, ORG_KEY_SUFFIXES.DROPOUT_LOG, []);
       const limit = settings.mainListLimit || 30;
 
       const rebalanced = rebalanceLists(rsvpData.mainList, rsvpData.waitlist, limit);
@@ -221,6 +222,7 @@ export default async function handler(req, res) {
         emailStatus,
         lastEmailWeek,
         emailLog,
+        dropoutLog,
         currentWeekId
       });
     } catch (error) {

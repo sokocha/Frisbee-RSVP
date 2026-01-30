@@ -357,6 +357,20 @@ export default async function handler(req, res) {
 
       await setOrgData(orgId, ORG_KEY_SUFFIXES.RSVP_DATA, { mainList, waitlist });
 
+      // Log the dropout event
+      const timezone = settings.accessPeriod?.timezone || org.timezone || 'Africa/Lagos';
+      const periodId = getCurrentPeriodId(settings, timezone);
+      const dropoutEntry = {
+        name: person.name,
+        timestamp: new Date().toISOString(),
+        list: isWaitlist ? 'waitlist' : 'main',
+        periodId,
+      };
+      const dropoutLog = await getOrgData(orgId, ORG_KEY_SUFFIXES.DROPOUT_LOG, []);
+      dropoutLog.unshift(dropoutEntry);
+      if (dropoutLog.length > 50) dropoutLog.length = 50;
+      await setOrgData(orgId, ORG_KEY_SUFFIXES.DROPOUT_LOG, dropoutLog);
+
       return res.status(200).json({
         success: true,
         message,
