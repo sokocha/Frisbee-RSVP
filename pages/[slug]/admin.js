@@ -86,6 +86,75 @@ function getCurrentTimeInTimezone(timezone) {
   }
 }
 
+// Helper: Compute next scheduled email send time based on access period + cron schedule.
+// The Vercel cron runs at 0 * * * * (top of every UTC hour), so the email is sent
+// at the first :00 UTC after the form closes.
+function getNextScheduledEmail(settings) {
+  if (!settings?.accessPeriod?.enabled || !settings?.email?.enabled || !settings?.email?.recipients?.length) {
+    return null;
+  }
+
+  const ap = settings.accessPeriod;
+  const tz = ap.timezone || 'Africa/Lagos';
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  const now = new Date();
+  const localNow = new Date(now.toLocaleString('en-US', { timeZone: tz }));
+  const currentDay = localNow.getDay();
+  const currentHour = localNow.getHours();
+  const currentMinute = localNow.getMinutes();
+
+  // Find next occurrence of the close time (endDay at endHour:endMinute)
+  let daysUntil = ap.endDay - currentDay;
+  if (daysUntil < 0) daysUntil += 7;
+  if (daysUntil === 0 && (currentHour > ap.endHour || (currentHour === ap.endHour && currentMinute >= (ap.endMinute || 0)))) {
+    daysUntil = 7; // already passed this week
+  }
+
+  // Compute the UTC offset so we can figure out when the cron fires
+  const utcNow = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+  const tzNow = new Date(now.toLocaleString('en-US', { timeZone: tz }));
+  const offsetMins = Math.round((tzNow - utcNow) / 60000);
+
+  // Close time in UTC minutes-of-day
+  const closeLocalMins = ap.endHour * 60 + (ap.endMinute || 0);
+  const closeUtcMins = ((closeLocalMins - offsetMins) % 1440 + 1440) % 1440;
+
+  // Cron fires at the top of the next UTC hour (or same hour if exactly :00)
+  const closeUtcMinute = closeUtcMins % 60;
+  let cronUtcMins;
+  if (closeUtcMinute === 0) {
+    cronUtcMins = closeUtcMins;
+  } else {
+    cronUtcMins = (Math.floor(closeUtcMins / 60) + 1) * 60;
+    if (cronUtcMins >= 1440) cronUtcMins -= 1440;
+  }
+
+  // Convert cron fire time back to local timezone
+  const cronLocalMins = ((cronUtcMins + offsetMins) % 1440 + 1440) % 1440;
+  const cronHour = Math.floor(cronLocalMins / 60);
+  const cronMinute = cronLocalMins % 60;
+
+  // If cron fires on the next calendar day (crossed midnight), adjust daysUntil for display
+  let sendDaysUntil = daysUntil;
+  if (cronLocalMins < closeLocalMins && closeUtcMinute !== 0) {
+    sendDaysUntil += 1;
+  }
+
+  const sendDay = (ap.endDay + (sendDaysUntil - daysUntil)) % 7;
+  const h = cronHour % 12 || 12;
+  const m = cronMinute.toString().padStart(2, '0');
+  const ampm = cronHour < 12 ? 'AM' : 'PM';
+
+  return {
+    sendDay: dayNames[sendDay],
+    sendTime: `${h}:${m} ${ampm}`,
+    closeDay: dayNames[ap.endDay],
+    closeTime: formatTime12h(ap.endHour, ap.endMinute || 0),
+    recipientCount: settings.email.recipients.length,
+  };
+}
+
 // TimePicker component
 function TimePicker({ hour, minute, onChange, label }) {
   const timeValue = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
@@ -1797,6 +1866,27 @@ export default function OrgAdmin() {
                   {/* Email History */}
                   <div className="bg-white rounded-lg border border-gray-200 p-6">
                       <h3 className="font-semibold mb-3">Email History</h3>
+
+                      {/* Upcoming scheduled email */}
+                      {(() => {
+                        const next = getNextScheduledEmail(settings);
+                        if (!next) return null;
+                        return (
+                          <div className="flex items-center gap-2 text-sm bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 mb-4">
+                            <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                              Scheduled
+                            </span>
+                            <span className="text-blue-800">
+                              Next email: {next.sendDay} at {next.sendTime}
+                            </span>
+                            <span className="text-blue-500">
+                              &middot; {next.recipientCount} recipient{next.recipientCount !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        );
+                      })()}
+
                       {emailLog.length > 0 ? (
                         <div className="overflow-x-auto">
                           <table className="w-full text-sm">
