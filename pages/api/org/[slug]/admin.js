@@ -184,12 +184,6 @@ export default async function handler(req, res) {
       const dropoutLog = await getOrgData(orgId, ORG_KEY_SUFFIXES.DROPOUT_LOG, []);
       const limit = settings.mainListLimit || 30;
 
-      const rebalanced = rebalanceLists(rsvpData.mainList, rsvpData.waitlist, limit);
-      const orderChanged = JSON.stringify(rebalanced) !== JSON.stringify(rsvpData);
-      if (orderChanged) {
-        await setOrgData(orgId, ORG_KEY_SUFFIXES.RSVP_DATA, rebalanced);
-      }
-
       const timezone = settings.accessPeriod?.timezone || org.timezone || 'Africa/Lagos';
       const currentWeekId = getCurrentPeriodId(settings, timezone);
 
@@ -214,8 +208,8 @@ export default async function handler(req, res) {
           timezone: org.timezone,
           visibility: org.visibility || 'private',
         },
-        mainList: rebalanced.mainList,
-        waitlist: rebalanced.waitlist,
+        mainList: rsvpData.mainList,
+        waitlist: rsvpData.waitlist,
         whitelist,
         settings,
         archive,
@@ -511,6 +505,7 @@ export default async function handler(req, res) {
           waitlist: rsvpData.waitlist,
           moved: person.name,
           promoted: promoted?.name || null,
+          dropoutLog,
         });
       }
 

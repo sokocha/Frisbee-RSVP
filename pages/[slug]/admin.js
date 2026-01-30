@@ -633,8 +633,9 @@ export default function OrgAdmin() {
         } else {
           showMessage(`Moved ${data.moved} to ${to === 'waitlist' ? 'waitlist' : 'main list'}.`);
         }
-        // Refresh dropout log
-        loadData();
+        if (data.dropoutLog) {
+          setDropoutLog(data.dropoutLog);
+        }
       } else {
         showMessage(data.error, 'error');
       }
