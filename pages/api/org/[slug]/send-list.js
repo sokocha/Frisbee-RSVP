@@ -77,7 +77,7 @@ async function generatePDF(mainList, weekId, orgName, sport) {
   });
 }
 
-// Update email status in KV store
+// Update email status in KV store and append to email log
 async function updateEmailStatus(orgId, weekId, status, details = {}) {
   const statusData = {
     weekId,
@@ -86,6 +86,19 @@ async function updateEmailStatus(orgId, weekId, status, details = {}) {
     ...details
   };
   await setOrgData(orgId, ORG_KEY_SUFFIXES.EMAIL_STATUS, statusData);
+
+  // Append to email log (capped at 50 entries)
+  const logEntry = {
+    timestamp: new Date().toISOString(),
+    periodId: weekId,
+    status,
+    recipientCount: details.recipientCount || 0,
+    ...(details.error && { error: details.error }),
+  };
+  const existingLog = await getOrgData(orgId, ORG_KEY_SUFFIXES.EMAIL_LOG, []);
+  const updatedLog = [logEntry, ...existingLog].slice(0, 50);
+  await setOrgData(orgId, ORG_KEY_SUFFIXES.EMAIL_LOG, updatedLog);
+
   return statusData;
 }
 
