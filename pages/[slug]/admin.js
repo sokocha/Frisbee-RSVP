@@ -339,6 +339,14 @@ export default function OrgAdmin() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const initialSettingsRef = useRef(null);
 
+  // Drag and drop
+  const [draggedPerson, setDraggedPerson] = useState(null);
+  const [dragSource, setDragSource] = useState(null);
+  const [dragOverTarget, setDragOverTarget] = useState(null);
+
+  // Dropout log
+  const [dropoutLog, setDropoutLog] = useState([]);
+
   // Email status
   const [emailStatus, setEmailStatus] = useState(null);
   const [lastEmailWeek, setLastEmailWeek] = useState(null);
@@ -456,6 +464,7 @@ export default function OrgAdmin() {
         setEmailStatus(data.emailStatus || null);
         setLastEmailWeek(data.lastEmailWeek || null);
         setEmailLog(data.emailLog || []);
+        setDropoutLog(data.dropoutLog || []);
 
         if (data.settings) {
           const formData = {
@@ -603,6 +612,62 @@ export default function OrgAdmin() {
       showMessage('Failed to remove person', 'error');
     }
     setSaving(false);
+  }
+
+  async function handleMovePerson(personId, to) {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/org/${slug}/admin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'move-person', data: { personId, to } }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setMainList(data.mainList);
+        setWaitlist(data.waitlist);
+        if (data.promoted) {
+          showMessage(`Moved ${data.moved} to ${to === 'waitlist' ? 'waitlist' : 'main list'}. ${data.promoted} promoted.`);
+        } else {
+          showMessage(`Moved ${data.moved} to ${to === 'waitlist' ? 'waitlist' : 'main list'}.`);
+        }
+        // Refresh dropout log
+        loadData();
+      } else {
+        showMessage(data.error, 'error');
+      }
+    } catch (error) {
+      showMessage('Failed to move person', 'error');
+    }
+    setSaving(false);
+  }
+
+  function handleDragStart(e, person, source) {
+    setDraggedPerson(person);
+    setDragSource(source);
+    e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function handleDragEnd() {
+    setDraggedPerson(null);
+    setDragSource(null);
+    setDragOverTarget(null);
+  }
+
+  function handleDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }
+
+  function handleDrop(e, targetList) {
+    e.preventDefault();
+    setDragOverTarget(null);
+    if (!draggedPerson || dragSource === targetList) return;
+    handleMovePerson(draggedPerson.id, targetList);
+    setDraggedPerson(null);
+    setDragSource(null);
   }
 
   async function handleSaveSettings(e) {
@@ -1112,7 +1177,17 @@ export default function OrgAdmin() {
 
                 <div className="grid md:grid-cols-2 gap-4">
                   {/* Main List */}
-                  <div className="bg-white rounded-lg border border-gray-200 p-4">
+                  <div
+                    className={`bg-white rounded-lg border-2 p-4 transition-colors ${
+                      dragOverTarget === 'mainList' && dragSource !== 'mainList'
+                        ? 'border-blue-400 bg-blue-50'
+                        : 'border-gray-200'
+                    }`}
+                    onDragOver={handleDragOver}
+                    onDragEnter={() => setDragOverTarget('mainList')}
+                    onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverTarget(null); }}
+                    onDrop={(e) => handleDrop(e, 'mainList')}
+                  >
                     <div className="flex justify-between items-center mb-4">
                       <h3 className="font-medium text-gray-900">Main List ({mainList.length}/{settingsForm.mainListLimit})</h3>
                       <button
@@ -1130,8 +1205,17 @@ export default function OrgAdmin() {
                     ) : (
                       <div className="space-y-2 max-h-80 overflow-y-auto">
                         {filteredMainList.map((person, i) => (
-                          <div key={person.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                            <div>
+                          <div
+                            key={person.id}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, person, 'mainList')}
+                            onDragEnd={handleDragEnd}
+                            className={`flex items-center justify-between p-2 bg-gray-50 rounded cursor-grab active:cursor-grabbing ${
+                              draggedPerson?.id === person.id ? 'opacity-40' : ''
+                            }`}
+                          >
+                            <div className="flex items-center">
+                              <span className="text-gray-300 mr-2 select-none">&#x2630;</span>
                               <span className="text-gray-400 text-sm mr-2">#{mainList.indexOf(person) + 1}</span>
                               <span className="font-medium">{person.name}</span>
                               {person.isWhitelisted && (
@@ -1152,17 +1236,36 @@ export default function OrgAdmin() {
                   </div>
 
                   {/* Waitlist */}
-                  <div className="bg-white rounded-lg border border-gray-200 p-4">
+                  <div
+                    className={`bg-white rounded-lg border-2 p-4 transition-colors ${
+                      dragOverTarget === 'waitlist' && dragSource !== 'waitlist'
+                        ? 'border-orange-400 bg-orange-50'
+                        : 'border-gray-200'
+                    }`}
+                    onDragOver={handleDragOver}
+                    onDragEnter={() => setDragOverTarget('waitlist')}
+                    onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverTarget(null); }}
+                    onDrop={(e) => handleDrop(e, 'waitlist')}
+                  >
                     <h3 className="font-medium text-gray-900 mb-4">Waitlist ({waitlist.length})</h3>
                     {filteredWaitlist.length === 0 ? (
                       <p className="text-gray-400 text-center py-4">
-                        {listSearchQuery ? 'No matches found' : 'Waitlist empty'}
+                        {listSearchQuery ? 'No matches found' : (dragOverTarget === 'waitlist' ? 'Drop here' : 'Waitlist empty')}
                       </p>
                     ) : (
                       <div className="space-y-2 max-h-80 overflow-y-auto">
                         {filteredWaitlist.map((person, i) => (
-                          <div key={person.id} className="flex items-center justify-between p-2 bg-orange-50 rounded">
-                            <div>
+                          <div
+                            key={person.id}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, person, 'waitlist')}
+                            onDragEnd={handleDragEnd}
+                            className={`flex items-center justify-between p-2 bg-orange-50 rounded cursor-grab active:cursor-grabbing ${
+                              draggedPerson?.id === person.id ? 'opacity-40' : ''
+                            }`}
+                          >
+                            <div className="flex items-center">
+                              <span className="text-gray-300 mr-2 select-none">&#x2630;</span>
                               <span className="text-gray-400 text-sm mr-2">#{waitlist.indexOf(person) + 1}</span>
                               <span className="font-medium">{person.name}</span>
                             </div>
@@ -1179,6 +1282,43 @@ export default function OrgAdmin() {
                     )}
                   </div>
                 </div>
+
+                {/* Dropout Log */}
+                {dropoutLog.length > 0 && (
+                  <div className="bg-white rounded-lg border border-gray-200 p-4 mt-4">
+                    <h3 className="font-medium text-gray-900 mb-3">Drop-out Log</h3>
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {[...dropoutLog].reverse().map((entry, i) => (
+                        <div key={i} className="flex items-center justify-between text-sm py-1.5 border-b border-gray-50 last:border-0">
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex text-xs font-medium px-1.5 py-0.5 rounded ${
+                              entry.action === 'self'
+                                ? 'bg-yellow-50 text-yellow-700'
+                                : entry.action === 'admin-move'
+                                ? 'bg-blue-50 text-blue-700'
+                                : 'bg-red-50 text-red-700'
+                            }`}>
+                              {entry.action === 'self' ? 'Self' : entry.action === 'admin-move' ? 'Moved' : 'Removed'}
+                            </span>
+                            <span className="font-medium">{entry.name}</span>
+                            <span className="text-gray-400">
+                              from {entry.from === 'mainList' ? 'main list' : 'waitlist'}
+                              {entry.to ? ` → ${entry.to === 'mainList' ? 'main list' : 'waitlist'}` : ''}
+                            </span>
+                          </div>
+                          <div className="text-right text-gray-400 text-xs whitespace-nowrap ml-2">
+                            {new Date(entry.timestamp).toLocaleDateString('en-US', {
+                              month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+                            })}
+                            {entry.promotedPerson && (
+                              <span className="block text-green-600">{entry.promotedPerson} promoted</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Permanent Members Section */}

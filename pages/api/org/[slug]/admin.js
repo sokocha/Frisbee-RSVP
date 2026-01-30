@@ -181,6 +181,7 @@ export default async function handler(req, res) {
       const emailStatus = await getOrgData(orgId, ORG_KEY_SUFFIXES.EMAIL_STATUS, null);
       const lastEmailWeek = await getOrgData(orgId, ORG_KEY_SUFFIXES.LAST_EMAIL, null);
       const emailLog = await getOrgData(orgId, ORG_KEY_SUFFIXES.EMAIL_LOG, []);
+      const dropoutLog = await getOrgData(orgId, ORG_KEY_SUFFIXES.DROPOUT_LOG, []);
       const limit = settings.mainListLimit || 30;
 
       const rebalanced = rebalanceLists(rsvpData.mainList, rsvpData.waitlist, limit);
@@ -221,6 +222,7 @@ export default async function handler(req, res) {
         emailStatus,
         lastEmailWeek,
         emailLog,
+        dropoutLog,
         currentWeekId
       });
     } catch (error) {
@@ -400,23 +402,115 @@ export default async function handler(req, res) {
 
         const rsvpData = await getOrgData(orgId, ORG_KEY_SUFFIXES.RSVP_DATA, { mainList: [], waitlist: [] });
 
+        const list = isWaitlist ? rsvpData.waitlist : rsvpData.mainList;
+        const person = list.find(p => p.id === personId);
+        let promoted = null;
+
         if (isWaitlist) {
           rsvpData.waitlist = rsvpData.waitlist.filter(p => p.id !== personId);
         } else {
           rsvpData.mainList = rsvpData.mainList.filter(p => p.id !== personId);
 
           if (rsvpData.waitlist.length > 0) {
-            const promoted = rsvpData.waitlist.shift();
+            promoted = rsvpData.waitlist.shift();
             rsvpData.mainList.push(promoted);
           }
         }
 
         await setOrgData(orgId, ORG_KEY_SUFFIXES.RSVP_DATA, rsvpData);
 
+        // Log the removal
+        if (person) {
+          const dropoutLog = await getOrgData(orgId, ORG_KEY_SUFFIXES.DROPOUT_LOG, []);
+          dropoutLog.push({
+            name: person.name,
+            timestamp: new Date().toISOString(),
+            from: isWaitlist ? 'waitlist' : 'mainList',
+            action: 'admin-remove',
+            promotedPerson: promoted?.name || null,
+          });
+          if (dropoutLog.length > 100) dropoutLog.splice(0, dropoutLog.length - 100);
+          await setOrgData(orgId, ORG_KEY_SUFFIXES.DROPOUT_LOG, dropoutLog);
+        }
+
         return res.status(200).json({
           success: true,
           mainList: rsvpData.mainList,
           waitlist: rsvpData.waitlist
+        });
+      }
+
+      if (action === 'move-person') {
+        const { personId, to } = data; // to: 'mainList' or 'waitlist'
+
+        if (!['mainList', 'waitlist'].includes(to)) {
+          return res.status(400).json({ error: 'Invalid target list' });
+        }
+
+        const rsvpData = await getOrgData(orgId, ORG_KEY_SUFFIXES.RSVP_DATA, { mainList: [], waitlist: [] });
+        const settings = await getOrgData(orgId, ORG_KEY_SUFFIXES.SETTINGS, getDefaultSettings(org.timezone));
+        const limit = settings.mainListLimit || 30;
+
+        const inMain = rsvpData.mainList.find(p => p.id === personId);
+        const inWait = rsvpData.waitlist.find(p => p.id === personId);
+
+        if (!inMain && !inWait) {
+          return res.status(404).json({ error: 'Person not found' });
+        }
+
+        const person = inMain || inWait;
+        const from = inMain ? 'mainList' : 'waitlist';
+
+        if (from === to) {
+          return res.status(200).json({ success: true, mainList: rsvpData.mainList, waitlist: rsvpData.waitlist });
+        }
+
+        let promoted = null;
+
+        if (to === 'waitlist') {
+          // Move from main → waitlist: remove, auto-promote first waitlister, then append dropped person
+          rsvpData.mainList = rsvpData.mainList.filter(p => p.id !== personId);
+
+          if (rsvpData.waitlist.length > 0) {
+            promoted = rsvpData.waitlist.shift();
+            rsvpData.mainList.push(promoted);
+          }
+
+          rsvpData.waitlist.push(person);
+        } else {
+          // Move from waitlist → main
+          rsvpData.waitlist = rsvpData.waitlist.filter(p => p.id !== personId);
+          rsvpData.mainList.push(person);
+
+          // If over limit, rebalance
+          if (rsvpData.mainList.length > limit) {
+            const rebalanced = rebalanceLists(rsvpData.mainList, rsvpData.waitlist, limit);
+            rsvpData.mainList = rebalanced.mainList;
+            rsvpData.waitlist = rebalanced.waitlist;
+          }
+        }
+
+        await setOrgData(orgId, ORG_KEY_SUFFIXES.RSVP_DATA, rsvpData);
+
+        // Log the move
+        const dropoutLog = await getOrgData(orgId, ORG_KEY_SUFFIXES.DROPOUT_LOG, []);
+        dropoutLog.push({
+          name: person.name,
+          timestamp: new Date().toISOString(),
+          from,
+          to,
+          action: 'admin-move',
+          promotedPerson: promoted?.name || null,
+        });
+        if (dropoutLog.length > 100) dropoutLog.splice(0, dropoutLog.length - 100);
+        await setOrgData(orgId, ORG_KEY_SUFFIXES.DROPOUT_LOG, dropoutLog);
+
+        return res.status(200).json({
+          success: true,
+          mainList: rsvpData.mainList,
+          waitlist: rsvpData.waitlist,
+          moved: person.name,
+          promoted: promoted?.name || null,
         });
       }
 
