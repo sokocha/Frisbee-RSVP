@@ -273,6 +273,7 @@ export default function OrgAdmin() {
   // Email status
   const [emailStatus, setEmailStatus] = useState(null);
   const [lastEmailWeek, setLastEmailWeek] = useState(null);
+  const [emailLog, setEmailLog] = useState([]);
   const [sendingTestEmail, setSendingTestEmail] = useState(false);
 
   // Whitelist form
@@ -385,6 +386,7 @@ export default function OrgAdmin() {
         setArchive(data.archive || []);
         setEmailStatus(data.emailStatus || null);
         setLastEmailWeek(data.lastEmailWeek || null);
+        setEmailLog(data.emailLog || []);
 
         if (data.settings) {
           const formData = {
@@ -735,6 +737,41 @@ export default function OrgAdmin() {
       .replace(/\{\{sport\}\}/g, org?.sport || 'sport');
 
     return { subject, body };
+  }
+
+  // Compute next scheduled email send time
+  function getNextScheduledEmail() {
+    if (!settingsForm.accessPeriod?.enabled || !settingsForm.email?.enabled) return null;
+    if (!settingsForm.email?.recipients?.length && !emailRecipients.trim()) return null;
+
+    const timezone = settingsForm.accessPeriod?.timezone || org?.timezone || 'Africa/Lagos';
+    const { endDay, endHour, endMinute } = settingsForm.accessPeriod;
+
+    // Get current time in the org's timezone
+    const now = new Date();
+    const localNow = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+    const currentDay = localNow.getDay();
+    const currentHour = localNow.getHours();
+    const currentMinute = localNow.getMinutes();
+
+    const currentMins = currentDay * 24 * 60 + currentHour * 60 + currentMinute;
+    const endMins = endDay * 24 * 60 + endHour * 60 + (endMinute || 0);
+
+    // Calculate minutes until the next close time
+    let minsUntilClose = endMins - currentMins;
+    if (minsUntilClose <= 0) minsUntilClose += 7 * 24 * 60;
+
+    // The close time in the local timezone
+    const closeDate = new Date(localNow.getTime() + minsUntilClose * 60 * 1000);
+
+    // Round up to the next :00 hour (matching cron schedule 0 * * * *)
+    const closeMinutes = closeDate.getMinutes();
+    if (closeMinutes > 0) {
+      closeDate.setMinutes(0, 0, 0);
+      closeDate.setHours(closeDate.getHours() + 1);
+    }
+
+    return closeDate;
   }
 
   // Export list to PDF (client-side generation)
@@ -1792,38 +1829,6 @@ export default function OrgAdmin() {
                     </div>
                   </div>
 
-                  {/* Last Sent Indicator */}
-                  {(emailStatus || lastEmailWeek) && (
-                    <div className="bg-white rounded-lg border border-gray-200 p-6">
-                      <h3 className="font-semibold mb-3">Email Status</h3>
-                      <div className="space-y-2">
-                        {lastEmailWeek && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <span className={`w-2 h-2 rounded-full ${emailStatus?.success !== false ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                            <span className="text-gray-600">
-                              Last sent: Week {lastEmailWeek}
-                              {emailStatus?.sentAt && (
-                                <span className="text-gray-400 ml-1">
-                                  ({new Date(emailStatus.sentAt).toLocaleDateString('en-US', {
-                                    month: 'short',
-                                    day: 'numeric',
-                                    hour: 'numeric',
-                                    minute: '2-digit',
-                                  })})
-                                </span>
-                              )}
-                            </span>
-                          </div>
-                        )}
-                        {emailStatus?.recipientCount && (
-                          <p className="text-xs text-gray-500">
-                            Sent to {emailStatus.recipientCount} recipient{emailStatus.recipientCount !== 1 ? 's' : ''}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
                   {/* Test & Manual Send Section */}
                   <div className="bg-white rounded-lg border border-gray-200 p-6">
                     <h3 className="font-semibold mb-4">Send Email</h3>
@@ -1859,6 +1864,83 @@ export default function OrgAdmin() {
                   </div>
                 </>
               )}
+
+              {/* Email History - always visible */}
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <h3 className="font-semibold mb-4">Email History</h3>
+
+                {/* Next Scheduled Email Banner */}
+                {(() => {
+                  const nextSend = getNextScheduledEmail();
+                  if (!nextSend) return null;
+                  const timezone = settingsForm.accessPeriod?.timezone || org?.timezone || 'Africa/Lagos';
+                  return (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 flex items-center gap-2">
+                      <span className="text-blue-500 text-lg">📅</span>
+                      <div>
+                        <span className="text-sm font-medium text-blue-800">Scheduled</span>
+                        <span className="text-sm text-blue-700 ml-1">
+                          — Next email will be sent around{' '}
+                          {nextSend.toLocaleString('en-US', {
+                            timeZone: timezone,
+                            weekday: 'short',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true,
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {emailLog.length === 0 ? (
+                  <p className="text-gray-400 text-center py-4">No emails sent yet.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200">
+                          <th className="text-left py-2 pr-3 font-medium text-gray-500">Timestamp</th>
+                          <th className="text-left py-2 pr-3 font-medium text-gray-500">Period</th>
+                          <th className="text-left py-2 pr-3 font-medium text-gray-500">Status</th>
+                          <th className="text-right py-2 font-medium text-gray-500">Recipients</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {emailLog.map((entry, i) => (
+                          <tr key={i} className="border-b border-gray-100 last:border-0">
+                            <td className="py-2 pr-3 text-gray-600 whitespace-nowrap">
+                              {new Date(entry.timestamp).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              })}
+                            </td>
+                            <td className="py-2 pr-3 text-gray-600">{entry.periodId}</td>
+                            <td className="py-2 pr-3">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                                entry.status === 'sent'
+                                  ? 'bg-green-100 text-green-700'
+                                  : 'bg-red-100 text-red-700'
+                              }`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${
+                                  entry.status === 'sent' ? 'bg-green-500' : 'bg-red-500'
+                                }`}></span>
+                                {entry.status === 'sent' ? 'Sent' : 'Failed'}
+                              </span>
+                            </td>
+                            <td className="py-2 text-right text-gray-600">{entry.recipientCount}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
 
               {/* Save Button */}
               <button

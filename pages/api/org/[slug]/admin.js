@@ -180,6 +180,7 @@ export default async function handler(req, res) {
       const archive = await getOrgData(orgId, ORG_KEY_SUFFIXES.ARCHIVE, []);
       const emailStatus = await getOrgData(orgId, ORG_KEY_SUFFIXES.EMAIL_STATUS, null);
       const lastEmailWeek = await getOrgData(orgId, ORG_KEY_SUFFIXES.LAST_EMAIL, null);
+      const emailLog = await getOrgData(orgId, ORG_KEY_SUFFIXES.EMAIL_LOG, []);
       const limit = settings.mainListLimit || 30;
 
       const rebalanced = rebalanceLists(rsvpData.mainList, rsvpData.waitlist, limit);
@@ -219,6 +220,7 @@ export default async function handler(req, res) {
         archive,
         emailStatus,
         lastEmailWeek,
+        emailLog,
         currentWeekId
       });
     } catch (error) {
