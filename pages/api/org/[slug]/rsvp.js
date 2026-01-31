@@ -7,6 +7,25 @@ import { isFormOpen, getCurrentPeriodId } from '../../../../lib/recurrence';
 const DEFAULT_MAIN_LIST_LIMIT = 30;
 
 /**
+ * Compute when dropouts are no longer allowed.
+ * If email sending is enabled, the deadline is the next UTC :00 at or after
+ * the window close time (i.e. when the hourly cron would fire and send).
+ * Otherwise the deadline equals the window close time itself.
+ */
+function computeDropoutDeadline(closeTimeISO, settings) {
+  if (!closeTimeISO) return null;
+  const emailEnabled = settings?.email?.enabled && settings?.email?.recipients?.length > 0;
+  if (!emailEnabled) return closeTimeISO;
+
+  const close = new Date(closeTimeISO);
+  // Round up to the next UTC hour mark (when the cron runs)
+  if (close.getUTCMinutes() > 0 || close.getUTCSeconds() > 0 || close.getUTCMilliseconds() > 0) {
+    close.setUTCHours(close.getUTCHours() + 1, 0, 0, 0);
+  }
+  return close.toISOString();
+}
+
+/**
  * Sort people by priority:
  * 1. Whitelisted members first (by earliest timestamp)
  * 2. Non-whitelisted members second (by earliest timestamp)
@@ -209,7 +228,8 @@ export default async function handler(req, res) {
           isOpen: accessStatus.isOpen,
           message: accessStatus.message,
           nextOpenTime: accessStatus.nextOpenTime,
-          closeTime: accessStatus.closeTime || null
+          closeTime: accessStatus.closeTime || null,
+          dropoutDeadline: computeDropoutDeadline(accessStatus.closeTime, settings),
         },
         snoozedNames,
         whitelist: whitelist.map(w => ({ name: w.name, deviceId: w.deviceId })),
@@ -318,9 +338,10 @@ export default async function handler(req, res) {
     try {
       const settings = await getOrgData(orgId, ORG_KEY_SUFFIXES.SETTINGS, getDefaultSettings(org.timezone));
       const accessStatus = isFormOpen(settings);
+      const dropoutDeadline = computeDropoutDeadline(accessStatus.closeTime, settings);
 
-      if (!accessStatus.isOpen) {
-        return res.status(403).json({ error: accessStatus.message });
+      if (dropoutDeadline && new Date() >= new Date(dropoutDeadline)) {
+        return res.status(403).json({ error: 'The dropout deadline has passed. The list has been finalized.' });
       }
 
       const data = await getOrgData(orgId, ORG_KEY_SUFFIXES.RSVP_DATA, { mainList: [], waitlist: [] });
