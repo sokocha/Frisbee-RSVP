@@ -67,7 +67,7 @@ function Toast({ message, onClose }) {
   );
 }
 
-function CountdownTimer({ targetTime }) {
+function CountdownTimer({ targetTime, className }) {
   const [timeLeft, setTimeLeft] = useState('');
   useEffect(() => {
     const calculateTimeLeft = () => {
@@ -90,7 +90,7 @@ function CountdownTimer({ targetTime }) {
     const interval = setInterval(calculateTimeLeft, 1000);
     return () => clearInterval(interval);
   }, [targetTime]);
-  return <div className="text-2xl font-mono font-bold text-white animate-pulse">{timeLeft}</div>;
+  return <div className={className || "text-2xl font-mono font-bold text-white animate-pulse"}>{timeLeft}</div>;
 }
 
 function Spinner() {
@@ -260,7 +260,7 @@ export default function OrgRSVP() {
   const [deviceId, setDeviceId] = useState(null);
   const [hasSignedUp, setHasSignedUp] = useState(false);
   const [mySignup, setMySignup] = useState(null);
-  const [accessStatus, setAccessStatus] = useState({ isOpen: true, message: null, nextOpenTime: null });
+  const [accessStatus, setAccessStatus] = useState({ isOpen: true, message: null, nextOpenTime: null, closeTime: null });
   const [mainListLimit, setMainListLimit] = useState(DEFAULT_MAIN_LIST_LIMIT);
   const [savedName, setStoredName] = useState('');
   const [showNameEdit, setShowNameEdit] = useState(false);
@@ -303,7 +303,7 @@ export default function OrgRSVP() {
         setOrg(data.organization);
         setMainList(data.mainList || []);
         setWaitlist(data.waitlist || []);
-        setAccessStatus(data.accessStatus || { isOpen: true, message: null, nextOpenTime: null });
+        setAccessStatus(data.accessStatus || { isOpen: true, message: null, nextOpenTime: null, closeTime: null });
         setMainListLimit(data.mainListLimit || DEFAULT_MAIN_LIST_LIMIT);
         setGameInfo(data.gameInfo || null);
         setWhatsapp(data.whatsapp || null);
@@ -786,6 +786,24 @@ export default function OrgRSVP() {
                   <p className="text-white/50 text-xs mt-1">You'll be notified when a spot opens up</p>
                 </div>
               )}
+              {/* Dropout deadline info */}
+              {accessStatus.isOpen && accessStatus.closeTime && (
+                <div className="mt-2 flex items-center justify-center gap-1.5 text-white/60 text-xs">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>Dropout deadline in</span>
+                  <CountdownTimer targetTime={accessStatus.closeTime} className="text-xs font-mono font-semibold text-white/80 inline" />
+                </div>
+              )}
+              {!accessStatus.isOpen && (
+                <div className="mt-2 flex items-center justify-center gap-1.5 text-amber-300/80 text-xs">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H9m-3-4V7a4 4 0 118 0v4m-8 0h12a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-6a2 2 0 012-2z" />
+                  </svg>
+                  <span>Dropout deadline has passed — the list is being finalized</span>
+                </div>
+              )}
             </div>
           )}
 
@@ -927,7 +945,7 @@ export default function OrgRSVP() {
                           Skip week?
                         </button>
                       )}
-                      {isMySignup(person) && !person.isWhitelisted && (
+                      {isMySignup(person) && !person.isWhitelisted && accessStatus.isOpen && (
                         <button
                           onClick={() => setConfirmModal({ show: true, personId: person.id, isWaitlist: false })}
                           disabled={submitting}
@@ -978,7 +996,7 @@ export default function OrgRSVP() {
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <span className="text-xs text-gray-400">#{index + 1}</span>
-                        {isMySignup(person) && (
+                        {isMySignup(person) && accessStatus.isOpen && (
                           <button
                             onClick={() => setConfirmModal({ show: true, personId: person.id, isWaitlist: true })}
                             disabled={submitting}
