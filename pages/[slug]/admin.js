@@ -765,14 +765,13 @@ export default function OrgAdmin() {
     let minsUntilClose = endMins - currentMins;
     if (minsUntilClose <= 0) minsUntilClose += 7 * 24 * 60;
 
-    // The close time in the local timezone
-    const closeDate = new Date(localNow.getTime() + minsUntilClose * 60 * 1000);
+    // Use actual UTC time (not localNow) to avoid double timezone conversion
+    // when the result is later formatted with toLocaleString({ timeZone })
+    const closeDate = new Date(now.getTime() + minsUntilClose * 60 * 1000);
 
-    // Round up to the next :00 hour (matching cron schedule 0 * * * *)
-    const closeMinutes = closeDate.getMinutes();
-    if (closeMinutes > 0) {
-      closeDate.setMinutes(0, 0, 0);
-      closeDate.setHours(closeDate.getHours() + 1);
+    // Round up to next UTC :00 hour (cron runs at 0 * * * * UTC)
+    if (closeDate.getUTCMinutes() > 0 || closeDate.getUTCSeconds() > 0) {
+      closeDate.setUTCHours(closeDate.getUTCHours() + 1, 0, 0, 0);
     }
 
     return closeDate;
