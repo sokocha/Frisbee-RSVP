@@ -7,6 +7,23 @@ import { isFormOpen, getCurrentPeriodId } from '../../../../lib/recurrence';
 const DEFAULT_MAIN_LIST_LIMIT = 30;
 
 /**
+ * Compute the predicted email send time for a given window close.
+ * The Vercel cron fires at UTC :00 every hour, so the email will be
+ * sent at the first UTC :00 at or after the close time.
+ * Returns an ISO string, or null if email is not enabled or closeTime is missing.
+ */
+function getEmailSendTime(closeTimeISO, settings) {
+  if (!closeTimeISO) return null;
+  if (!settings?.email?.enabled || !settings?.email?.recipients?.length) return null;
+
+  const close = new Date(closeTimeISO);
+  if (close.getUTCMinutes() > 0 || close.getUTCSeconds() > 0 || close.getUTCMilliseconds() > 0) {
+    close.setUTCHours(close.getUTCHours() + 1, 0, 0, 0);
+  }
+  return close.toISOString();
+}
+
+/**
  * Sort people by priority:
  * 1. Whitelisted members first (by earliest timestamp)
  * 2. Non-whitelisted members second (by earliest timestamp)
@@ -217,6 +234,7 @@ export default async function handler(req, res) {
           closeTime: accessStatus.closeTime || null,
           emailEnabled,
           emailSentForPeriod,
+          emailSendTime: getEmailSendTime(accessStatus.closeTime, settings),
         },
         snoozedNames,
         whitelist: whitelist.map(w => ({ name: w.name, deviceId: w.deviceId })),
