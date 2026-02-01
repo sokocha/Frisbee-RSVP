@@ -7,25 +7,6 @@ import { isFormOpen, getCurrentPeriodId } from '../../../../lib/recurrence';
 const DEFAULT_MAIN_LIST_LIMIT = 30;
 
 /**
- * Compute when dropouts are no longer allowed.
- * If email sending is enabled, the deadline is the next UTC :00 at or after
- * the window close time (i.e. when the hourly cron would fire and send).
- * Otherwise the deadline equals the window close time itself.
- */
-function computeDropoutDeadline(closeTimeISO, settings) {
-  if (!closeTimeISO) return null;
-  const emailEnabled = settings?.email?.enabled && settings?.email?.recipients?.length > 0;
-  if (!emailEnabled) return closeTimeISO;
-
-  const close = new Date(closeTimeISO);
-  // Round up to the next UTC hour mark (when the cron runs)
-  if (close.getUTCMinutes() > 0 || close.getUTCSeconds() > 0 || close.getUTCMilliseconds() > 0) {
-    close.setUTCHours(close.getUTCHours() + 1, 0, 0, 0);
-  }
-  return close.toISOString();
-}
-
-/**
  * Sort people by priority:
  * 1. Whitelisted members first (by earliest timestamp)
  * 2. Non-whitelisted members second (by earliest timestamp)
@@ -213,6 +194,11 @@ export default async function handler(req, res) {
         }
       }
 
+      // Check if email has been sent for the current period
+      const emailEnabled = !!(settings?.email?.enabled && settings?.email?.recipients?.length);
+      const lastEmailPeriod = await getOrgData(orgId, ORG_KEY_SUFFIXES.LAST_EMAIL, null);
+      const emailSentForPeriod = emailEnabled && lastEmailPeriod === currentPeriodId;
+
       return res.status(200).json({
         organization: {
           slug: org.slug,
@@ -229,7 +215,8 @@ export default async function handler(req, res) {
           message: accessStatus.message,
           nextOpenTime: accessStatus.nextOpenTime,
           closeTime: accessStatus.closeTime || null,
-          dropoutDeadline: computeDropoutDeadline(accessStatus.closeTime, settings),
+          emailEnabled,
+          emailSentForPeriod,
         },
         snoozedNames,
         whitelist: whitelist.map(w => ({ name: w.name, deviceId: w.deviceId })),
@@ -338,10 +325,19 @@ export default async function handler(req, res) {
     try {
       const settings = await getOrgData(orgId, ORG_KEY_SUFFIXES.SETTINGS, getDefaultSettings(org.timezone));
       const accessStatus = isFormOpen(settings);
-      const dropoutDeadline = computeDropoutDeadline(accessStatus.closeTime, settings);
+      const emailEnabled = !!(settings?.email?.enabled && settings?.email?.recipients?.length);
 
-      if (dropoutDeadline && new Date() >= new Date(dropoutDeadline)) {
-        return res.status(403).json({ error: 'The dropout deadline has passed. The list has been finalized.' });
+      if (emailEnabled) {
+        // When email is enabled, dropouts are blocked once the email has been sent
+        const timezone = settings.accessPeriod?.timezone || org.timezone || 'Africa/Lagos';
+        const periodId = getCurrentPeriodId(settings, timezone);
+        const lastEmailPeriod = await getOrgData(orgId, ORG_KEY_SUFFIXES.LAST_EMAIL, null);
+        if (lastEmailPeriod === periodId) {
+          return res.status(403).json({ error: 'The list has already been sent. Dropouts are no longer possible.' });
+        }
+      } else if (!accessStatus.isOpen) {
+        // When email is not enabled, dropouts are blocked when the window closes
+        return res.status(403).json({ error: accessStatus.message });
       }
 
       const data = await getOrgData(orgId, ORG_KEY_SUFFIXES.RSVP_DATA, { mainList: [], waitlist: [] });

@@ -260,7 +260,7 @@ export default function OrgRSVP() {
   const [deviceId, setDeviceId] = useState(null);
   const [hasSignedUp, setHasSignedUp] = useState(false);
   const [mySignup, setMySignup] = useState(null);
-  const [accessStatus, setAccessStatus] = useState({ isOpen: true, message: null, nextOpenTime: null, closeTime: null, dropoutDeadline: null });
+  const [accessStatus, setAccessStatus] = useState({ isOpen: true, message: null, nextOpenTime: null, closeTime: null, emailEnabled: false, emailSentForPeriod: false });
   const [mainListLimit, setMainListLimit] = useState(DEFAULT_MAIN_LIST_LIMIT);
   const [savedName, setStoredName] = useState('');
   const [showNameEdit, setShowNameEdit] = useState(false);
@@ -277,9 +277,11 @@ export default function OrgRSVP() {
   const [snoozing, setSnoozing] = useState(false);
   const [snoozedNames, setSnoozedNames] = useState([]);
 
-  // Whether the dropout deadline is still in the future (users can still drop out)
-  const canDropOut = accessStatus.dropoutDeadline
-    ? new Date() < new Date(accessStatus.dropoutDeadline)
+  // Whether the user can still drop out:
+  // - If email is enabled: allowed until the list email has actually been sent
+  // - If email is not enabled: allowed while the RSVP window is open
+  const canDropOut = accessStatus.emailEnabled
+    ? !accessStatus.emailSentForPeriod
     : accessStatus.isOpen;
 
   const checkMySignup = useCallback((mainList, waitlist, currentDeviceId) => {
@@ -308,7 +310,7 @@ export default function OrgRSVP() {
         setOrg(data.organization);
         setMainList(data.mainList || []);
         setWaitlist(data.waitlist || []);
-        setAccessStatus(data.accessStatus || { isOpen: true, message: null, nextOpenTime: null, closeTime: null, dropoutDeadline: null });
+        setAccessStatus(data.accessStatus || { isOpen: true, message: null, nextOpenTime: null, closeTime: null, emailEnabled: false, emailSentForPeriod: false });
         setMainListLimit(data.mainListLimit || DEFAULT_MAIN_LIST_LIMIT);
         setGameInfo(data.gameInfo || null);
         setWhatsapp(data.whatsapp || null);
@@ -791,14 +793,30 @@ export default function OrgRSVP() {
                   <p className="text-white/50 text-xs mt-1">You'll be notified when a spot opens up</p>
                 </div>
               )}
-              {/* Dropout deadline info */}
-              {canDropOut && accessStatus.dropoutDeadline && (
+              {/* Dropout status info */}
+              {canDropOut && !accessStatus.isOpen && accessStatus.emailEnabled && (
+                <div className="mt-2 flex items-center justify-center gap-1.5 text-white/60 text-xs">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>You can still drop out — the list email hasn't been sent yet</span>
+                </div>
+              )}
+              {canDropOut && accessStatus.isOpen && accessStatus.emailEnabled && (
+                <div className="mt-2 flex items-center justify-center gap-1.5 text-white/60 text-xs">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>You can drop out until the list email is sent</span>
+                </div>
+              )}
+              {canDropOut && !accessStatus.emailEnabled && accessStatus.closeTime && accessStatus.isOpen && (
                 <div className="mt-2 flex items-center justify-center gap-1.5 text-white/60 text-xs">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <span>Dropout deadline in</span>
-                  <CountdownTimer targetTime={accessStatus.dropoutDeadline} className="text-xs font-mono font-semibold text-white/80 inline" />
+                  <CountdownTimer targetTime={accessStatus.closeTime} className="text-xs font-mono font-semibold text-white/80 inline" />
                 </div>
               )}
               {!canDropOut && (
@@ -806,7 +824,7 @@ export default function OrgRSVP() {
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H9m-3-4V7a4 4 0 118 0v4m-8 0h12a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-6a2 2 0 012-2z" />
                   </svg>
-                  <span>Dropout deadline has passed — the list has been finalized</span>
+                  <span>{accessStatus.emailEnabled ? 'The list has been sent — dropouts are no longer possible' : 'Dropout deadline has passed'}</span>
                 </div>
               )}
             </div>
