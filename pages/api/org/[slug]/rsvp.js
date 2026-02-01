@@ -7,6 +7,23 @@ import { isFormOpen, getCurrentPeriodId } from '../../../../lib/recurrence';
 const DEFAULT_MAIN_LIST_LIMIT = 30;
 
 /**
+ * Compute the predicted email send time for a given window close.
+ * The Vercel cron fires at UTC :00 every hour, so the email will be
+ * sent at the first UTC :00 at or after the close time.
+ * Returns an ISO string, or null if email is not enabled or closeTime is missing.
+ */
+function getEmailSendTime(closeTimeISO, settings) {
+  if (!closeTimeISO) return null;
+  if (!settings?.email?.enabled || !settings?.email?.recipients?.length) return null;
+
+  const close = new Date(closeTimeISO);
+  if (close.getUTCMinutes() > 0 || close.getUTCSeconds() > 0 || close.getUTCMilliseconds() > 0) {
+    close.setUTCHours(close.getUTCHours() + 1, 0, 0, 0);
+  }
+  return close.toISOString();
+}
+
+/**
  * Sort people by priority:
  * 1. Whitelisted members first (by earliest timestamp)
  * 2. Non-whitelisted members second (by earliest timestamp)
@@ -194,6 +211,11 @@ export default async function handler(req, res) {
         }
       }
 
+      // Check if email has been sent for the current period
+      const emailEnabled = !!(settings?.email?.enabled && settings?.email?.recipients?.length);
+      const lastEmailPeriod = await getOrgData(orgId, ORG_KEY_SUFFIXES.LAST_EMAIL, null);
+      const emailSentForPeriod = emailEnabled && lastEmailPeriod === currentPeriodId;
+
       return res.status(200).json({
         organization: {
           slug: org.slug,
@@ -208,7 +230,11 @@ export default async function handler(req, res) {
         accessStatus: {
           isOpen: accessStatus.isOpen,
           message: accessStatus.message,
-          nextOpenTime: accessStatus.nextOpenTime
+          nextOpenTime: accessStatus.nextOpenTime,
+          closeTime: accessStatus.closeTime || null,
+          emailEnabled,
+          emailSentForPeriod,
+          emailSendTime: getEmailSendTime(accessStatus.closeTime, settings),
         },
         snoozedNames,
         whitelist: whitelist.map(w => ({ name: w.name, deviceId: w.deviceId })),
@@ -317,8 +343,18 @@ export default async function handler(req, res) {
     try {
       const settings = await getOrgData(orgId, ORG_KEY_SUFFIXES.SETTINGS, getDefaultSettings(org.timezone));
       const accessStatus = isFormOpen(settings);
+      const emailEnabled = !!(settings?.email?.enabled && settings?.email?.recipients?.length);
 
-      if (!accessStatus.isOpen) {
+      if (emailEnabled) {
+        // When email is enabled, dropouts are blocked once the email has been sent
+        const timezone = settings.accessPeriod?.timezone || org.timezone || 'Africa/Lagos';
+        const periodId = getCurrentPeriodId(settings, timezone);
+        const lastEmailPeriod = await getOrgData(orgId, ORG_KEY_SUFFIXES.LAST_EMAIL, null);
+        if (lastEmailPeriod === periodId) {
+          return res.status(403).json({ error: 'The list has already been sent. Dropouts are no longer possible.' });
+        }
+      } else if (!accessStatus.isOpen) {
+        // When email is not enabled, dropouts are blocked when the window closes
         return res.status(403).json({ error: accessStatus.message });
       }
 
