@@ -188,10 +188,15 @@ async function checkAndResetIfNeeded(settings) {
       await kv.set(ARCHIVE_KEY, archive);
     }
 
-    // Reset: keep only whitelisted people (who aren't snoozed)
+    // Reset: keep whitelisted people and restore those who snoozed the prior period.
     const snoozedData = await kv.get(SNOOZED_KEY) || { weekId: null, names: [] };
     const whitelistedPeople = rsvpData.mainList.filter(p => p.isWhitelisted);
-    await kv.set(RSVP_KEY, { mainList: whitelistedPeople, waitlist: [] });
+    const alreadyPresent = new Set(whitelistedPeople.map(p => p.name.toLowerCase()));
+    const restoredFromSnooze = (snoozedData.names || [])
+      .map(entry => (typeof entry === 'object' && entry?.snapshot) ? entry.snapshot : null)
+      .filter(snap => snap && !alreadyPresent.has(snap.name.toLowerCase()));
+    const newMainList = [...whitelistedPeople, ...restoredFromSnooze];
+    await kv.set(RSVP_KEY, { mainList: newMainList, waitlist: [] });
 
     // Clear snoozed list for new week
     await kv.set(SNOOZED_KEY, { weekId: currentWeekId, names: [] });

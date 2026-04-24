@@ -488,6 +488,107 @@ describe('Org RSVP API - PATCH (snooze)', () => {
   });
 });
 
+describe('Org RSVP API - weekly reset', () => {
+  // Configure the org with an always-open weekly access window so that a GET
+  // will run checkAndResetIfNeeded regardless of the actual wall-clock time.
+  function enableAlwaysOpenAccess(orgId) {
+    mockKvStore[`org:${orgId}:settings`] = {
+      mainListLimit: 30,
+      accessPeriod: {
+        enabled: true,
+        startDay: 0, startHour: 0, startMinute: 0,
+        endDay: 6, endHour: 23, endMinute: 59,
+        timezone: 'Africa/Lagos',
+      },
+    };
+  }
+
+  it('restores snoozed members to the main list when a new period starts', async () => {
+    const orgId = setupTestOrg('test-org');
+    enableAlwaysOpenAccess(orgId);
+
+    // Previous period left one whitelisted member on the list and one snoozed.
+    const originalTimestamp = '2026-01-01T10:00:00.000Z';
+    mockKvStore[`org:${orgId}:rsvp-data`] = {
+      mainList: [{
+        id: 1,
+        name: 'Alice',
+        isWhitelisted: true,
+        deviceId: 'alice-device',
+        timestamp: originalTimestamp,
+      }],
+      waitlist: [],
+    };
+    mockKvStore[`org:${orgId}:snoozed`] = {
+      weekId: 'prev-period',
+      names: [{
+        nameLC: 'bob',
+        snapshot: {
+          id: 2,
+          name: 'Bob',
+          isWhitelisted: true,
+          deviceId: 'bob-device',
+          timestamp: originalTimestamp,
+        },
+      }],
+    };
+    // Force the reset branch: lastReset differs from whatever the current period id is.
+    mockKvStore[`org:${orgId}:last-reset`] = 'definitely-not-current';
+
+    const { req, res } = createMockReqRes('GET', 'test-org');
+    await handler(req, res);
+
+    const responseBody = res.json.mock.calls[0][0];
+    expect(responseBody.mainList).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'Alice' }),
+        expect.objectContaining({ name: 'Bob', timestamp: originalTimestamp }),
+      ])
+    );
+    expect(responseBody.snoozedNames).toEqual([]);
+    expect(mockKvStore[`org:${orgId}:snoozed`]).toEqual(
+      expect.objectContaining({ names: [] })
+    );
+  });
+
+  it('does not duplicate a member already on the main list', async () => {
+    const orgId = setupTestOrg('test-org');
+    enableAlwaysOpenAccess(orgId);
+
+    mockKvStore[`org:${orgId}:rsvp-data`] = {
+      mainList: [{
+        id: 1,
+        name: 'Carol',
+        isWhitelisted: true,
+        deviceId: 'carol-device',
+        timestamp: '2026-01-01T10:00:00.000Z',
+      }],
+      waitlist: [],
+    };
+    mockKvStore[`org:${orgId}:snoozed`] = {
+      weekId: 'prev-period',
+      names: [{
+        nameLC: 'carol',
+        snapshot: {
+          id: 99,
+          name: 'Carol',
+          isWhitelisted: true,
+          deviceId: 'carol-device',
+          timestamp: '2025-12-01T10:00:00.000Z',
+        },
+      }],
+    };
+    mockKvStore[`org:${orgId}:last-reset`] = 'definitely-not-current';
+
+    const { req, res } = createMockReqRes('GET', 'test-org');
+    await handler(req, res);
+
+    const responseBody = res.json.mock.calls[0][0];
+    const carols = responseBody.mainList.filter(p => p.name === 'Carol');
+    expect(carols).toHaveLength(1);
+  });
+});
+
 describe('Org RSVP API - Method not allowed', () => {
   it('returns 405 for unsupported methods', async () => {
     setupTestOrg('test-org');

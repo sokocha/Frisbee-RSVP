@@ -107,7 +107,16 @@ async function checkAndResetIfNeeded(orgId, settings) {
     }
 
     const whitelistedPeople = rsvpData.mainList.filter(p => p.isWhitelisted);
-    await setOrgData(orgId, ORG_KEY_SUFFIXES.RSVP_DATA, { mainList: whitelistedPeople, waitlist: [] });
+
+    // Restore members who snoozed the previous period so they rejoin automatically.
+    const prevSnoozed = await getOrgData(orgId, ORG_KEY_SUFFIXES.SNOOZED, { names: [] });
+    const alreadyPresent = new Set(whitelistedPeople.map(p => p.name.toLowerCase()));
+    const restoredFromSnooze = (prevSnoozed.names || [])
+      .map(entry => (typeof entry === 'object' && entry?.snapshot) ? entry.snapshot : null)
+      .filter(snap => snap && !alreadyPresent.has(snap.name.toLowerCase()));
+
+    const newMainList = [...whitelistedPeople, ...restoredFromSnooze];
+    await setOrgData(orgId, ORG_KEY_SUFFIXES.RSVP_DATA, { mainList: newMainList, waitlist: [] });
     await setOrgData(orgId, ORG_KEY_SUFFIXES.SNOOZED, { weekId: currentPeriodId, names: [] });
     await setOrgData(orgId, ORG_KEY_SUFFIXES.LAST_RESET, currentPeriodId);
 
