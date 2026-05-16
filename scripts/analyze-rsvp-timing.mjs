@@ -194,19 +194,26 @@ function computeOpenTime(tsISO, settings) {
   const tz = settings.accessPeriod.timezone || 'Africa/Lagos';
   const { startDay, startHour, startMinute } = settings.accessPeriod;
   const utc = new Date(tsISO);
-  const local = new Date(utc.toLocaleString('en-US', { timeZone: tz }));
 
-  const target = new Date(local);
-  let daysBack = (local.getDay() - startDay + 7) % 7;
+  // Get tz wall-clock components for utc via Intl (no ms involved).
+  const tzView = new Date(utc.toLocaleString('en-US', { timeZone: tz }));
+
+  let daysBack = (tzView.getDay() - startDay + 7) % 7;
+  const currentMinutes = tzView.getHours() * 60 + tzView.getMinutes();
+  const startMinutes = startHour * 60 + startMinute;
+  if (daysBack === 0 && currentMinutes < startMinutes) daysBack = 7;
+
+  const target = new Date(tzView);
   target.setDate(target.getDate() - daysBack);
   target.setHours(startHour, startMinute, 0, 0);
-  if (target > local) {
-    target.setDate(target.getDate() - 7);
-  }
-  // local was built by stringifying utc in tz — the diff gives the tz offset
-  // that applied at that wall-clock instant, which we subtract to get UTC back.
-  const offsetMs = local.getTime() - utc.getTime();
-  return new Date(target.getTime() - offsetMs);
+
+  // Compute tz offset using a second-aligned reference so utc's milliseconds
+  // don't leak into the offset (which was the prior bug).
+  const utcRounded = new Date(Math.floor(utc.getTime() / 1000) * 1000);
+  const tzViewRounded = new Date(utcRounded.toLocaleString('en-US', { timeZone: tz }));
+  const tzOffsetMs = tzViewRounded.getTime() - utcRounded.getTime();
+
+  return new Date(target.getTime() - tzOffsetMs);
 }
 
 function pad(n) { return String(n).padStart(2, '0'); }
