@@ -3,10 +3,14 @@
  * Analyze RSVP submission timing for bot-like patterns.
  *
  * Pulls every archived period (and the current one) from Vercel KV and flags
- * submissions that look automated:
- *   - sub-second offsets from form-open time (humans need ~1.5–3s)
- *   - bursts of multiple "different" people submitting within ~200ms
- *   - suspiciously uniform inter-arrival cadence across the first N entries
+ * submissions that look automated. Thresholds account for the real
+ * client-open flow: returning members have a prefilled name and only click
+ * one button, but the path still requires a countdown-driven page reload +
+ * hydrate + render before the button is clickable.
+ *
+ *   < 0.5s  — physically impossible without scripting the API directly
+ *   < 1.0s  — bypassed the reload path; likely a script
+ *   < 2.0s  — fast but plausible for a primed regular with a synced clock
  *
  * Usage:
  *   vercel env pull .env.local            # one-time, gets KV_* credentials
@@ -18,14 +22,12 @@
 
 import { kv } from '@vercel/kv';
 
-const SUB_SECOND_THRESHOLD_S = 1.0;     // anyone faster than this is suspicious
-const FAST_THRESHOLD_S = 2.0;            // worth flagging but plausibly human
-const BURST_GAP_MS = 200;                // consecutive gaps below this = burst
-const BURST_MIN_COUNT = 3;               // at least N entries to call it a burst
-const CADENCE_WINDOW = 5;                // analyze first N inter-arrival gaps
-const CADENCE_MEAN_MS = 500;             // mean gap below this...
-const CADENCE_STDEV_MS = 100;            // ...with stdev below this = robotic
-const TOP_ROWS = 15;
+const BOT_THRESHOLD_S = 0.5;        // below this is mechanically impossible for a human
+const LIKELY_BOT_THRESHOLD_S = 1.0; // below this bypassed the reload path
+const FAST_THRESHOLD_S = 2.0;       // below this is fast-but-normal for a primed regular
+const CADENCE_WINDOW = 5;           // analyze first N inter-arrival gaps
+const CADENCE_MEAN_MS = 500;        // mean gap below this...
+const CADENCE_STDEV_MS = 100;       // ...with stdev below this = robotic
 
 async function main() {
   const slug = process.argv[2];
@@ -74,6 +76,13 @@ async function main() {
   console.log(`Summary: ${totalFlagged}/${periods.length} periods had at least one anomaly.`);
 }
 
+function tagFor(offset) {
+  if (offset < BOT_THRESHOLD_S)        return '  🚨 BOT (sub-500ms)';
+  if (offset < LIKELY_BOT_THRESHOLD_S) return '  ⚠️  likely bot (sub-1s)';
+  if (offset < FAST_THRESHOLD_S)       return '  ·  fast';
+  return '';
+}
+
 function analyzePeriod(period, settings) {
   const all = [...(period.mainList || []), ...(period.waitlist || [])];
   // Whitelisted entries get their timestamps preserved across resets, so they
@@ -100,46 +109,38 @@ function analyzePeriod(period, settings) {
   console.log(`First RSVP:  ${rows[0].ts.toISOString()}  (+${rows[0].offset.toFixed(3)}s)`);
   console.log(`Total non-whitelisted: ${rows.length}`);
 
-  console.log(`\nFirst ${Math.min(TOP_ROWS, rows.length)} submissions:`);
-  rows.slice(0, TOP_ROWS).forEach((r, i) => {
-    const tag =
-      r.offset < SUB_SECOND_THRESHOLD_S ? '  ⚠️  SUB-SECOND' :
-      r.offset < FAST_THRESHOLD_S       ? '  ⚠   fast' : '';
-    console.log(`  #${String(i + 1).padStart(2)}  +${r.offset.toFixed(3).padStart(7)}s  ${r.name}${tag}`);
+  console.log(`\nAll submissions:`);
+  rows.forEach((r, i) => {
+    console.log(`  #${String(i + 1).padStart(3)}  +${r.offset.toFixed(3).padStart(8)}s  ${r.name}${tagFor(r.offset)}`);
   });
 
-  // Inter-arrival deltas in ms
+  const flags = [];
+
+  // 1. Bot-level entries (<500ms)
+  const botEntries = rows.filter(r => r.offset < BOT_THRESHOLD_S);
+  if (botEntries.length > 0) {
+    flags.push(
+      `${botEntries.length} sub-500ms entr${botEntries.length === 1 ? 'y' : 'ies'} — ` +
+      `impossible without scripting the API directly:\n` +
+      botEntries.map(r => `       • ${r.name}  +${r.offset.toFixed(3)}s  device=${shortId(r.deviceId)}`).join('\n')
+    );
+  }
+
+  // 2. Likely-bot entries (500ms–1s)
+  const likelyBot = rows.filter(r => r.offset >= BOT_THRESHOLD_S && r.offset < LIKELY_BOT_THRESHOLD_S);
+  if (likelyBot.length > 0) {
+    flags.push(
+      `${likelyBot.length} sub-1s entr${likelyBot.length === 1 ? 'y' : 'ies'} — ` +
+      `bypassed the reload path, likely scripted:\n` +
+      likelyBot.map(r => `       • ${r.name}  +${r.offset.toFixed(3)}s  device=${shortId(r.deviceId)}`).join('\n')
+    );
+  }
+
+  // 3. Robotic cadence in the opening window
   const deltas = [];
   for (let i = 1; i < rows.length; i++) {
     deltas.push(rows[i].ts - rows[i - 1].ts);
   }
-
-  const flags = [];
-
-  // 1. Sub-second offsets
-  const subSecond = rows.filter(r => r.offset < SUB_SECOND_THRESHOLD_S);
-  if (subSecond.length > 0) {
-    flags.push(
-      `${subSecond.length} sub-second entr${subSecond.length === 1 ? 'y' : 'ies'} ` +
-      `(humans typically need 1.5–3s to react + type a name + submit):\n` +
-      subSecond.map(r => `       • ${r.name}  +${r.offset.toFixed(3)}s  device=${shortId(r.deviceId)}`).join('\n')
-    );
-  }
-
-  // 2. Bursts of tight consecutive submissions
-  let runStart = -1, runLen = 0;
-  for (let i = 0; i < deltas.length; i++) {
-    if (deltas[i] < BURST_GAP_MS) {
-      if (runStart < 0) runStart = i;
-      runLen++;
-    } else {
-      maybeFlagBurst(runStart, runLen, rows, deltas, flags);
-      runStart = -1; runLen = 0;
-    }
-  }
-  maybeFlagBurst(runStart, runLen, rows, deltas, flags);
-
-  // 3. Robotic cadence in the opening window
   if (deltas.length >= CADENCE_WINDOW) {
     const window = deltas.slice(0, CADENCE_WINDOW);
     const mean = window.reduce((a, b) => a + b, 0) / window.length;
@@ -175,15 +176,6 @@ function analyzePeriod(period, settings) {
   }
   flags.forEach(f => console.log(`  ⚠ ${f}`));
   return true;
-}
-
-function maybeFlagBurst(runStart, runLen, rows, deltas, flags) {
-  if (runStart < 0 || runLen < BURST_MIN_COUNT - 1) return;
-  const totalGapMs = deltas.slice(runStart, runStart + runLen).reduce((a, b) => a + b, 0);
-  const names = rows.slice(runStart, runStart + runLen + 1).map(r => r.name);
-  flags.push(
-    `Burst of ${names.length} submissions within ${totalGapMs}ms: ${names.join(' → ')}`
-  );
 }
 
 /**
