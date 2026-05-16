@@ -19,6 +19,12 @@ jest.mock('@vercel/kv', () => ({
   },
 }));
 
+// Bypass Turnstile in unit tests — verification is covered separately.
+jest.mock('../../lib/turnstile', () => ({
+  verifyTurnstileToken: jest.fn(() => Promise.resolve({ success: true })),
+  getClientIp: jest.fn(() => null),
+}));
+
 import handler from '../../pages/api/org/[slug]/rsvp';
 
 // Helper to create mock request/response with slug
