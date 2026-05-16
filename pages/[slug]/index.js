@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import Turnstile from '../../components/Turnstile';
 
 const DEFAULT_MAIN_LIST_LIMIT = 30;
 
@@ -276,6 +277,7 @@ export default function OrgRSVP() {
   const [snoozeCode, setSnoozeCode] = useState('');
   const [snoozing, setSnoozing] = useState(false);
   const [snoozedNames, setSnoozedNames] = useState([]);
+  const turnstileRef = useRef(null);
 
   // Whether the user can still drop out:
   // - If email is enabled: allowed until the list email has actually been sent
@@ -377,12 +379,17 @@ export default function OrgRSVP() {
       showToast('Please enter your first and last name', 'error');
       return;
     }
+    const turnstileToken = turnstileRef.current?.getToken();
+    if (!turnstileToken) {
+      showToast('Verifying… please try again in a moment.', 'warning');
+      return;
+    }
     setSubmitting(true);
     try {
       const response = await fetch(`/api/org/${slug}/rsvp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: trimmedName, deviceId })
+        body: JSON.stringify({ name: trimmedName, deviceId, turnstileToken })
       });
       const data = await response.json();
       if (response.ok) {
@@ -399,9 +406,11 @@ export default function OrgRSVP() {
         setTimeout(() => setShowSuccessAnimation(false), 2500);
       } else {
         showToast(data.error, 'error');
+        turnstileRef.current?.reset();
       }
     } catch (error) {
       showToast('Failed to submit RSVP. Please try again.', 'error');
+      turnstileRef.current?.reset();
     }
     setSubmitting(false);
   };
@@ -918,6 +927,8 @@ export default function OrgRSVP() {
                   <p>You've already signed up for this week!</p>
                 </div>
               )}
+
+              {!hasSignedUp && <Turnstile ref={turnstileRef} />}
 
               {/* Progress Bar */}
               <div className="mt-4">

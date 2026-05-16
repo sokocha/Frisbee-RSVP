@@ -3,6 +3,7 @@ import { getOrgData, setOrgData, ORG_KEY_SUFFIXES } from '../../../../lib/kv';
 import { verifySession, parseCookies, isSuperAdmin } from '../../../../lib/auth';
 import { getOrganizerById } from '../../../../lib/organizations';
 import { isFormOpen, getCurrentPeriodId } from '../../../../lib/recurrence';
+import { verifyTurnstileToken, getClientIp } from '../../../../lib/turnstile';
 
 const DEFAULT_MAIN_LIST_LIMIT = 30;
 
@@ -258,7 +259,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const { name, deviceId } = req.body;
+    const { name, deviceId, turnstileToken } = req.body;
 
     if (!name || !deviceId) {
       return res.status(400).json({ error: 'Name and deviceId are required' });
@@ -267,6 +268,12 @@ export default async function handler(req, res) {
     const trimmedName = name.trim();
     if (!trimmedName) {
       return res.status(400).json({ error: 'Name cannot be empty' });
+    }
+
+    const verify = await verifyTurnstileToken(turnstileToken, getClientIp(req));
+    if (!verify.success) {
+      console.warn('[rsvp] Turnstile verification failed:', verify.error);
+      return res.status(403).json({ error: 'Security check failed. Please reload the page and try again.' });
     }
 
     try {
