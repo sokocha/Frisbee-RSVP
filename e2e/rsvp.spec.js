@@ -85,6 +85,22 @@ test.describe('PlayDay Landing Page', () => {
 });
 
 test.describe('Organization RSVP Page', () => {
+  // Stub Cloudflare Turnstile so the widget produces a fake token immediately
+  // and the submit path is testable without network access to challenges.cloudflare.com.
+  test.beforeEach(async ({ page }) => {
+    await page.route('**/challenges.cloudflare.com/**', route => route.abort());
+    await page.addInitScript(() => {
+      window.turnstile = {
+        render: (_container, opts) => {
+          setTimeout(() => opts?.callback?.('e2e-test-token'), 0);
+          return 'fake-widget-id';
+        },
+        reset: () => {},
+        remove: () => {},
+      };
+    });
+  });
+
   test('displays the RSVP page with organization name', async ({ page }) => {
     await mockOrgRsvpApi(page, TEST_ORG_SLUG);
     await page.goto(`/${TEST_ORG_SLUG}`);
